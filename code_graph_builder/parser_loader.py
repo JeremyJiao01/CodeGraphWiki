@@ -273,12 +273,18 @@ def _create_language_queries(
     )
     combined_import_patterns = _build_combined_import_pattern(lang_config)
 
+    # Build optional typedef/macro queries (currently C-specific)
+    typedef_query = _create_optional_query(language, lang_config.typedef_query)
+    macro_query = _create_optional_query(language, lang_config.macro_query)
+
     return LanguageQueries(
         functions=_create_optional_query(language, function_patterns),
         classes=_create_optional_query(language, class_patterns),
         calls=_create_optional_query(language, call_patterns),
         imports=_create_optional_query(language, combined_import_patterns),
         locals=_create_locals_query(language, lang_name),
+        typedefs=typedef_query,
+        macros=macro_query,
         config=lang_config,
         language=language,
         parser=parser,

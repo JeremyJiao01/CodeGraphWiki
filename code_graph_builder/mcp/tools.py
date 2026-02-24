@@ -448,10 +448,10 @@ class MCPToolsRegistry:
             ToolDefinition(
                 name="list_api_interfaces",
                 description=(
-                    "List public API interfaces (function signatures) for a module or "
-                    "the entire project. Returns function name, full signature, return "
-                    "type, parameters, and visibility. Particularly useful for C "
-                    "codebases to understand module boundaries."
+                    "List public API interfaces for a module or the entire project. "
+                    "Returns function signatures, struct/union/enum definitions with "
+                    "members, typedef declarations, and macro definitions. Particularly "
+                    "useful for C codebases to understand module boundaries."
                 ),
                 input_schema={
                     "type": "object",
@@ -465,11 +465,19 @@ class MCPToolsRegistry:
                         },
                         "visibility": {
                             "type": "string",
-                            "enum": ["public", "static", "all"],
+                            "enum": ["public", "static", "extern", "all"],
                             "description": (
-                                "Filter by visibility: 'public' (default) for externally "
-                                "visible functions, 'static' for file-local functions, "
-                                "'all' for both."
+                                "Filter by visibility: 'public' (default) for functions "
+                                "declared in headers, 'extern' for non-static functions "
+                                "not in headers, 'static' for file-local functions, "
+                                "'all' for everything."
+                            ),
+                        },
+                        "include_types": {
+                            "type": "boolean",
+                            "description": (
+                                "Include struct/union/enum definitions and typedefs. "
+                                "Defaults to true."
                             ),
                         },
                     },
@@ -988,6 +996,7 @@ class MCPToolsRegistry:
         self,
         module: str | None = None,
         visibility: str = "public",
+        include_types: bool = True,
     ) -> dict[str, Any]:
         err = self._require_active()
         if err:
@@ -1003,7 +1012,7 @@ class MCPToolsRegistry:
                 visibility=vis_filter,
             )
 
-            # Group results by module for readability
+            # Group function results by module
             by_module: dict[str, list[dict[str, Any]]] = {}
             for row in rows:
                 raw = row.get("result", row)
@@ -1017,19 +1026,49 @@ class MCPToolsRegistry:
                         "parameters": raw[5],
                         "start_line": raw[6],
                         "end_line": raw[7],
+                        "entity_type": "function",
                     }
                 else:
-                    # Fallback for dict-based results
                     mod_name = raw.get("module", "unknown") if isinstance(raw, dict) else "unknown"
                     entry = raw if isinstance(raw, dict) else {"raw": raw}
+                    if isinstance(entry, dict):
+                        entry["entity_type"] = "function"
 
                 if mod_name not in by_module:
                     by_module[mod_name] = []
                 by_module[mod_name].append(entry)
 
+            # Fetch type APIs (structs, unions, enums, typedefs) if requested
+            type_count = 0
+            if include_types and hasattr(self._ingestor, "fetch_module_type_apis"):
+                type_rows = self._ingestor.fetch_module_type_apis(module_qn=module)
+                for row in type_rows:
+                    raw = row.get("result", row)
+                    if isinstance(raw, (list, tuple)) and len(raw) >= 6:
+                        mod_name = raw[0] or "unknown"
+                        entry = {
+                            "name": raw[1],
+                            "kind": raw[2],
+                            "signature": raw[3],
+                            "members": raw[4] if len(raw) > 4 else None,
+                            "start_line": raw[4 if len(raw) <= 5 else 5],
+                            "end_line": raw[5 if len(raw) <= 6 else 6],
+                            "entity_type": raw[2] or "type",
+                        }
+                    else:
+                        mod_name = raw.get("module", "unknown") if isinstance(raw, dict) else "unknown"
+                        entry = raw if isinstance(raw, dict) else {"raw": raw}
+
+                    if mod_name not in by_module:
+                        by_module[mod_name] = []
+                    by_module[mod_name].append(entry)
+                    type_count += 1
+
             total = sum(len(v) for v in by_module.values())
             return {
                 "total_apis": total,
+                "function_count": total - type_count,
+                "type_count": type_count,
                 "module_count": len(by_module),
                 "visibility_filter": visibility,
                 "modules": by_module,

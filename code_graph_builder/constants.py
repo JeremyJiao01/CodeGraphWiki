@@ -267,6 +267,8 @@ KEY_IS_EXPORTED = "is_exported"
 KEY_RETURN_TYPE = "return_type"
 KEY_SIGNATURE = "signature"
 KEY_VISIBILITY = "visibility"
+KEY_MEMBERS = "members"
+KEY_KIND = "kind"
 
 # Node type constants
 NODE_PROJECT = NodeLabel.PROJECT
@@ -420,6 +422,8 @@ QUERY_IMPORTS = "imports"
 QUERY_LOCALS = "locals"
 QUERY_CONFIG = "config"
 QUERY_LANGUAGE = "language"
+QUERY_TYPEDEFS = "typedefs"
+QUERY_MACROS = "macros"
 
 # Query capture names
 CAPTURE_FUNCTION = "function"
@@ -427,6 +431,8 @@ CAPTURE_CLASS = "class"
 CAPTURE_CALL = "call"
 CAPTURE_IMPORT = "import"
 CAPTURE_IMPORT_FROM = "import_from"
+CAPTURE_TYPEDEF = "typedef"
+CAPTURE_MACRO = "macro"
 
 # Locals query patterns for JS/TS
 JS_LOCALS_PATTERN = """
@@ -589,6 +595,8 @@ SPEC_C_CLASS_TYPES = (
 SPEC_C_MODULE_TYPES = ("translation_unit",)
 SPEC_C_CALL_TYPES = ("call_expression",)
 SPEC_C_IMPORT_TYPES = ("preproc_include",)
+SPEC_C_TYPEDEF_TYPES = ("type_definition",)
+SPEC_C_MACRO_TYPES = ("preproc_def", "preproc_function_def")
 SPEC_C_PACKAGE_INDICATORS = frozenset({PKG_MAKEFILE, "configure.ac", "configure.in"})
 
 SPEC_CPP_FUNCTION_TYPES = (

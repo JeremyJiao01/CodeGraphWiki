@@ -120,6 +120,7 @@ class KuzuIngestor:
                         signature STRING,
                         visibility STRING,
                         parameters STRING[],
+                        kind STRING,
                         PRIMARY KEY (qualified_name)
                     )
                 """)
@@ -219,6 +220,7 @@ class KuzuIngestor:
                 signature = props.get("signature", "")
                 visibility = props.get("visibility", "")
                 parameters = props.get("parameters")
+                kind = props.get("kind", "")
 
                 try:
                     cypher = f"""
@@ -232,7 +234,8 @@ class KuzuIngestor:
                             return_type: {self._value_to_cypher(return_type)},
                             signature: {self._value_to_cypher(signature)},
                             visibility: {self._value_to_cypher(visibility)},
-                            parameters: {self._value_to_cypher(parameters if parameters else [])}
+                            parameters: {self._value_to_cypher(parameters if parameters else [])},
+                            kind: {self._value_to_cypher(kind)}
                         }})
                     """
                     self._conn.execute(cypher)
@@ -341,6 +344,70 @@ class KuzuIngestor:
             return self.query(cypher)
         except Exception as e:
             logger.error(f"fetch_module_apis error: {e}")
+            return []
+
+    def fetch_module_type_apis(
+        self,
+        module_qn: str | None = None,
+    ) -> list[ResultRow]:
+        """Fetch type API interfaces (structs, unions, enums, typedefs) for a module.
+
+        Args:
+            module_qn: Qualified name of a module. If None, returns across all modules.
+
+        Returns:
+            List of result rows with type name, kind, signature, members, etc.
+        """
+        if not self._conn:
+            raise ConnectionError("Not connected to database")
+
+        # Query Class nodes (struct/union/enum)
+        class_conditions: list[str] = []
+        if module_qn:
+            safe_qn = module_qn.replace("'", "\\'")
+            class_conditions.append(f"m.qualified_name = '{safe_qn}'")
+
+        class_where = f"WHERE {' AND '.join(class_conditions)}" if class_conditions else ""
+
+        class_cypher = f"""
+            MATCH (m:Module)-[:DEFINES]->(c:Class)
+            {class_where}
+            RETURN m.qualified_name AS module,
+                   c.name AS name,
+                   c.kind AS kind,
+                   c.signature AS signature,
+                   c.parameters AS members,
+                   c.start_line AS start_line,
+                   c.end_line AS end_line
+            ORDER BY m.qualified_name, c.start_line
+        """
+
+        # Query Type nodes (typedefs)
+        type_conditions: list[str] = []
+        if module_qn:
+            safe_qn = module_qn.replace("'", "\\'")
+            type_conditions.append(f"m.qualified_name = '{safe_qn}'")
+
+        type_where = f"WHERE {' AND '.join(type_conditions)}" if type_conditions else ""
+
+        type_cypher = f"""
+            MATCH (m:Module)-[:DEFINES]->(t:Type)
+            {type_where}
+            RETURN m.qualified_name AS module,
+                   t.name AS name,
+                   t.kind AS kind,
+                   t.signature AS signature,
+                   t.start_line AS start_line,
+                   t.end_line AS end_line
+            ORDER BY m.qualified_name, t.start_line
+        """
+
+        try:
+            class_rows = self.query(class_cypher)
+            type_rows = self.query(type_cypher)
+            return class_rows + type_rows
+        except Exception as e:
+            logger.error(f"fetch_module_type_apis error: {e}")
             return []
 
     def clean_database(self) -> None:
