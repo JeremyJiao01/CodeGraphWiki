@@ -182,7 +182,7 @@ python3 -m code_graph_builder.mcp.server
 }
 ```
 
-MCP 服务器提供的工具：`initialize_repository`、`query_code_graph`、`get_code_snippet`、`semantic_search`、`list_api_interfaces` 等。
+MCP 服务器提供 9 个工具：`initialize_repository`、`get_repository_info`、`query_code_graph`、`get_code_snippet`、`semantic_search`、`locate_function`、`list_api_interfaces`、`list_wiki_pages`、`get_wiki_page`。
 
 > **首次配置？** 请参阅 [CLAUDE_CODE_GUIDE.md](./CLAUDE_CODE_GUIDE.md) 第 0 节的交互式配置流程，由 AI Agent 自动完成 LLM / Embedding 连接测试和 MCP 配置。
 

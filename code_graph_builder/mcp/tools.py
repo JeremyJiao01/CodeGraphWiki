@@ -263,8 +263,12 @@ class MCPToolsRegistry:
                 },
             ),
             ToolDefinition(
-                name="get_active_repository",
-                description="Return information about the currently active (indexed) repository.",
+                name="get_repository_info",
+                description=(
+                    "Return information about the currently active (indexed) repository, "
+                    "including graph statistics (node/relationship counts), wiki pages, "
+                    "and service availability."
+                ),
                 input_schema={"type": "object", "properties": {}, "required": []},
             ),
             ToolDefinition(
@@ -298,47 +302,6 @@ class MCPToolsRegistry:
                         }
                     },
                     "required": ["qualified_name"],
-                },
-            ),
-            ToolDefinition(
-                name="get_graph_stats",
-                description="Return statistics about the code knowledge graph (node/relationship counts).",
-                input_schema={"type": "object", "properties": {}, "required": []},
-            ),
-            ToolDefinition(
-                name="read_file",
-                description="Read the contents of a file within the indexed repository (paginated).",
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Relative path from the repository root.",
-                        },
-                        "start_line": {
-                            "type": "integer",
-                            "description": "First line to return (1-indexed). Default: 1.",
-                        },
-                        "end_line": {
-                            "type": "integer",
-                            "description": "Last line to return (inclusive). Default: all lines.",
-                        },
-                    },
-                    "required": ["path"],
-                },
-            ),
-            ToolDefinition(
-                name="list_directory",
-                description="List files and subdirectories within the indexed repository.",
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Relative path from repository root. Default: '.'.",
-                        }
-                    },
-                    "required": [],
                 },
             ),
             ToolDefinition(
@@ -419,60 +382,6 @@ class MCPToolsRegistry:
                 },
             ),
             ToolDefinition(
-                name="get_function_diff",
-                description=(
-                    "Locate a function by AST and generate a unified diff between the "
-                    "original source and the provided new code."
-                ),
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "Relative path from repo root.",
-                        },
-                        "function_name": {
-                            "type": "string",
-                            "description": "Function or method name.",
-                        },
-                        "new_code": {
-                            "type": "string",
-                            "description": "Proposed replacement source code.",
-                        },
-                        "line_number": {
-                            "type": "integer",
-                            "description": "Optional: line number to disambiguate overloads.",
-                        },
-                    },
-                    "required": ["file_path", "function_name", "new_code"],
-                },
-            ),
-            ToolDefinition(
-                name="surgical_replace_code",
-                description=(
-                    "Replace an exact code block in a file using diff-match-patch for "
-                    "validation. The target_code must be an exact substring of the file."
-                ),
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "Relative path from repo root.",
-                        },
-                        "target_code": {
-                            "type": "string",
-                            "description": "Exact code block to replace (must match file content).",
-                        },
-                        "replacement_code": {
-                            "type": "string",
-                            "description": "New code to substitute in place of target_code.",
-                        },
-                    },
-                    "required": ["file_path", "target_code", "replacement_code"],
-                },
-            ),
-            ToolDefinition(
                 name="list_api_interfaces",
                 description=(
                     "List public API interfaces for a module or the entire project. "
@@ -518,18 +427,13 @@ class MCPToolsRegistry:
     def get_handler(self, name: str):
         handlers: dict[str, Any] = {
             "initialize_repository": self._handle_initialize_repository,
-            "get_active_repository": self._handle_get_active_repository,
+            "get_repository_info": self._handle_get_repository_info,
             "query_code_graph": self._handle_query_code_graph,
             "get_code_snippet": self._handle_get_code_snippet,
             "semantic_search": self._handle_semantic_search,
-            "get_graph_stats": self._handle_get_graph_stats,
-            "read_file": self._handle_read_file,
-            "list_directory": self._handle_list_directory,
             "list_wiki_pages": self._handle_list_wiki_pages,
             "get_wiki_page": self._handle_get_wiki_page,
             "locate_function": self._handle_locate_function,
-            "get_function_diff": self._handle_get_function_diff,
-            "surgical_replace_code": self._handle_surgical_replace_code,
             "list_api_interfaces": self._handle_list_api_interfaces,
         }
         return handlers.get(name)
@@ -619,10 +523,10 @@ class MCPToolsRegistry:
             raise ToolError({"error": str(exc), "status": "error"}) from exc
 
     # -------------------------------------------------------------------------
-    # get_active_repository
+    # get_repository_info (merged: active repo metadata + graph statistics)
     # -------------------------------------------------------------------------
 
-    async def _handle_get_active_repository(self) -> dict[str, Any]:
+    async def _handle_get_repository_info(self) -> dict[str, Any]:
         if self._active_artifact_dir is None:
             raise ToolError("No active repository. Call initialize_repository first.")
 
@@ -634,13 +538,23 @@ class MCPToolsRegistry:
         if wiki_subdir.exists():
             wiki_pages = [p.stem for p in sorted(wiki_subdir.glob("*.md"))]
 
-        return {
+        result: dict[str, Any] = {
             "repo_path": str(self._active_repo_path),
             "artifact_dir": str(self._active_artifact_dir),
             "indexed_at": meta.get("indexed_at"),
             "semantic_search_available": self._semantic_service is not None,
+            "cypher_query_available": self._cypher_gen is not None,
             "wiki_pages": wiki_pages,
         }
+
+        # Merge graph statistics
+        if self._ingestor is not None:
+            try:
+                result["graph_stats"] = self._ingestor.get_statistics()
+            except Exception as exc:
+                result["graph_stats"] = {"error": str(exc)}
+
+        return result
 
     # -------------------------------------------------------------------------
     # query_code_graph
@@ -774,21 +688,7 @@ class MCPToolsRegistry:
             raise ToolError({"error": f"Semantic search failed: {exc}", "query": query}) from exc
 
     # -------------------------------------------------------------------------
-    # get_graph_stats
-    # -------------------------------------------------------------------------
-
-    async def _handle_get_graph_stats(self) -> dict[str, Any]:
-        self._require_active()
-
-        assert self._ingestor is not None
-
-        try:
-            return self._ingestor.get_statistics()
-        except Exception as exc:
-            raise ToolError(f"Failed to get statistics: {exc}") from exc
-
-    # -------------------------------------------------------------------------
-    # read_file / list_directory  (path safety: must stay within repo root)
+    # path safety helper (used by locate_function)
     # -------------------------------------------------------------------------
 
     def _safe_path(self, rel_path: str) -> Path | None:
@@ -800,65 +700,6 @@ class MCPToolsRegistry:
         except ValueError:
             return None
         return target
-
-    async def _handle_read_file(
-        self,
-        path: str,
-        start_line: int = 1,
-        end_line: int | None = None,
-    ) -> dict[str, Any]:
-        self._require_active()
-
-        target = self._safe_path(path)
-        if target is None:
-            raise ToolError({"error": "Path is outside the repository root.", "path": path})
-        if not target.exists():
-            raise ToolError({"error": "File not found.", "path": path})
-        if not target.is_file():
-            raise ToolError({"error": "Path is not a file.", "path": path})
-
-        try:
-            lines = target.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
-            total = len(lines)
-            start_idx = max(0, start_line - 1)
-            end_idx = min(total, end_line) if end_line is not None else total
-            content = "".join(lines[start_idx:end_idx])
-            return {
-                "path": path,
-                "start_line": start_line,
-                "end_line": end_idx,
-                "total_lines": total,
-                "content": content,
-            }
-        except Exception as exc:
-            raise ToolError({"error": f"Failed to read file: {exc}", "path": path}) from exc
-
-    async def _handle_list_directory(self, path: str = ".") -> dict[str, Any]:
-        self._require_active()
-
-        target = self._safe_path(path)
-        if target is None:
-            raise ToolError({"error": "Path is outside the repository root.", "path": path})
-        if not target.exists():
-            raise ToolError({"error": "Directory not found.", "path": path})
-        if not target.is_dir():
-            raise ToolError({"error": "Path is not a directory.", "path": path})
-
-        try:
-            entries = sorted(target.iterdir(), key=lambda p: (p.is_file(), p.name))
-            return {
-                "path": path,
-                "entries": [
-                    {
-                        "name": e.name,
-                        "type": "file" if e.is_file() else "directory",
-                        "size": e.stat().st_size if e.is_file() else None,
-                    }
-                    for e in entries
-                ],
-            }
-        except Exception as exc:
-            raise ToolError({"error": f"Failed to list directory: {exc}", "path": path}) from exc
 
     # -------------------------------------------------------------------------
     # wiki tools
@@ -913,7 +754,7 @@ class MCPToolsRegistry:
         }
 
     # -------------------------------------------------------------------------
-    # locate_function / get_function_diff / surgical_replace_code
+    # locate_function
     # -------------------------------------------------------------------------
 
     async def _handle_locate_function(
@@ -939,63 +780,6 @@ class MCPToolsRegistry:
                 "file_path": file_path,
                 "function_name": function_name,
             })
-        return result
-
-    async def _handle_get_function_diff(
-        self,
-        file_path: str,
-        function_name: str,
-        new_code: str,
-        line_number: int | None = None,
-    ) -> dict[str, Any]:
-        self._require_repo_path()
-        if self._file_editor is None:
-            raise ToolError("File editor not initialized.")
-
-        target = self._safe_path(file_path)
-        if target is None:
-            raise ToolError({"error": "Path outside repository root.", "file_path": file_path})
-        if not target.exists():
-            raise ToolError({"error": "File not found.", "file_path": file_path})
-
-        located = self._file_editor.locate_function(target, function_name, line_number)
-        if located is None:
-            raise ToolError({
-                "error": f"Function '{function_name}' not found in {file_path}.",
-                "file_path": file_path,
-                "function_name": function_name,
-            })
-
-        diff = self._file_editor.get_diff(
-            located["source_code"], new_code, label=function_name
-        )
-        return {
-            "file_path": file_path,
-            "function_name": function_name,
-            "qualified_name": located["qualified_name"],
-            "start_line": located["start_line"],
-            "end_line": located["end_line"],
-            "diff": diff,
-        }
-
-    async def _handle_surgical_replace_code(
-        self,
-        file_path: str,
-        target_code: str,
-        replacement_code: str,
-    ) -> dict[str, Any]:
-        self._require_repo_path()
-        if self._file_editor is None:
-            raise ToolError("File editor not initialized.")
-
-        target = self._safe_path(file_path)
-        if target is None:
-            raise ToolError({"error": "Path outside repository root.", "file_path": file_path})
-
-        result = self._file_editor.replace_code_block(target, target_code, replacement_code)
-        if not result.get("success"):
-            raise ToolError({"error": result.get("error", "Unknown error"), "file_path": file_path})
-        result["file_path"] = file_path
         return result
 
     # -------------------------------------------------------------------------
