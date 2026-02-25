@@ -74,13 +74,34 @@ async def main() -> None:
         if name == "initialize_repository":
             session = server.request_context.session
 
-            async def _progress_cb(msg: str) -> None:
+            # Extract progress token from request metadata (if client supports it)
+            progress_token = None
+            meta = getattr(server.request_context, "meta", None)
+            if meta is not None:
+                progress_token = getattr(meta, "progressToken", None)
+
+            async def _progress_cb(msg: str, pct: float = 0.0) -> None:
                 try:
                     await session.send_log_message(
-                        level="info", data=msg, logger="code-graph-builder"
+                        level="info",
+                        data=f"[{pct:.0f}%] {msg}" if pct > 0 else msg,
+                        logger="code-graph-builder",
                     )
                 except Exception:
                     pass
+
+                # Send MCP progress notification (rendered as progress bar
+                # by clients that support it, e.g. Claude Code)
+                if progress_token is not None:
+                    try:
+                        await session.send_progress_notification(
+                            progress_token=progress_token,
+                            progress=pct,
+                            total=100.0,
+                            message=msg,
+                        )
+                    except Exception:
+                        pass
 
             kwargs["_progress_cb"] = _progress_cb
 
