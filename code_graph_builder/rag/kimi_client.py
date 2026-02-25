@@ -78,8 +78,10 @@ class KimiClient:
 
         if not self.api_key:
             raise ValueError(
-                "Moonshot API key is required. "
-                "Set MOONSHOT_API_KEY environment variable or pass api_key."
+                "LLM API key is required. "
+                "Set one of: LLM_API_KEY, OPENAI_API_KEY, or MOONSHOT_API_KEY "
+                "environment variable, or pass api_key directly. "
+                "Use create_kimi_client() for automatic provider detection."
             )
 
         logger.info(f"Initialized KimiClient with model: {self.model}")
@@ -233,17 +235,60 @@ class KimiClient:
 
 def create_kimi_client(
     api_key: str | None = None,
-    model: str = "kimi-k2.5",
+    model: str | None = None,
+    base_url: str | None = None,
     **kwargs: Any,
 ) -> KimiClient:
-    """Factory function to create KimiClient.
+    """Factory function to create KimiClient with auto-detection.
+
+    Auto-detects API credentials from environment variables in this priority:
+
+        1. ``LLM_API_KEY`` / ``LLM_BASE_URL`` / ``LLM_MODEL``   (generic, highest)
+        2. ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` / ``OPENAI_MODEL``
+        3. ``MOONSHOT_API_KEY`` / ``MOONSHOT_MODEL``              (legacy default)
+
+    This allows third-party model providers (DeepSeek, OpenAI, etc.) to be used
+    seamlessly in CAMEL agents without requiring a Moonshot API key.
 
     Args:
-        api_key: Moonshot API key (or from MOONSHOT_API_KEY env var)
-        model: Model name
+        api_key: API key (auto-detected from env if not provided)
+        model: Model name (auto-detected from env if not provided)
+        base_url: API base URL (auto-detected from env if not provided)
         **kwargs: Additional arguments for KimiClient
 
     Returns:
         Configured KimiClient
     """
-    return KimiClient(api_key=api_key, model=model, **kwargs)
+    import os
+
+    # Provider detection order: (key_env, url_env, model_env, default_url, default_model)
+    _providers = [
+        ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "https://api.openai.com/v1", "gpt-4o"),
+        ("OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "https://api.openai.com/v1", "gpt-4o"),
+        ("MOONSHOT_API_KEY", "LLM_BASE_URL", "MOONSHOT_MODEL", "https://api.moonshot.cn/v1", "kimi-k2.5"),
+    ]
+
+    detected_key = api_key or ""
+    detected_url = base_url or ""
+    detected_model = model or ""
+
+    if not detected_key:
+        for key_env, url_env, model_env, default_url, default_model in _providers:
+            env_key = os.environ.get(key_env, "")
+            if env_key:
+                detected_key = env_key
+                detected_url = detected_url or os.environ.get(url_env, default_url)
+                detected_model = detected_model or os.environ.get(model_env, default_model)
+                logger.info(f"KimiClient: auto-detected provider via {key_env}")
+                break
+
+    # Apply defaults for any still-missing values
+    detected_model = detected_model or "kimi-k2.5"
+    detected_url = detected_url or KimiClient.DEFAULT_BASE_URL
+
+    return KimiClient(
+        api_key=detected_key or None,
+        model=detected_model,
+        base_url=detected_url,
+        **kwargs,
+    )

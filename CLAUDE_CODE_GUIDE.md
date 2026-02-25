@@ -43,62 +43,148 @@
 
 3. 如果用户暂不配置 Embedding，语义搜索功能将不可用，但图构建和 Cypher 查询功能不受影响。
 
-### 0.3 第三步：创建并运行连接测试脚本
+### 0.3 第三步：检查并安装项目依赖
 
-在用户提供完所有配置信息后，**Agent 应主动创建连接测试脚本**来验证配置是否正确。
+在创建测试脚本之前，**Agent 必须先确保项目依赖已正确安装**。
+
+#### 依赖检查流程
+
+1. **确认虚拟环境已激活**：检查当前 Python 环境是否为项目虚拟环境（`.venv`），如未激活则先激活：
+   ```bash
+   # Linux / macOS
+   source .venv/bin/activate
+   # Windows
+   .\.venv\Scripts\activate
+   ```
+
+2. **安装项目核心依赖**：在项目根目录运行（推荐使用 `pip install .` 方式以确保完整安装）：
+   ```bash
+   # 核心安装（必须）
+   pip install .
+
+   # 如需语义搜索和 RAG 功能（推荐）
+   pip install ".[semantic,rag]"
+
+   # 如需全语言解析支持
+   pip install ".[treesitter-full,semantic,rag]"
+   ```
+
+3. **验证核心模块可导入**：
+   ```bash
+   python3 -c "from code_graph_builder import CodeGraphBuilder; print('✅ 核心模块正常')"
+   python3 -c "from code_graph_builder.rag.llm_backend import create_llm_backend; print('✅ LLM 模块正常')"
+   python3 -c "from code_graph_builder.rag.kimi_client import create_kimi_client; print('✅ KimiClient 模块正常')"
+   ```
+
+4. **检查缺失的可选依赖**（按需安装）：
+   ```bash
+   # httpx — LLM 后端和语义搜索需要
+   python3 -c "import httpx; print('✅ httpx 已安装')" || pip install httpx
+   # requests — KimiClient 需要
+   python3 -c "import requests; print('✅ requests 已安装')" || pip install requests
+   # tree-sitter 语言语法包 — 至少安装一个
+   python3 -c "import tree_sitter_python; print('✅ tree-sitter-python 已安装')" || pip install tree-sitter-python
+   ```
+
+> **注意**：如果任何导入失败，Agent 应根据错误信息自动安装缺失的包，然后重新验证，直到所有必需模块均可正常导入。
+
+### 0.4 第四步：创建并运行连接测试脚本
+
+在依赖安装验证通过后，**Agent 应主动创建连接测试脚本**来验证 API 配置是否正确。
+
+> **重要**：测试脚本必须使用项目自身的 LLM 连接方式（`create_llm_backend()` / `create_kimi_client()`），而非直接裸调 HTTP API。这样可以确保用户的配置在实际项目运行中也能正常工作。
 
 #### LLM 连接测试脚本示例
 
 在项目目录下创建临时测试脚本 `_test_llm_connection.py`：
 
 ```python
-"""LLM 连接测试脚本 — 验证 LLM API 配置是否正确"""
-import httpx
+"""LLM 连接测试脚本 — 使用项目的 create_llm_backend() 验证 LLM API 配置"""
+import os
 import sys
 
 # ===== 用户配置（Agent 根据用户输入填写） =====
-LLM_API_KEY = "sk-用户提供的key"
-LLM_BASE_URL = "https://api.openai.com/v1"  # 根据用户选择的平台填写
-LLM_MODEL = "gpt-4o"  # 根据用户选择的平台填写
+os.environ["LLM_API_KEY"] = "sk-用户提供的key"
+os.environ["LLM_BASE_URL"] = "https://api.openai.com/v1"  # 根据用户选择的平台填写
+os.environ["LLM_MODEL"] = "gpt-4o"  # 根据用户选择的平台填写
 # ============================================
 
+from code_graph_builder.rag.llm_backend import create_llm_backend
+
 def test_llm():
-    print(f"测试 LLM 连接...")
-    print(f"  Base URL: {LLM_BASE_URL}")
-    print(f"  Model:    {LLM_MODEL}")
-    print(f"  API Key:  {LLM_API_KEY[:8]}...{LLM_API_KEY[-4:]}")
+    print("测试 LLM 连接（via create_llm_backend）...")
+    backend = create_llm_backend()
+
+    print(f"  Base URL: {backend.base_url}")
+    print(f"  Model:    {backend.model}")
+    print(f"  API Key:  {backend.api_key[:8]}...{backend.api_key[-4:]}")
+
+    if not backend.available:
+        print("  ❌ LLM 后端未配置（api_key 为空）")
+        return False
 
     try:
-        resp = httpx.post(
-            f"{LLM_BASE_URL}/chat/completions",
-            json={
-                "model": LLM_MODEL,
-                "messages": [{"role": "user", "content": "Say hello in one word."}],
-                "max_tokens": 10,
-            },
-            headers={
-                "Authorization": f"Bearer {LLM_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            timeout=30.0,
+        reply = backend.chat(
+            messages=[{"role": "user", "content": "Say hello in one word."}],
+            max_tokens=10,
         )
-        if resp.status_code == 200:
-            data = resp.json()
-            reply = data["choices"][0]["message"]["content"]
-            print(f"  ✅ LLM 连接成功！回复: {reply}")
-            return True
-        else:
-            print(f"  ❌ LLM 连接失败！HTTP {resp.status_code}")
-            print(f"  响应: {resp.text[:500]}")
-            return False
+        print(f"  ✅ LLM 连接成功！回复: {reply}")
+        return True
     except Exception as e:
-        print(f"  ❌ LLM 连接异常: {e}")
+        print(f"  ❌ LLM 连接失败: {e}")
         return False
 
 if __name__ == "__main__":
     ok = test_llm()
     sys.exit(0 if ok else 1)
 ```
+
+#### CAMEL Agent 连接测试脚本示例（可选）
+
+如果用户需要使用 CAMEL 多 Agent 分析功能，还应测试 `create_kimi_client()` 的连接。`create_kimi_client()` 已支持自动检测多种 LLM 提供商（LLM_API_KEY > OPENAI_API_KEY > MOONSHOT_API_KEY），第三方模型用户无需单独配置 Moonshot。
+
+在项目目录下创建临时测试脚本 `_test_camel_connection.py`：
+
+```python
+"""CAMEL Agent 连接测试脚本 — 验证 CAMEL Agent 的 LLM 配置是否正确"""
+import os
+import sys
+
+# ===== 用户配置（Agent 根据用户输入填写） =====
+# 支持任意 OpenAI 兼容平台，无需 Moonshot 专属 Key
+os.environ["LLM_API_KEY"] = "sk-用户提供的key"
+os.environ["LLM_BASE_URL"] = "https://api.openai.com/v1"  # 根据用户选择的平台填写
+os.environ["LLM_MODEL"] = "gpt-4o"  # 根据用户选择的平台填写
+# ============================================
+
+from code_graph_builder.rag.kimi_client import create_kimi_client
+
+def test_camel():
+    print("测试 CAMEL Agent 连接（via create_kimi_client）...")
+    try:
+        client = create_kimi_client()
+    except ValueError as e:
+        print(f"  ❌ 客户端创建失败: {e}")
+        return False
+
+    print(f"  Base URL: {client.base_url}")
+    print(f"  Model:    {client.model}")
+    print(f"  API Key:  {client.api_key[:8]}...{client.api_key[-4:]}")
+
+    try:
+        resp = client.chat(query="Say hello in one word.", max_tokens=10)
+        print(f"  ✅ CAMEL Agent 连接成功！回复: {resp.content}")
+        return True
+    except Exception as e:
+        print(f"  ❌ CAMEL Agent 连接失败: {e}")
+        return False
+
+if __name__ == "__main__":
+    ok = test_camel()
+    sys.exit(0 if ok else 1)
+```
+
+> **第三方模型提示**：`create_kimi_client()` 会按优先级自动检测 `LLM_API_KEY` → `OPENAI_API_KEY` → `MOONSHOT_API_KEY`。如果用户使用 DeepSeek、OpenAI 等第三方模型，只需配置 `LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL` 即可，CAMEL Agent 将自动使用该配置，**无需额外配置 Moonshot Key**。
 
 #### Embedding 连接测试脚本示例
 
@@ -156,10 +242,12 @@ if __name__ == "__main__":
 
 #### 测试流程
 
-1. Agent 根据用户提供的信息，填入脚本中的配置变量
-2. 运行 `python _test_llm_connection.py` 和 `python _test_embedding_connection.py`
-3. 如果测试通过（✅），继续下一步配置 MCP
-4. 如果测试失败（❌），根据错误信息排查：
+1. Agent 根据用户提供的信息，填入脚本中的配置变量（环境变量）
+2. 运行 `python _test_llm_connection.py` 验证 LLM 连接
+3. 如需 CAMEL Agent 功能，运行 `python _test_camel_connection.py` 验证 CAMEL 连接
+4. 如需 Embedding，运行 `python _test_embedding_connection.py`
+5. 如果测试通过（✅），继续下一步配置 MCP
+6. 如果测试失败（❌），根据错误信息排查：
 
 | 错误信息 | 可能原因 | 修复方法 |
 |----------|----------|----------|
@@ -170,11 +258,12 @@ if __name__ == "__main__":
 | `Connection refused` / `timeout` | 网络不通或 URL 拼写错误 | 检查网络连接和 URL |
 | `SSL error` | 证书问题或代理配置 | 检查代理设置或添加 `verify=False`（仅调试用） |
 | `Invalid model` | 模型名拼写错误 | 请用户确认模型名称 |
+| `ModuleNotFoundError` | 项目依赖未安装 | 返回第 0.3 步重新安装依赖 |
 
-5. Agent 根据错误信息自动调整配置并重新测试，直到全部通过
-6. 测试通过后删除临时测试脚本
+7. Agent 根据错误信息自动调整配置并重新测试，直到全部通过
+8. 测试通过后删除临时测试脚本
 
-### 0.4 第四步：自动配置 Claude Code MCP
+### 0.5 第五步：自动配置 Claude Code MCP
 
 连接测试全部通过后，Agent 应主动为用户配置 MCP Server。
 
@@ -262,21 +351,26 @@ Agent 在配置 MCP 时需要设置以下环境变量（根据用户在 0.1 和 
 
 > **优先级说明**：LLM 密钥检测优先级为 `LLM_API_KEY` > `OPENAI_API_KEY` > `MOONSHOT_API_KEY`，推荐统一使用 `LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL` 组合。
 
-### 0.5 完整交互流程总结
+### 0.6 完整交互流程总结
 
 ```
 Agent 引导用户完成 MCP 首次配置：
 
 1. 询问 → 用户选择 LLM 平台、提供 API Key 和 URL
 2. 询问 → 用户提供 Embedding (DashScope) API Key
-3. 创建 → 生成连接测试脚本
-4. 测试 → 运行测试脚本验证连接
+3. 依赖 → 检查并安装项目所需依赖（pip install . 及可选依赖）
+   ├── 验证核心模块可导入
+   └── 按需安装缺失的可选依赖
+4. 创建 → 生成连接测试脚本（使用项目的 create_llm_backend / create_kimi_client）
+5. 测试 → 运行测试脚本验证连接
    ├── 通过 → 继续下一步
    └── 失败 → 根据错误信息修改配置，重新测试
-5. 配置 → 自动写入 Claude Code MCP 配置文件
-6. 验证 → 提示用户重启或验证 MCP 连接
-7. 清理 → 删除临时测试脚本
+6. 配置 → 自动写入 Claude Code MCP 配置文件
+7. 验证 → 提示用户重启或验证 MCP 连接
+8. 清理 → 删除临时测试脚本
 ```
+
+> **第三方模型用户提示**：CAMEL Agent 模块已支持自动检测多种 LLM 提供商。用户无需专门配置 `MOONSHOT_API_KEY`，只要设置了 `LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL`，所有功能（包括 CAMEL 多 Agent 分析）均可正常使用。
 
 ---
 
