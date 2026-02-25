@@ -16,7 +16,14 @@ from typing import Any
 
 from loguru import logger
 
-ProgressCb = Callable[[str], None] | None
+ProgressCb = Callable[[str, float], None] | None
+"""Progress callback: (message, percentage_0_to_100) -> None.
+
+Pipeline weight allocation:
+    Step 1 (graph + API docs):  0 – 15 %
+    Step 2 (embeddings):       15 – 40 %
+    Step 3 (wiki generation):  40 – 100 %
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +114,7 @@ def _generate_api_docs(
 
     if not rebuild and index_file.exists():
         if progress_cb:
-            progress_cb("[Step 1/3] Reusing cached API docs.")
+            progress_cb("[Step 1/3] Reusing cached API docs.", 15.0)
         return
 
     try:
@@ -124,7 +131,8 @@ def _generate_api_docs(
             f"[Step 1/3] API docs generated: "
             f"{result['module_count']} modules, "
             f"{result['func_count']} functions, "
-            f"{result['type_count']} types."
+            f"{result['type_count']} types.",
+            15.0,
         )
 
 
@@ -152,7 +160,8 @@ def build_graph(
                 f"[Step 1/3] Graph built: "
                 f"{result.nodes_created} nodes, "
                 f"{result.relationships_created} relationships, "
-                f"{result.files_processed} files processed."
+                f"{result.files_processed} files processed.",
+                10.0,
             )
     else:
         stats = builder.get_statistics()
@@ -160,7 +169,8 @@ def build_graph(
             progress_cb(
                 f"[Step 1/3] Reusing existing graph: "
                 f"{stats.get('node_count', '?')} nodes, "
-                f"{stats.get('relationship_count', '?')} relationships."
+                f"{stats.get('relationship_count', '?')} relationships.",
+                10.0,
             )
 
     _generate_api_docs(builder, artifact_dir, rebuild, progress_cb)
@@ -195,7 +205,8 @@ def build_vector_index(
         func_map: dict[int, dict] = cache["func_map"]
         if progress_cb:
             progress_cb(
-                f"[Step 2/3] Loaded {len(vector_store)} embeddings from cache: {vectors_path}"
+                f"[Step 2/3] Loaded {len(vector_store)} embeddings from cache: {vectors_path}",
+                40.0,
             )
         return vector_store, embedder, func_map
 
@@ -222,7 +233,8 @@ def build_vector_index(
     if progress_cb:
         progress_cb(
             f"[Step 2/3] Embedding {total} functions "
-            f"(batch size {_EMBED_BATCH_SIZE}, {(total + _EMBED_BATCH_SIZE - 1) // _EMBED_BATCH_SIZE} API calls)..."
+            f"(batch size {_EMBED_BATCH_SIZE}, {(total + _EMBED_BATCH_SIZE - 1) // _EMBED_BATCH_SIZE} API calls)...",
+            16.0,
         )
 
     vector_store = MemoryVectorStore(dimension=embedder.get_embedding_dimension())
@@ -249,9 +261,14 @@ def build_vector_index(
             func_map[node_id] = func
 
         done = min(batch_start + _EMBED_BATCH_SIZE, total)
-        pct = done * 100 // total
+        local_pct = done * 100 // total
+        # Map local 0-100% to overall 16-40%
+        overall_pct = 16.0 + (done / total) * 24.0
         if progress_cb:
-            progress_cb(f"[Step 2/3] Embedded {done}/{total} functions ({pct}%).")
+            progress_cb(
+                f"[Step 2/3] Embedded {done}/{total} functions ({local_pct}%).",
+                overall_pct,
+            )
 
     vector_store.store_embeddings_batch(records)
 
@@ -259,7 +276,7 @@ def build_vector_index(
         pickle.dump({"vector_store": vector_store, "func_map": func_map}, fh)
 
     if progress_cb:
-        progress_cb(f"[Step 2/3] Done — {len(records)} embeddings saved.")
+        progress_cb(f"[Step 2/3] Done — {len(records)} embeddings saved.", 40.0)
 
     return vector_store, embedder, func_map
 
@@ -307,7 +324,8 @@ def run_wiki_generation(
         if progress_cb:
             progress_cb(
                 "[Step 3/3] Skipped — no LLM API key configured. "
-                "Set LLM_API_KEY, OPENAI_API_KEY, or MOONSHOT_API_KEY to enable wiki generation."
+                "Set LLM_API_KEY, OPENAI_API_KEY, or MOONSHOT_API_KEY to enable wiki generation.",
+                100.0,
             )
         return output_dir / "index.md", 0
     agent = CamelAgent(
@@ -323,17 +341,19 @@ def run_wiki_generation(
             planned_pages = pickle.load(fh)
         if progress_cb:
             progress_cb(
-                f"[Step 3/3] Loaded wiki structure from cache: {len(planned_pages)} pages."
+                f"[Step 3/3] Loaded wiki structure from cache: {len(planned_pages)} pages.",
+                45.0,
             )
     else:
         if progress_cb:
-            progress_cb("[Step 3/3] Planning wiki structure (Phase 1)...")
+            progress_cb("[Step 3/3] Planning wiki structure (Phase 1)...", 41.0)
         planned_pages = plan_wiki_structure(agent, repo_path, project_name, comprehensive)
         with open(structure_cache, "wb") as fh:
             pickle.dump(planned_pages, fh)
         if progress_cb:
             progress_cb(
-                f"[Step 3/3] Wiki structure planned: {len(planned_pages)} pages."
+                f"[Step 3/3] Wiki structure planned: {len(planned_pages)} pages.",
+                45.0,
             )
 
     high = [p for p in planned_pages if p["importance"] == "high"]
@@ -344,7 +364,8 @@ def run_wiki_generation(
     if progress_cb:
         progress_cb(
             f"[Step 3/3] Generating {total_pages} wiki pages "
-            f"({'comprehensive' if comprehensive else 'concise'} mode)..."
+            f"({'comprehensive' if comprehensive else 'concise'} mode)...",
+            46.0,
         )
 
     wiki_dir = output_dir / "wiki"
@@ -367,18 +388,23 @@ def run_wiki_generation(
             page_file.write_text(content, encoding="utf-8")
             generated.append({**page, "content": content})
 
+            # Map page progress to overall 46-98%
+            page_pct = 46.0 + (i / total_pages) * 52.0
             if progress_cb:
                 progress_cb(
                     f"[Step 3/3] Page {i}/{total_pages} done: {page['id']} — {page['title']} "
-                    f"({len(content)} chars)."
+                    f"({len(content)} chars).",
+                    page_pct,
                 )
         except Exception as exc:
             err_content = f"# {page['title']}\n\n*生成失败: {exc}*"
             (wiki_dir / f"{page['id']}.md").write_text(err_content, encoding="utf-8")
             generated.append({**page, "content": err_content})
+            page_pct = 46.0 + (i / total_pages) * 52.0
             if progress_cb:
                 progress_cb(
-                    f"[Step 3/3] Page {i}/{total_pages} FAILED: {page['id']} — {exc}"
+                    f"[Step 3/3] Page {i}/{total_pages} FAILED: {page['id']} — {exc}",
+                    page_pct,
                 )
 
     # Write index.md
@@ -427,7 +453,8 @@ def run_wiki_generation(
 
     if progress_cb:
         progress_cb(
-            f"[Step 3/3] Wiki complete: {len(generated)} pages at {output_dir}/"
+            f"[Step 3/3] Wiki complete: {len(generated)} pages at {output_dir}/",
+            100.0,
         )
 
     return index_path, len(generated)

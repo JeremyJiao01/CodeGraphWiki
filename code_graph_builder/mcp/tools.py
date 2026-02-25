@@ -501,9 +501,9 @@ class MCPToolsRegistry:
 
         loop = asyncio.get_event_loop()
 
-        def sync_progress(msg: str) -> None:
+        def sync_progress(msg: str, pct: float = 0.0) -> None:
             if _progress_cb is not None:
-                asyncio.run_coroutine_threadsafe(_progress_cb(msg), loop)
+                asyncio.run_coroutine_threadsafe(_progress_cb(msg, pct), loop)
 
         result = await loop.run_in_executor(
             None,
