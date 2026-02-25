@@ -322,7 +322,13 @@ class GraphUpdater:
 
                 return False
 
-        for filepath in self.repo_path.rglob("*"):
+        # Sort files so header files (.h) are processed before source files (.c)
+        # to populate header declarations before visibility resolution.
+        all_files = sorted(
+            self.repo_path.rglob("*"),
+            key=lambda p: (0 if p.suffix == cs.EXT_H else 1, str(p)),
+        )
+        for filepath in all_files:
             if filepath.is_file() and not should_skip_path(
                 filepath,
                 self.repo_path,
@@ -330,6 +336,17 @@ class GraphUpdater:
                 unignore_paths=self.unignore_paths,
             ):
                 lang_config = get_language_spec(filepath.suffix)
+                # Fallback: if the mapped language (e.g. CPP for .h) isn't
+                # available but C is, use C for header files.
+                if (
+                    lang_config
+                    and isinstance(lang_config.language, cs.SupportedLanguage)
+                    and lang_config.language not in self.parsers
+                    and filepath.suffix == cs.EXT_H
+                    and cs.SupportedLanguage.C in self.parsers
+                ):
+                    from .language_spec import LANGUAGE_SPECS
+                    lang_config = LANGUAGE_SPECS.get(cs.SupportedLanguage.C)
                 if (
                     lang_config
                     and isinstance(lang_config.language, cs.SupportedLanguage)

@@ -65,15 +65,31 @@ code_graph_builder/
 ### 安装
 
 ```bash
-# 基础依赖（含 Kùzu 后端）
-uv sync
+# 克隆项目
+git clone <repo-url>
+cd CodeGraphWiki
 
-# 含语义搜索（Qwen3 嵌入）
-uv sync --extra semantic
+# 基础安装（含 Kùzu 后端）
+pip install .
+
+# 含 C/C++ Tree-sitter 语法
+pip install ".[treesitter-c]"
 
 # 含所有 Tree-sitter 语言语法
-uv sync --extra treesitter-full
+pip install ".[treesitter-full]"
+
+# 含语义搜索（Qwen3 嵌入）
+pip install ".[semantic]"
+
+# 安装全部可选依赖
+pip install ".[treesitter-full,semantic,rag]"
 ```
+
+> 如需在虚拟环境中安装：
+> ```bash
+> python3 -m venv .venv && source .venv/bin/activate
+> pip install ".[treesitter-full]"
+> ```
 
 ### 基本用法
 
@@ -136,6 +152,33 @@ service = SemanticSearchService(
 results = service.search("recursive fibonacci implementation", top_k=5)
 ```
 
+### MCP 服务器
+
+项目内置 MCP（Model Context Protocol）服务器，可与 Claude Code 等 AI 工具集成：
+
+```bash
+# 启动 MCP 服务器（stdio 模式）
+python3 -m code_graph_builder.mcp.server
+```
+
+在 Claude Code 配置文件中添加：
+
+```json
+{
+  "mcpServers": {
+    "code-graph-builder": {
+      "command": "python3",
+      "args": ["-m", "code_graph_builder.mcp.server"],
+      "env": {
+        "CGB_WORKSPACE": "~/.code-graph-builder"
+      }
+    }
+  }
+}
+```
+
+MCP 服务器提供的工具：`initialize_repository`、`query_code_graph`、`get_code_snippet`、`semantic_search`、`list_api_interfaces` 等。
+
 ### RAG Wiki 生成
 
 需要配置 Moonshot API Key（Kimi k2.5）：
@@ -144,11 +187,10 @@ results = service.search("recursive fibonacci implementation", top_k=5)
 export MOONSHOT_API_KEY=sk-xxxxxx
 ```
 
-```python
+```bash
 # 参考 examples/test_rag_tinycc.py
 # 按模块批量生成代码 wiki，真实源码作为上下文
-
-python code_graph_builder/examples/test_rag_tinycc.py \
+python3 code_graph_builder/examples/test_rag_tinycc.py \
     --repo-path /path/to/tinycc \
     --max-pages 10 \
     --output-dir ./rag_output
@@ -158,6 +200,7 @@ python code_graph_builder/examples/test_rag_tinycc.py \
 
 | 变量名 | 用途 | 默认值 |
 |--------|------|--------|
+| `CGB_WORKSPACE` | MCP 服务器工作目录 | `~/.code-graph-builder` |
 | `DASHSCOPE_API_KEY` | 阿里云 DashScope（Qwen3 嵌入） | 无 |
 | `MOONSHOT_API_KEY` | Moonshot AI（Kimi k2.5 RAG） | 无 |
 | `MOONSHOT_MODEL` | Kimi 模型名 | `kimi-k2.5` |
@@ -170,7 +213,7 @@ python code_graph_builder/examples/test_rag_tinycc.py \
 |------|----------|
 | Python | 函数、类、方法、导入、调用关系 |
 | JavaScript / TypeScript | 函数、类、模块、调用关系 |
-| C / C++ | 函数、结构体、调用关系 |
+| C / C++ | 函数、结构体/联合体/枚举（含成员）、typedef、宏、调用关系 |
 | Rust | 函数、impl 块、trait、调用关系 |
 | Go | 函数、接口、调用关系 |
 | Java | 类、方法、继承、调用关系 |
@@ -181,9 +224,11 @@ python code_graph_builder/examples/test_rag_tinycc.py \
 
 ## 图模式（Graph Schema）
 
-**节点类型**：`Project`、`Package`、`Module`、`File`、`Class`、`Function`、`Method`、`Folder`
+**节点类型**：`Project`、`Package`、`Module`、`File`、`Class`、`Function`、`Method`、`Type`、`Folder`
 
 **关系类型**：`CONTAINS`、`DEFINES`、`CALLS`、`INHERITS`、`IMPORTS`
+
+**节点属性**：`qualified_name`（主键）、`name`、`path`、`start_line`、`end_line`、`signature`、`return_type`、`visibility`、`parameters`、`kind`、`docstring`
 
 ## 示例脚本
 
@@ -214,9 +259,15 @@ python code_graph_builder/examples/test_rag_tinycc.py \
 ## 运行测试
 
 ```bash
+# 安装测试依赖
+pip install pytest
+
 # 单元测试（无需外部依赖）
-uv run pytest code_graph_builder/tests/ -v
+python3 -m pytest code_graph_builder/tests/ -v
 
 # RAG 模块测试
-uv run pytest code_graph_builder/rag/tests/ -v
+python3 -m pytest code_graph_builder/rag/tests/ -v
+
+# C API 提取测试（需要 tree-sitter-c）
+python3 -m pytest code_graph_builder/tests/test_c_api_extraction.py -v
 ```

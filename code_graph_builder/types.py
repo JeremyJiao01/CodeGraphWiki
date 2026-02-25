@@ -104,12 +104,14 @@ class BatchWrapper(TypedDict):
 
 
 # Language query types
-class LanguageQueries(TypedDict):
+class LanguageQueries(TypedDict, total=False):
     functions: Query | None
     classes: Query | None
     calls: Query | None
     imports: Query | None
     locals: Query | None
+    typedefs: Query | None
+    macros: Query | None
     config: LanguageSpec
     language: Language
     parser: Parser

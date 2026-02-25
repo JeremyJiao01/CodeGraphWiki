@@ -442,6 +442,13 @@ LANGUAGE_SPECS: dict[cs.SupportedLanguage, LanguageSpec] = {
         call_query="""
     (call_expression) @call
     """,
+        typedef_query="""
+    (type_definition) @typedef
+    """,
+        macro_query="""
+    (preproc_def) @macro
+    (preproc_function_def) @macro
+    """,
     ),
     cs.SupportedLanguage.CPP: LanguageSpec(
         language=cs.SupportedLanguage.CPP,

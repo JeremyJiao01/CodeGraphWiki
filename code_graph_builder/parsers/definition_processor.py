@@ -97,6 +97,11 @@ class DefinitionProcessor:
             self._ingest_functions(root_node, module_qn, language, queries)
             self._ingest_classes(root_node, module_qn, language, queries)
 
+            # Ingest C-specific constructs: typedefs and macros
+            if language == cs.SupportedLanguage.C:
+                self._ingest_c_typedefs(root_node, module_qn, queries)
+                self._ingest_c_macros(root_node, module_qn, queries)
+
             return (root_node, language)
 
         except Exception as e:
@@ -246,6 +251,8 @@ class DefinitionProcessor:
         if not class_query:
             return
 
+        is_c_lang = language == cs.SupportedLanguage.C
+
         try:
             cursor = QueryCursor(class_query)
             captures = cursor.captures(root_node)
@@ -267,6 +274,16 @@ class DefinitionProcessor:
                     cs.KEY_START_LINE: class_node.start_point[0] + 1,
                     cs.KEY_END_LINE: class_node.end_point[0] + 1,
                 }
+
+                # Extract C struct/union/enum members and build signature
+                if is_c_lang:
+                    kind = self._c_class_kind(class_node)
+                    members = self._extract_c_members(class_node)
+                    class_props[cs.KEY_KIND] = kind
+                    class_props[cs.KEY_PARAMETERS] = members
+                    class_props[cs.KEY_SIGNATURE] = self._build_c_class_signature(
+                        kind, class_name, members
+                    )
 
                 logger.info(f"  Found class: {class_name}")
                 self.ingestor.ensure_node_batch(cs.NodeLabel.CLASS, class_props)
@@ -416,7 +433,8 @@ class DefinitionProcessor:
         Rules:
         - ``static`` keyword → "static" (file-local, private)
         - Declared in a ``.h`` header file → "public"
-        - Otherwise → "public" (C functions default to external linkage)
+        - Function name found in a previously processed header → "public"
+        - Otherwise → "extern" (external linkage but not declared in a header)
         """
         # Check for ``static`` storage class specifier
         for child in func_node.children:
@@ -424,7 +442,13 @@ class DefinitionProcessor:
                 text = safe_decode_text(child)
                 if text and "static" in text:
                     return "static"
-        return "public"
+        if is_header:
+            return "public"
+        # Check if this function was declared in a previously processed header
+        func_name = self._extract_function_name(func_node)
+        if func_name and func_name in self._header_declarations:
+            return "public"
+        return "extern"
 
     @staticmethod
     def _build_c_signature(
@@ -436,6 +460,196 @@ class DefinitionProcessor:
         ret = return_type or "void"
         params = ", ".join(parameters) if parameters else "void"
         return f"{ret} {name}({params})"
+
+    # -----------------------------------------------------------------
+    # C struct/union/enum member extraction
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _c_class_kind(class_node: Node) -> str:
+        """Return the C type kind: 'struct', 'union', or 'enum'."""
+        node_type = class_node.type
+        if node_type == "struct_specifier":
+            return "struct"
+        if node_type == "union_specifier":
+            return "union"
+        if node_type == "enum_specifier":
+            return "enum"
+        return "struct"
+
+    @staticmethod
+    def _extract_c_members(class_node: Node) -> list[str]:
+        """Extract member declarations from a C struct/union/enum.
+
+        For struct/union: returns field declarations like ``["int x", "char *name"]``.
+        For enum: returns enumerator names like ``["RED", "GREEN", "BLUE"]``.
+        """
+        members: list[str] = []
+        body = class_node.child_by_field_name("body")
+        if not body:
+            return members
+
+        for child in body.children:
+            if child.type == "field_declaration":
+                text = safe_decode_text(child)
+                if text:
+                    # Strip trailing semicolons
+                    members.append(text.rstrip(";").strip())
+            elif child.type == "enumerator":
+                name_node = child.child_by_field_name("name")
+                if name_node:
+                    text = safe_decode_text(name_node)
+                    if text:
+                        members.append(text)
+        return members
+
+    @staticmethod
+    def _build_c_class_signature(kind: str, name: str, members: list[str]) -> str:
+        """Build a summary signature for a C struct/union/enum."""
+        if not members:
+            return f"{kind} {name}"
+        member_str = "; ".join(members)
+        return f"{kind} {name} {{ {member_str} }}"
+
+    # -----------------------------------------------------------------
+    # C typedef extraction
+    # -----------------------------------------------------------------
+
+    def _ingest_c_typedefs(
+        self,
+        root_node: Node,
+        module_qn: str,
+        queries: dict[cs.SupportedLanguage, LanguageQueries],
+    ) -> None:
+        """Extract typedef declarations and create Type nodes."""
+        lang_queries = queries.get(cs.SupportedLanguage.C)
+        if not lang_queries:
+            return
+
+        typedef_query = lang_queries.get("typedefs")
+        if not typedef_query:
+            return
+
+        try:
+            cursor = QueryCursor(typedef_query)
+            captures = cursor.captures(root_node)
+            typedef_nodes = captures.get(cs.CAPTURE_TYPEDEF, [])
+
+            for td_node in typedef_nodes:
+                if not isinstance(td_node, Node):
+                    continue
+
+                td_name = self._extract_c_typedef_name(td_node)
+                if not td_name:
+                    continue
+
+                td_qn = f"{module_qn}.{td_name}"
+                td_text = safe_decode_text(td_node)
+                signature = td_text.rstrip(";").strip() if td_text else f"typedef {td_name}"
+
+                td_props: PropertyDict = {
+                    cs.KEY_QUALIFIED_NAME: td_qn,
+                    cs.KEY_NAME: td_name,
+                    cs.KEY_START_LINE: td_node.start_point[0] + 1,
+                    cs.KEY_END_LINE: td_node.end_point[0] + 1,
+                    cs.KEY_SIGNATURE: signature,
+                    cs.KEY_KIND: "typedef",
+                }
+
+                logger.info(f"  Found typedef: {td_name}")
+                self.ingestor.ensure_node_batch(cs.NodeLabel.TYPE, td_props)
+
+                self.ingestor.ensure_relationship_batch(
+                    (cs.NodeLabel.MODULE, cs.KEY_QUALIFIED_NAME, module_qn),
+                    cs.RelationshipType.DEFINES,
+                    (cs.NodeLabel.TYPE, cs.KEY_QUALIFIED_NAME, td_qn),
+                )
+
+        except Exception as e:
+            logger.debug(f"Error ingesting typedefs: {e}")
+
+    @staticmethod
+    def _extract_c_typedef_name(td_node: Node) -> str | None:
+        """Extract the name introduced by a typedef.
+
+        The ``type_definition`` node has a ``declarator`` field which contains
+        the new type name (a ``type_identifier``).
+        """
+        declarator = td_node.child_by_field_name("declarator")
+        if declarator:
+            if declarator.type == "type_identifier":
+                return safe_decode_text(declarator)
+            # Pointer typedefs: typedef int *int_ptr;
+            inner = declarator.child_by_field_name("declarator")
+            if inner:
+                return safe_decode_text(inner)
+        return None
+
+    # -----------------------------------------------------------------
+    # C macro extraction
+    # -----------------------------------------------------------------
+
+    def _ingest_c_macros(
+        self,
+        root_node: Node,
+        module_qn: str,
+        queries: dict[cs.SupportedLanguage, LanguageQueries],
+    ) -> None:
+        """Extract #define macro definitions and create Function nodes with kind='macro'."""
+        lang_queries = queries.get(cs.SupportedLanguage.C)
+        if not lang_queries:
+            return
+
+        macro_query = lang_queries.get("macros")
+        if not macro_query:
+            return
+
+        try:
+            cursor = QueryCursor(macro_query)
+            captures = cursor.captures(root_node)
+            macro_nodes = captures.get(cs.CAPTURE_MACRO, [])
+
+            for macro_node in macro_nodes:
+                if not isinstance(macro_node, Node):
+                    continue
+
+                macro_name = self._extract_c_macro_name(macro_node)
+                if not macro_name:
+                    continue
+
+                macro_qn = f"{module_qn}.{macro_name}"
+                macro_text = safe_decode_text(macro_node)
+                signature = macro_text.strip() if macro_text else f"#define {macro_name}"
+
+                macro_props: PropertyDict = {
+                    cs.KEY_QUALIFIED_NAME: macro_qn,
+                    cs.KEY_NAME: macro_name,
+                    cs.KEY_START_LINE: macro_node.start_point[0] + 1,
+                    cs.KEY_END_LINE: macro_node.end_point[0] + 1,
+                    cs.KEY_SIGNATURE: signature,
+                    cs.KEY_KIND: "macro",
+                    cs.KEY_VISIBILITY: "public",
+                }
+
+                logger.info(f"  Found macro: {macro_name}")
+                self.ingestor.ensure_node_batch(cs.NodeLabel.FUNCTION, macro_props)
+
+                self.ingestor.ensure_relationship_batch(
+                    (cs.NodeLabel.MODULE, cs.KEY_QUALIFIED_NAME, module_qn),
+                    cs.RelationshipType.DEFINES,
+                    (cs.NodeLabel.FUNCTION, cs.KEY_QUALIFIED_NAME, macro_qn),
+                )
+
+        except Exception as e:
+            logger.debug(f"Error ingesting macros: {e}")
+
+    @staticmethod
+    def _extract_c_macro_name(macro_node: Node) -> str | None:
+        """Extract the macro name from a preproc_def node."""
+        name_node = macro_node.child_by_field_name("name")
+        if name_node:
+            return safe_decode_text(name_node)
+        return None
 
     def _extract_function_name(self, func_node: Node) -> str | None:
         """Extract function name from a function node."""
