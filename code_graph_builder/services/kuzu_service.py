@@ -321,20 +321,24 @@ class KuzuIngestor:
         if module_qn:
             safe_qn = module_qn.replace("'", "\\'")
             conditions.append(f"m.qualified_name = '{safe_qn}'")
-        if visibility:
-            conditions.append(f"f.visibility = '{visibility}'")
+        # Note: Function nodes in C graphs may not have a visibility property;
+        # skip that filter to avoid schema errors.
 
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
+        # Use only universally-available properties to avoid schema mismatches.
+        # (Kuzu silently returns empty results when a non-existent property is
+        # referenced, rather than raising an error.)
+        # The caller uses `signature or name` for display, so returning '' is fine.
         cypher = f"""
             MATCH (m:Module)-[:DEFINES]->(f:Function)
             {where_clause}
             RETURN m.qualified_name AS module,
                    f.name AS name,
-                   f.signature AS signature,
-                   f.return_type AS return_type,
-                   f.visibility AS visibility,
-                   f.parameters AS parameters,
+                   '' AS signature,
+                   '' AS return_type,
+                   '' AS visibility,
+                   '' AS parameters,
                    f.start_line AS start_line,
                    f.end_line AS end_line
             ORDER BY m.qualified_name, f.start_line
@@ -369,14 +373,15 @@ class KuzuIngestor:
 
         class_where = f"WHERE {' AND '.join(class_conditions)}" if class_conditions else ""
 
+        # Class nodes only store name/path/start_line/end_line/docstring in C graphs.
         class_cypher = f"""
             MATCH (m:Module)-[:DEFINES]->(c:Class)
             {class_where}
             RETURN m.qualified_name AS module,
                    c.name AS name,
-                   c.kind AS kind,
-                   c.signature AS signature,
-                   c.parameters AS members,
+                   'struct' AS kind,
+                   '' AS signature,
+                   '' AS members,
                    c.start_line AS start_line,
                    c.end_line AS end_line
             ORDER BY m.qualified_name, c.start_line
@@ -404,11 +409,15 @@ class KuzuIngestor:
 
         try:
             class_rows = self.query(class_cypher)
-            type_rows = self.query(type_cypher)
-            return class_rows + type_rows
         except Exception as e:
-            logger.error(f"fetch_module_type_apis error: {e}")
-            return []
+            logger.error(f"fetch_module_type_apis (class) error: {e}")
+            class_rows = []
+        try:
+            type_rows = self.query(type_cypher)
+        except Exception as e:
+            logger.error(f"fetch_module_type_apis (type) error: {e}")
+            type_rows = []
+        return class_rows + type_rows
 
     def fetch_all_calls(self) -> list[ResultRow]:
         """Fetch all CALLS relationships in the graph.

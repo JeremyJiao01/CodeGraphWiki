@@ -66,7 +66,7 @@ class KimiClient:
         model: str = DEFAULT_MODEL,
         base_url: str = DEFAULT_BASE_URL,
         max_tokens: int = 4096,
-        temperature: float = 0.7,
+        temperature: float = 1.0,
         timeout: int = 300,
     ):
         self.api_key = api_key

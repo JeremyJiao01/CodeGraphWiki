@@ -37,7 +37,7 @@ class LLMBackend:
     api_key: str = ""
     model: str = "gpt-4o"
     base_url: str = "https://api.openai.com/v1"
-    temperature: float = 0.0
+    temperature: float = 1.0
     max_tokens: int = 4096
 
     @property
@@ -74,7 +74,8 @@ class LLMBackend:
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        message = data["choices"][0]["message"]
+        return message.get("content") or message.get("reasoning_content", "")
 
 
 def create_llm_backend(**kwargs: Any) -> LLMBackend:

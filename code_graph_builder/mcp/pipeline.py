@@ -73,16 +73,16 @@ def _read_function_source(func: dict, repo_path: Path) -> str | None:
 _FUNC_DOC_QUERY = """
     MATCH (m:Module)-[:DEFINES]->(f:Function)
     RETURN m.qualified_name, m.path,
-           f.qualified_name, f.name, f.signature, f.return_type,
-           f.visibility, f.parameters, f.docstring,
+           f.qualified_name, f.name, '' AS signature, '' AS return_type,
+           '' AS visibility, '' AS parameters, f.docstring,
            f.start_line, f.end_line, f.path
     ORDER BY m.qualified_name, f.start_line
 """
 
 _TYPE_DOC_QUERY_CLASS = """
     MATCH (m:Module)-[:DEFINES]->(c:Class)
-    RETURN m.qualified_name, c.name, c.kind, c.signature,
-           c.parameters, c.start_line, c.end_line
+    RETURN m.qualified_name, c.name, 'struct' AS kind, '' AS signature,
+           '' AS parameters, c.start_line, c.end_line
     ORDER BY m.qualified_name, c.start_line
 """
 
@@ -332,7 +332,6 @@ def run_wiki_generation(
         role=f"{project_name} 技术文档专家",
         goal=f"结合真实源码，为 {project_name} 生成专业、准确、图文并茂的技术 Wiki",
         backstory=f"拥有丰富的技术写作和代码阅读经验，深入理解 {project_name} 源码架构",
-        llm_backend=llm_backend,
     )
 
     # Phase 1: plan structure (or load cache)
