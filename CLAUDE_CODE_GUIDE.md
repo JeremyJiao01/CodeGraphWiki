@@ -442,6 +442,7 @@ python3 -m code_graph_builder.commands_cli info
 | `/code-snippet` | 按 qualified name 获取源码 | `/code-snippet mymodule.MyClass.method` |
 | `/code-search` | 语义向量搜索 | `/code-search 递归树遍历` |
 | `/code-locate` | Tree-sitter 定位函数 | `/code-locate src/parser.c parse_expr` |
+| `/wiki-gen` | 单独重新生成 Wiki（复用已有图和嵌入） | `/wiki-gen --rebuild` |
 | `/wiki-list` | 列出 Wiki 页面 | `/wiki-list` |
 | `/wiki-read` | 读取 Wiki 页面 | `/wiki-read page-1` |
 | `/api-list` | 列出 API 接口 | `/api-list --module project.parser` |
@@ -467,6 +468,7 @@ python3 -m code_graph_builder.commands_cli info
 | 图构建 + 嵌入 + Wiki | ✅ `/repo-init` | ✅ `initialize_repository` |
 | 自然语言 Cypher 查询 | ✅ `/graph-query` | ✅ `query_code_graph` |
 | 语义向量搜索 | ✅ `/code-search` | ✅ `semantic_search` |
+| Wiki 单独生成 | ✅ `/wiki-gen` | ✅ `generate_wiki` |
 | Wiki 浏览 | ✅ `/wiki-list` `/wiki-read` | ✅ `list_wiki_pages` `get_wiki_page` |
 | API 文档 | ✅ `/api-browse` `/api-detail` | ✅ `list_api_docs` `get_api_doc` |
 | 自然语言找 API | ✅ `/api-find` | ✅ `find_api` |
@@ -640,6 +642,7 @@ CodeGraphWiki/
 │   ├── code-snippet.md           # /code-snippet — 获取源码
 │   ├── code-search.md            # /code-search — 语义搜索
 │   ├── code-locate.md            # /code-locate — 定位函数
+│   ├── wiki-gen.md               # /wiki-gen — 单独重新生成 Wiki
 │   ├── wiki-list.md              # /wiki-list — 列出 Wiki
 │   ├── wiki-read.md              # /wiki-read — 读取 Wiki
 │   ├── api-list.md               # /api-list — 列出 API
