@@ -122,7 +122,10 @@ def _generate_api_docs(
         type_rows = builder.query(_TYPE_DOC_QUERY_CLASS) + builder.query(_TYPE_DOC_QUERY_TYPE)
         call_rows = builder.query(_CALLS_QUERY)
     except Exception as exc:
-        logger.warning(f"API docs skipped — graph query failed: {exc}")
+        msg = f"[Step 1/3] WARNING: API docs skipped — graph query failed: {exc}"
+        logger.warning(msg)
+        if progress_cb:
+            progress_cb(msg, 15.0)
         return
 
     result = generate_api_docs(func_rows, type_rows, call_rows, artifact_dir)

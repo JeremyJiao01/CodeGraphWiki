@@ -159,6 +159,8 @@ def cmd_init(args: argparse.Namespace, ws: Workspace) -> None:
     rebuild = args.rebuild
     wiki_mode = args.mode
     backend = args.backend
+    skip_embed = args.no_embed
+    skip_wiki = args.no_wiki or skip_embed  # wiki requires embeddings
     comprehensive = wiki_mode != "concise"
     max_pages = MAX_PAGES_COMPREHENSIVE if comprehensive else MAX_PAGES_CONCISE
 
@@ -172,7 +174,13 @@ def cmd_init(args: argparse.Namespace, ws: Workspace) -> None:
         prefix = f"[{pct:.0f}%] " if pct > 0 else ""
         _progress(f"{prefix}{msg}")
 
-    _progress(f"=== Initializing: {repo_path.name} ===")
+    steps = "graph"
+    if not skip_embed:
+        steps += " + embeddings"
+    if not skip_wiki:
+        steps += " + wiki"
+
+    _progress(f"=== Initializing: {repo_path.name} ({steps}) ===")
     _progress(f"    Workspace: {artifact_dir}")
     _progress(f"    Mode: {wiki_mode} | Backend: {backend} | Rebuild: {rebuild}")
     _progress("")
@@ -180,34 +188,50 @@ def cmd_init(args: argparse.Namespace, ws: Workspace) -> None:
     try:
         builder = build_graph(repo_path, db_path, artifact_dir, rebuild, progress_cb, backend=backend)
 
-        vector_store, embedder, func_map = build_vector_index(
-            builder, repo_path, vectors_path, rebuild, progress_cb
-        )
+        page_count = 0
+        index_path = wiki_dir / "index.md"
 
-        index_path, page_count = run_wiki_generation(
-            builder=builder,
-            repo_path=repo_path,
-            output_dir=wiki_dir,
-            max_pages=max_pages,
-            rebuild=rebuild,
-            comprehensive=comprehensive,
-            vector_store=vector_store,
-            embedder=embedder,
-            func_map=func_map,
-            progress_cb=progress_cb,
-        )
+        if not skip_embed:
+            vector_store, embedder, func_map = build_vector_index(
+                builder, repo_path, vectors_path, rebuild, progress_cb
+            )
+
+            if not skip_wiki:
+                index_path, page_count = run_wiki_generation(
+                    builder=builder,
+                    repo_path=repo_path,
+                    output_dir=wiki_dir,
+                    max_pages=max_pages,
+                    rebuild=rebuild,
+                    comprehensive=comprehensive,
+                    vector_store=vector_store,
+                    embedder=embedder,
+                    func_map=func_map,
+                    progress_cb=progress_cb,
+                )
+            else:
+                _progress("[Step 3/3] Wiki generation skipped (--no-wiki).")
+        else:
+            _progress("[Step 2/3] Embedding generation skipped (--no-embed).")
+            _progress("[Step 3/3] Wiki generation skipped (requires embeddings).")
 
         save_meta(artifact_dir, repo_path, page_count)
         ws.set_active(artifact_dir)
 
         _progress("")
         _progress("=== Done ===")
+        skipped = []
+        if skip_embed:
+            skipped.append("embed")
+        if skip_wiki:
+            skipped.append("wiki")
         _result_json({
             "status": "success",
             "repo_path": str(repo_path),
             "artifact_dir": str(artifact_dir),
             "wiki_index": str(index_path),
             "wiki_pages": page_count,
+            "skipped": skipped,
         })
 
     except Exception as exc:
@@ -235,15 +259,48 @@ def cmd_info(_args: argparse.Namespace, ws: Workspace) -> None:
         "wiki_pages": wiki_pages,
     }
 
-    # Graph statistics
+    # Graph statistics + language extraction stats
     db_path = artifact_dir / "graph.db"
     if db_path.exists():
         try:
             ingestor = _open_ingestor(artifact_dir)
             result["graph_stats"] = ingestor.get_statistics()
+
+            # Language extraction stats: count files by extension
+            try:
+                file_rows = ingestor.query(
+                    "MATCH (f:File) RETURN f.path AS path"
+                )
+                from .language_spec import get_language_for_extension
+                lang_counts: dict[str, int] = {}
+                total_files = 0
+                for row in file_rows:
+                    raw = row.get("result", row)
+                    fpath = raw[0] if isinstance(raw, (list, tuple)) else raw
+                    if isinstance(fpath, str):
+                        ext = Path(fpath).suffix.lower()
+                        lang = get_language_for_extension(ext)
+                        if lang:
+                            lang_name = lang.value
+                            lang_counts[lang_name] = lang_counts.get(lang_name, 0) + 1
+                            total_files += 1
+                result["language_stats"] = {
+                    "total_code_files": total_files,
+                    "by_language": dict(sorted(lang_counts.items(), key=lambda x: -x[1])),
+                }
+            except Exception:
+                pass  # language stats are optional
+
             ingestor.__exit__(None, None, None)
         except Exception as exc:
             result["graph_stats"] = {"error": str(exc)}
+
+    # Language support info
+    from .constants import LANGUAGE_METADATA, LanguageStatus
+    result["supported_languages"] = {
+        "full": [m.display_name for lang, m in LANGUAGE_METADATA.items() if m.status == LanguageStatus.FULL],
+        "in_development": [m.display_name for lang, m in LANGUAGE_METADATA.items() if m.status == LanguageStatus.DEV],
+    }
 
     # Service availability
     from .rag.llm_backend import create_llm_backend
@@ -252,6 +309,15 @@ def cmd_info(_args: argparse.Namespace, ws: Workspace) -> None:
     result["cypher_query_available"] = llm.available
     result["semantic_search_available"] = (artifact_dir / "vectors.pkl").exists()
     result["api_docs_available"] = (artifact_dir / "api_docs" / "index.md").exists()
+
+    # Warnings for missing services
+    warnings = []
+    if not llm.available:
+        warnings.append("LLM not configured — set LLM_API_KEY, OPENAI_API_KEY, or MOONSHOT_API_KEY.")
+    if not (artifact_dir / "vectors.pkl").exists():
+        warnings.append("Embeddings not built — semantic search unavailable.")
+    if warnings:
+        result["warnings"] = warnings
 
     _result_json(result)
 
@@ -378,7 +444,7 @@ def cmd_search(args: argparse.Namespace, ws: Workspace) -> None:
     if not vectors_path.exists():
         _die("Embeddings not found. Run /init-repo first to build vector index.")
 
-    from .embeddings.qwen3_embedder import Qwen3Embedder
+    from .embeddings.qwen3_embedder import create_embedder
     from .tools.semantic_search import SemanticSearchService
 
     vector_store = _load_vector_store(vectors_path)
@@ -386,7 +452,10 @@ def cmd_search(args: argparse.Namespace, ws: Workspace) -> None:
         _die("Failed to load vector store.")
 
     ingestor = _open_ingestor(artifact_dir)
-    embedder = Qwen3Embedder()
+    try:
+        embedder = create_embedder()
+    except ValueError as exc:
+        _die(f"Embedding API not configured: {exc}")
     service = SemanticSearchService(
         embedder=embedder, vector_store=vector_store, graph_service=ingestor,
     )
@@ -651,7 +720,7 @@ def cmd_api_find(args: argparse.Namespace, ws: Workspace) -> None:
     if not vectors_path.exists():
         _die("Embeddings not found. Run /repo-init first to build vector index.")
 
-    from .embeddings.qwen3_embedder import Qwen3Embedder
+    from .embeddings.qwen3_embedder import create_embedder
     from .tools.semantic_search import SemanticSearchService
 
     vector_store = _load_vector_store(vectors_path)
@@ -659,7 +728,11 @@ def cmd_api_find(args: argparse.Namespace, ws: Workspace) -> None:
         _die("Failed to load vector store.")
 
     ingestor = _open_ingestor(artifact_dir)
-    embedder = Qwen3Embedder()
+    try:
+        embedder = create_embedder()
+    except ValueError as exc:
+        ingestor.__exit__(None, None, None)
+        _die(f"Embedding API not configured: {exc}")
     service = SemanticSearchService(
         embedder=embedder, vector_store=vector_store, graph_service=ingestor,
     )
@@ -763,8 +836,8 @@ def cmd_wiki_gen(args: argparse.Namespace, ws: Workspace) -> None:
         vector_store = cache["vector_store"]
         func_map = cache["func_map"]
 
-        from .embeddings.qwen3_embedder import Qwen3Embedder
-        embedder = Qwen3Embedder()
+        from .embeddings.qwen3_embedder import create_embedder
+        embedder = create_embedder()
 
         _progress("Loaded existing graph and embeddings. Starting wiki generation...")
         _progress("")
@@ -805,6 +878,64 @@ def cmd_wiki_gen(args: argparse.Namespace, ws: Workspace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: embed-gen (standalone embedding rebuild)
+# ---------------------------------------------------------------------------
+
+def cmd_embed_gen(args: argparse.Namespace, ws: Workspace) -> None:
+    from .mcp.pipeline import build_vector_index, save_meta
+
+    artifact_dir = ws.require_active()
+    meta = ws.load_meta()
+    if meta is None:
+        _die("No metadata found. Run /repo-init first.")
+
+    repo_path = Path(meta["repo_path"]).resolve()
+    if not repo_path.exists():
+        _die(f"Repository path no longer exists: {repo_path}")
+
+    db_path = artifact_dir / "graph.db"
+    if not db_path.exists():
+        _die("Graph database not found. Run /repo-init first to build the graph.")
+
+    vectors_path = artifact_dir / "vectors.pkl"
+    rebuild = args.rebuild
+
+    def progress_cb(msg: str, pct: float = 0.0) -> None:
+        prefix = f"[{pct:.0f}%] " if pct > 0 else ""
+        _progress(f"{prefix}{msg}")
+
+    _progress(f"=== Embedding Generation: {repo_path.name} ===")
+    _progress(f"    Rebuild: {rebuild}")
+    _progress("")
+
+    try:
+        ingestor = _open_ingestor(artifact_dir)
+
+        _progress("Loaded existing graph. Starting embedding generation...")
+        _progress("")
+
+        vector_store, embedder, func_map = build_vector_index(
+            ingestor, repo_path, vectors_path, rebuild, progress_cb
+        )
+
+        save_meta(artifact_dir, repo_path, meta.get("wiki_page_count", 0))
+        ingestor.__exit__(None, None, None)
+
+        _progress("")
+        _progress("=== Done ===")
+        _result_json({
+            "status": "success",
+            "repo_path": str(repo_path),
+            "vectors_path": str(vectors_path),
+            "embedding_count": len(vector_store),
+        })
+
+    except Exception as exc:
+        _progress(f"\nERROR: Embedding generation failed: {exc}")
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Main — argparse
 # ---------------------------------------------------------------------------
 
@@ -823,6 +954,10 @@ def main() -> None:
                    help="Wiki mode: comprehensive (8-10 pages) or concise (4-5 pages)")
     p.add_argument("--backend", choices=["kuzu", "memgraph", "memory"], default="kuzu",
                    help="Graph database backend")
+    p.add_argument("--no-wiki", action="store_true",
+                   help="Skip wiki generation (graph + embeddings only)")
+    p.add_argument("--no-embed", action="store_true",
+                   help="Skip embeddings and wiki (graph only, fastest)")
 
     # info
     subparsers.add_parser("info", help="Show active repository info and graph statistics")
@@ -880,6 +1015,10 @@ def main() -> None:
     p.add_argument("--mode", choices=["comprehensive", "concise"], default="comprehensive",
                    help="Wiki mode: comprehensive (8-10 pages) or concise (4-5 pages)")
 
+    # embed-gen
+    p = subparsers.add_parser("embed-gen", help="Rebuild embeddings only (reuses existing graph)")
+    p.add_argument("--rebuild", action="store_true", help="Force rebuild embeddings even if cached")
+
     args = parser.parse_args()
 
     ws = Workspace()
@@ -898,6 +1037,7 @@ def main() -> None:
         "api-doc": cmd_api_doc,
         "api-find": cmd_api_find,
         "wiki-gen": cmd_wiki_gen,
+        "embed-gen": cmd_embed_gen,
     }
 
     handler = dispatch.get(args.command)
