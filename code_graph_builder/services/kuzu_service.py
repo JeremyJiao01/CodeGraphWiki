@@ -307,6 +307,10 @@ class KuzuIngestor:
             logger.error(f"Query error: {e}")
             return []
 
+    def fetch_all(self, cypher_query: str, params: PropertyDict | None = None) -> list[ResultRow]:
+        """Alias for query(); satisfies GraphServiceProtocol."""
+        return self.query(cypher_query, params)
+
     def fetch_module_apis(
         self,
         module_qn: str | None = None,
