@@ -31,7 +31,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from workspace first (written by setup wizard), then local .env
+_ws = Path(os.environ.get("CGB_WORKSPACE", Path.home() / ".code-graph-builder"))
+load_dotenv(_ws.expanduser() / ".env", override=False)
+load_dotenv(override=False)
 
 from ..settings import load_settings  # noqa: E402
 

@@ -2,10 +2,7 @@
   "mcpServers": {
     "code-graph-builder": {
       "command": "npx",
-      "args": ["-y", "code-graph-builder"],
-      "env": {
-        "CGB_WORKSPACE": "~/.code-graph-builder"
-      }
+      "args": ["-y", "code-graph-builder", "--server"]
     }
   }
 }
