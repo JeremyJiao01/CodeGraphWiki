@@ -73,16 +73,16 @@ def _read_function_source(func: dict, repo_path: Path) -> str | None:
 _FUNC_DOC_QUERY = """
     MATCH (m:Module)-[:DEFINES]->(f:Function)
     RETURN DISTINCT m.qualified_name, m.path,
-           f.qualified_name, f.name, '' AS signature, '' AS return_type,
-           '' AS visibility, '' AS parameters, f.docstring,
-           f.start_line, f.end_line, f.path
+           f.qualified_name, f.name, f.signature, f.return_type,
+           f.visibility, f.parameters, f.docstring,
+           f.start_line, f.end_line, f.path, f.kind
     ORDER BY m.qualified_name, f.start_line
 """
 
 _TYPE_DOC_QUERY_CLASS = """
     MATCH (m:Module)-[:DEFINES]->(c:Class)
-    RETURN DISTINCT m.qualified_name, c.name, 'struct' AS kind, '' AS signature,
-           '' AS parameters, c.start_line, c.end_line
+    RETURN DISTINCT m.qualified_name, c.name, c.kind, c.signature,
+           c.parameters, c.start_line, c.end_line
     ORDER BY m.qualified_name, c.start_line
 """
 
@@ -97,6 +97,19 @@ _CALLS_QUERY = """
     MATCH (caller:Function)-[:CALLS]->(callee:Function)
     RETURN DISTINCT caller.qualified_name, callee.qualified_name,
            callee.path, callee.start_line
+"""
+
+_IMPORTS_QUERY = """
+    MATCH (m1:Module)-[:IMPORTS]->(m2:Module)
+    RETURN DISTINCT m1.qualified_name, m2.qualified_name
+"""
+
+_MULTI_LEVEL_CALLS_QUERY = """
+    MATCH (f:Function {qualified_name: $qn})-[:CALLS]->(c1:Function)
+    OPTIONAL MATCH (c1)-[:CALLS]->(c2:Function)
+    RETURN DISTINCT f.qualified_name, f.name,
+           c1.qualified_name, c1.name, c1.visibility, c1.path, c1.start_line,
+           c2.qualified_name, c2.name, c2.visibility, c2.path, c2.start_line
 """
 
 
@@ -152,6 +165,7 @@ def generate_api_docs_step(
     artifact_dir: Path,
     rebuild: bool,
     progress_cb: ProgressCb = None,
+    repo_path: Path | None = None,
 ) -> dict[str, Any]:
     """Generate hierarchical API docs from the knowledge graph.
 
@@ -171,6 +185,7 @@ def generate_api_docs_step(
         func_rows = builder.query(_FUNC_DOC_QUERY)
         type_rows = builder.query(_TYPE_DOC_QUERY_CLASS) + builder.query(_TYPE_DOC_QUERY_TYPE)
         call_rows = builder.query(_CALLS_QUERY)
+        import_rows = builder.query(_IMPORTS_QUERY)
     except Exception as exc:
         msg = f"API docs skipped — graph query failed: {exc}"
         logger.warning(msg)
@@ -178,7 +193,14 @@ def generate_api_docs_step(
             progress_cb(msg, 15.0)
         return {"status": "skipped", "error": str(exc)}
 
-    result = generate_api_docs(func_rows, type_rows, call_rows, artifact_dir)
+    result = generate_api_docs(
+        func_rows=func_rows,
+        type_rows=type_rows,
+        call_rows=call_rows,
+        import_rows=import_rows,
+        output_dir=artifact_dir,
+        repo_path=repo_path,
+    )
     if progress_cb:
         progress_cb(
             f"API docs generated: "
@@ -202,13 +224,40 @@ def _build_embedding_text(
     callers: list[str],
     callees: list[str],
     source: str,
+    api_doc_path: Path | None = None,
 ) -> str:
     """Compose rich embedding text for a function.
 
-    Combines name, file location, docstring, call relationships, and source
-    code so that semantic search can match abstract descriptions even when
-    functions lack formal documentation.
+    Prefers the generated L3 API doc markdown (which contains natural language
+    descriptions, call trees, and source code) for better semantic retrieval.
+    Falls back to the legacy format when the doc file is not available.
     """
+    # Prefer L3 API doc if available — it contains semantic descriptions
+    if api_doc_path and api_doc_path.exists():
+        content = api_doc_path.read_text(encoding="utf-8")
+        # Truncate to embedding size limit while preserving the semantic header
+        if len(content) > _MAX_SOURCE_CHARS:
+            # Keep the header (title + description + signature + module) intact
+            lines = content.split("\n")
+            header_lines = []
+            body_lines = []
+            in_header = True
+            for line in lines:
+                if in_header and (line.startswith("#") or line.startswith(">") or line.startswith("-") or line.strip() == ""):
+                    header_lines.append(line)
+                else:
+                    in_header = False
+                    body_lines.append(line)
+            header = "\n".join(header_lines)
+            remaining = _MAX_SOURCE_CHARS - len(header) - 10
+            if remaining > 0:
+                body = "\n".join(body_lines)[:remaining]
+                content = header + "\n" + body
+            else:
+                content = content[:_MAX_SOURCE_CHARS]
+        return content
+
+    # Fallback: legacy format
     parts: list[str] = [f"Function: {func['name']}"]
     if func.get("path"):
         parts.append(f"File: {func['path']}")
@@ -229,6 +278,7 @@ def build_vector_index(
     vectors_path: Path,
     rebuild: bool,
     progress_cb: ProgressCb = None,
+    artifact_dir: Path | None = None,
 ) -> tuple[Any, Any, dict[int, dict]]:
     """Build or load vector embeddings, reporting after every API batch call."""
     from ..embeddings.qwen3_embedder import create_embedder
@@ -300,11 +350,18 @@ def build_vector_index(
     for i, func in enumerate(all_funcs):
         source = _read_function_source(func, repo_path)
         if source:
+            func_qn = func["qualified_name"]
+            api_doc_path = None
+            if artifact_dir:
+                from .api_doc_generator import _sanitise_filename
+                safe_qn = _sanitise_filename(func_qn)
+                api_doc_path = artifact_dir / "api_docs" / "funcs" / f"{safe_qn}.md"
             text = _build_embedding_text(
                 func,
-                callers=callers_of.get(func["qualified_name"], []),
-                callees=callees_of.get(func["qualified_name"], []),
+                callers=callers_of.get(func_qn, []),
+                callees=callees_of.get(func_qn, []),
                 source=source,
+                api_doc_path=api_doc_path,
             )
             embeddable.append((i, func, text))
 

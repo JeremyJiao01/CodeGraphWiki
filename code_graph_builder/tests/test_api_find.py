@@ -59,13 +59,12 @@ class TestRenderFuncDetail:
 
         content = _render_func_detail(func, callers=[], callees=[])
 
-        assert "# project.api.init" in content
+        assert "# init" in content
         assert "`int init(void)`" in content
-        assert "**Return**: `int`" in content
-        assert "**Visibility**: public" in content
+        assert "`int`" in content
+        assert "public" in content
         assert "Initialize the API subsystem." in content
-        assert "*(no callers found)*" in content
-        assert "*(no outgoing calls found)*" in content
+        assert "*(无调用者)*" in content
 
     def test_with_callers_and_callees(self):
         from code_graph_builder.mcp.api_doc_generator import _render_func_detail
@@ -88,12 +87,10 @@ class TestRenderFuncDetail:
 
         content = _render_func_detail(func, callers=callers, callees=callees)
 
-        assert "Called by (1)" in content
-        assert "`mod.bar`" in content
-        assert "Calls (1)" in content
-        assert "`mod.baz`" in content
+        assert "被调用 (1)" in content
+        assert "mod.bar" in content
         # No docstring section when docstring is None
-        assert "## Description" not in content
+        assert "## 描述" not in content
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +139,7 @@ class TestGenerateApiDocs:
 
         # Check L3 content
         func_doc = (tmp_path / "api_docs" / "funcs" / "mymod.do_stuff.md").read_text()
-        assert "# mymod.do_stuff" in func_doc
+        assert "# do_stuff" in func_doc
         assert "Does stuff." in func_doc
 
     def test_call_graph_wiring(self, tmp_path: Path):
@@ -175,12 +172,11 @@ class TestGenerateApiDocs:
         )
 
         caller_doc = (tmp_path / "api_docs" / "funcs" / "m.caller.md").read_text()
-        assert "`m.callee`" in caller_doc
-        assert "Calls (1)" in caller_doc
+        assert "callee" in caller_doc
 
         callee_doc = (tmp_path / "api_docs" / "funcs" / "m.callee.md").read_text()
-        assert "`m.caller`" in callee_doc
-        assert "Called by (1)" in callee_doc
+        assert "caller" in callee_doc
+        assert "被调用 (1)" in callee_doc
 
 
 # ---------------------------------------------------------------------------

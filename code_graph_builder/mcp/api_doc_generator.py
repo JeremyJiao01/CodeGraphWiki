@@ -66,13 +66,119 @@ def _build_call_graph(
             "path": callee_path,
             "start_line": callee_start,
         })
+        # Bug fix: callers_of stores *caller* info, not callee's location.
+        # Upstream query may not carry caller path yet, so use None defensively.
         callers_of[callee_qn].append({
             "qn": caller_qn,
-            "path": callee_path,
-            "start_line": callee_start,
+            "path": None,
+            "start_line": None,
         })
 
     return callers_of, callees_of
+
+
+# ---------------------------------------------------------------------------
+# Source code & call tree helpers
+# ---------------------------------------------------------------------------
+
+def _read_source_snippet(
+    path: str | None,
+    start_line: int | None,
+    end_line: int | None,
+    repo_path: Path | None = None,
+) -> str | None:
+    """Read function source code from the file system.
+
+    Returns the source code string or None if file cannot be read.
+    """
+    if not path or not start_line or not end_line:
+        return None
+
+    # Try absolute path first, then relative to repo_path
+    file_path = Path(path)
+    if not file_path.is_absolute() and repo_path:
+        file_path = repo_path / path
+
+    if not file_path.exists():
+        return None
+
+    try:
+        lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        # start_line and end_line are 1-based
+        start = max(0, start_line - 1)
+        end = min(len(lines), end_line)
+        snippet = "\n".join(lines[start:end])
+        # Truncate very long functions
+        if len(snippet) > 3000:
+            snippet = snippet[:3000] + "\n    /* ... truncated ... */"
+        return snippet
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _build_call_tree(
+    qn: str,
+    callees_of: dict[str, list[dict]],
+    func_lookup: dict[str, dict],
+    depth: int = 2,
+    _visited: set | None = None,
+) -> list[str]:
+    """Build ASCII call tree lines for a function, up to `depth` levels.
+
+    Returns list of strings like:
+        ["├── func_b          [static]", "│   └── func_c", "└── func_d"]
+    """
+    if _visited is None:
+        _visited = set()
+
+    _visited.add(qn)
+    callees = callees_of.get(qn, [])
+    lines: list[str] = []
+
+    for i, callee in enumerate(callees):
+        callee_qn = callee["qn"]
+        callee_func = func_lookup.get(callee_qn, {})
+        name = callee_func.get("name", callee_qn.rsplit(".", 1)[-1])
+        vis = callee_func.get("visibility", "")
+        vis_tag = f"  [{vis}]" if vis and vis != "public" else ""
+
+        is_last = (i == len(callees) - 1)
+        prefix = "└── " if is_last else "├── "
+        lines.append(f"{prefix}{name}{vis_tag}")
+
+        # Recurse if not visited and within depth
+        if depth > 1 and callee_qn not in _visited:
+            sub_lines = _build_call_tree(
+                callee_qn, callees_of, func_lookup, depth - 1, _visited
+            )
+            child_prefix = "    " if is_last else "│   "
+            for sub_line in sub_lines:
+                lines.append(f"{child_prefix}{sub_line}")
+
+    return lines
+
+
+def _infer_ownership(func: dict[str, Any]) -> list[str]:
+    """Infer memory ownership hints from function signature using heuristics.
+
+    Returns list of strings describing ownership for each parameter and return value.
+    """
+    hints: list[str] = []
+    name = func.get("name") or ""
+    return_type = func.get("return_type") or ""
+
+    # Return type ownership
+    if "*" in return_type:
+        if any(kw in name.lower() for kw in ("init", "create", "alloc", "new", "open", "dup", "clone")):
+            hints.append(f"返回 `{return_type}`: 调用方拥有，需释放")
+        elif any(kw in name.lower() for kw in ("get", "find", "lookup", "peek", "current")):
+            hints.append(f"返回 `{return_type}`: 借用，不可释放")
+
+    # Free/destroy patterns
+    if any(kw in name.lower() for kw in ("free", "destroy", "release", "close", "cleanup", "deinit")):
+        hints.append("释放函数：调用后指针失效")
+
+    return hints
 
 
 # ---------------------------------------------------------------------------
@@ -102,56 +208,144 @@ def _render_func_detail(
     func: dict[str, Any],
     callers: list[dict],
     callees: list[dict],
+    callees_of: dict[str, list[dict]] | None = None,
+    func_lookup: dict[str, dict] | None = None,
+    module_desc: str = "",
+    repo_path: Path | None = None,
 ) -> str:
-    """Render L3 detail page for a single function."""
+    """Render L3 detail page for a single function (embedding-optimized)."""
+    if callees_of is None:
+        callees_of = {}
+    if func_lookup is None:
+        func_lookup = {}
+
     lines: list[str] = []
     qn = func["qn"]
-    lines.append(f"# {qn}")
+    name = func.get("name") or qn.rsplit(".", 1)[-1]
+    module_qn = func.get("module_qn", "")
+    kind = func.get("kind") or ""
+
+    # Title
+    lines.append(f"# {name}")
     lines.append("")
-    lines.append(f"- **Signature**: `{func.get('signature') or func['name']}`")
-    if func.get("return_type"):
-        lines.append(f"- **Return**: `{func['return_type']}`")
-    lines.append(f"- **Visibility**: {func.get('visibility') or 'unknown'}")
+
+    # Semantic description line — the most important line for embedding retrieval
+    doc = (func.get("docstring") or "").strip()
+    if doc:
+        first_sentence = doc.split(".")[0].strip() + "." if "." in doc else doc
+        lines.append(f"> {first_sentence}")
+    else:
+        lines.append(f"> <!-- TODO: LLM generate description for {name} -->")
+    lines.append("")
+
+    # Metadata block
+    sig = func.get("signature") or name
+    if kind == "macro":
+        lines.append("- 类型: 宏定义")
+        lines.append(f"- 定义: `{sig}`")
+    else:
+        lines.append(f"- 签名: `{sig}`")
+        if func.get("return_type"):
+            lines.append(f"- 返回: `{func['return_type']}`")
+
+    vis = func.get("visibility") or "unknown"
     loc_path = func.get("path") or ""
     start = func.get("start_line") or "?"
     end = func.get("end_line") or "?"
-    lines.append(f"- **Location**: {loc_path}:{start}-{end}")
-    lines.append(f"- **Module**: {func.get('module_qn', '')}")
+
+    # Determine if declared in header
+    header_note = ""
+    if vis == "public" and loc_path:
+        header_name = Path(loc_path).stem + ".h"
+        header_note = f" | 头文件: {header_name}"
+
+    lines.append(f"- 可见性: {vis}{header_note}")
+    lines.append(f"- 位置: {loc_path}:{start}-{end}")
+
+    # Module with inline description for embedding context
+    if module_desc:
+        lines.append(f"- 模块: {module_qn} — {module_desc}")
+    else:
+        lines.append(f"- 模块: {module_qn}")
     lines.append("")
 
-    # Docstring
-    doc = func.get("docstring")
-    if doc:
-        lines.append("## Description")
+    # Full docstring (if longer than the summary line)
+    if doc and len(doc) > 80:
+        lines.append("## 描述")
         lines.append("")
-        lines.append(doc.strip())
+        lines.append(doc)
         lines.append("")
 
-    # Callers
-    lines.append(f"## Called by ({len(callers)})")
+    # Call tree (2-level, visual)
+    tree_lines = _build_call_tree(qn, callees_of, func_lookup, depth=2)
+    if tree_lines:
+        lines.append("## 调用树")
+        lines.append("")
+        lines.append(f"{name}")
+        lines.extend(tree_lines)
+        lines.append("")
+
+    # Called by
+    lines.append(f"## 被调用 ({len(callers)})")
     lines.append("")
     if callers:
         for c in callers:
+            caller_func = func_lookup.get(c["qn"], {})
+            caller_module = caller_func.get("module_qn", "")
+            module_tag = f" ({caller_module})" if caller_module and caller_module != module_qn else ""
             loc = ""
             if c.get("path") and c.get("start_line"):
-                loc = f" — {c['path']}:{c['start_line']}"
-            lines.append(f"- `{c['qn']}`{loc}")
+                loc = f" → {c['path']}:{c['start_line']}"
+            lines.append(f"- {c['qn']}{module_tag}{loc}")
     else:
-        lines.append("*(no callers found)*")
+        lines.append("*(无调用者)*")
     lines.append("")
 
-    # Callees
-    lines.append(f"## Calls ({len(callees)})")
-    lines.append("")
-    if callees:
-        for c in callees:
-            loc = ""
-            if c.get("path") and c.get("start_line"):
-                loc = f" — {c['path']}:{c['start_line']}"
-            lines.append(f"- `{c['qn']}`{loc}")
-    else:
-        lines.append("*(no outgoing calls found)*")
-    lines.append("")
+    # Parameters & memory ownership (C/C++ specific)
+    params = func.get("parameters")
+    ownership_hints = _infer_ownership(func)
+    if (params and isinstance(params, list) and any(p for p in params)) or ownership_hints:
+        lines.append("## 参数与内存")
+        lines.append("")
+        if params and isinstance(params, list):
+            lines.append("| 参数 | 方向 | 所有权 |")
+            lines.append("|------|------|--------|")
+            for p in params:
+                if not p:
+                    continue
+                # Heuristic: const pointer = input/borrow, pointer = in-out
+                direction = "in"
+                ownership = ""
+                p_str = str(p)
+                if "*" in p_str:
+                    if "const" in p_str:
+                        direction = "in"
+                        ownership = "借用"
+                    else:
+                        direction = "in/out"
+                        ownership = "借用，可修改"
+                lines.append(f"| `{p_str}` | {direction} | {ownership} |")
+        lines.append("")
+        if ownership_hints:
+            for hint in ownership_hints:
+                lines.append(f"- {hint}")
+            lines.append("")
+
+    # Source code
+    if kind != "macro":  # Macros already show definition in sig
+        source = _read_source_snippet(
+            func.get("path"), func.get("start_line"), func.get("end_line"), repo_path
+        )
+        if source:
+            lines.append("## 实现")
+            lines.append("")
+            # Detect language from file extension
+            ext = Path(loc_path).suffix if loc_path else ""
+            lang = "cpp" if ext in (".cpp", ".cc", ".cxx", ".hpp") else "c"
+            lines.append(f"```{lang}")
+            lines.append(source)
+            lines.append("```")
+            lines.append("")
 
     return "\n".join(lines)
 
@@ -161,25 +355,59 @@ def _render_module_page(
     files: list[str],
     funcs: list[dict[str, Any]],
     types: list[dict[str, Any]],
+    callees_of: dict[str, list[dict]] | None = None,
+    func_lookup: dict[str, dict] | None = None,
+    module_desc: str = "",
 ) -> str:
     """Render L2 module index page."""
+    if callees_of is None:
+        callees_of = {}
+    if func_lookup is None:
+        func_lookup = {}
+
     lines: list[str] = []
     lines.append(f"# {module_qn}")
+    if module_desc:
+        lines.append("")
+        lines.append(f"> {module_desc}")
     lines.append("")
-    lines.append(f"**Files**: {', '.join(files)}")
+
+    # Header/implementation split
+    headers = [f for f in files if f.endswith((".h", ".hpp", ".hxx"))]
+    sources = [f for f in files if not f.endswith((".h", ".hpp", ".hxx"))]
+    if headers:
+        lines.append(f"**头文件**: {', '.join(headers)} | **实现**: {', '.join(sources) if sources else '—'}")
+    else:
+        lines.append(f"**文件**: {', '.join(files)}")
     lines.append("")
+
+    # Separate macros from regular functions
+    regular_funcs = [f for f in funcs if f.get("kind") != "macro"]
+    macros = [f for f in funcs if f.get("kind") == "macro"]
+
+    # Call tree for public entry points
+    public_funcs = [f for f in regular_funcs if f.get("visibility") == "public"]
+    if public_funcs:
+        lines.append("## 调用树")
+        lines.append("")
+        for pf in public_funcs:
+            ret = f" → {pf['return_type']}" if pf.get("return_type") else ""
+            lines.append(f"{pf['name']}{ret}")
+            tree_lines = _build_call_tree(pf["qn"], callees_of, func_lookup, depth=2)
+            lines.extend(tree_lines)
+            lines.append("")
 
     # Group functions by visibility
     by_vis: dict[str, list[dict]] = defaultdict(list)
-    for f in funcs:
+    for f in regular_funcs:
         by_vis[f.get("visibility") or "unknown"].append(f)
 
     vis_order = ["public", "extern", "static", "unknown"]
     vis_labels = {
-        "public": "Public API (declared in header)",
-        "extern": "Extern (no header declaration)",
-        "static": "Static (file-local)",
-        "unknown": "Other",
+        "public": "公开接口",
+        "extern": "外部声明",
+        "static": "内部函数",
+        "unknown": "其他",
     }
 
     for vis in vis_order:
@@ -188,26 +416,80 @@ def _render_module_page(
             continue
         lines.append(f"## {vis_labels.get(vis, vis)} ({len(group)})")
         lines.append("")
-        lines.append("| Function | Signature | Lines |")
-        lines.append("|----------|-----------|-------|")
+        lines.append("| 函数 | 签名 | 一句话 |")
+        lines.append("|------|------|--------|")
         for f in group:
             safe = _sanitise_filename(f["qn"])
             sig = f.get("signature") or f["name"]
-            loc = f"{f.get('path', '')}:{f.get('start_line', '?')}-{f.get('end_line', '?')}"
-            lines.append(f"| [{f['name']}](../funcs/{safe}.md) | `{sig}` | {loc} |")
+            doc = (f.get("docstring") or "").strip()
+            brief = (doc.split(".")[0].strip() + ".") if doc and "." in doc else (doc or "—")
+            if len(brief) > 60:
+                brief = brief[:57] + "..."
+            lines.append(f"| [{f['name']}](../funcs/{safe}.md) | `{sig}` | {brief} |")
         lines.append("")
 
-    # Types
+    # Types: structs, unions, enums with member info
     if types:
-        lines.append(f"## Types ({len(types)})")
+        # Group by kind
+        structs = [t for t in types if t.get("kind") in ("struct", None, "")]
+        unions = [t for t in types if t.get("kind") == "union"]
+        enums = [t for t in types if t.get("kind") == "enum"]
+        typedefs = [t for t in types if t.get("kind") == "typedef"]
+
+        if structs or unions:
+            lines.append(f"## 结构体 ({len(structs) + len(unions)})")
+            lines.append("")
+            for t in structs + unions:
+                kind_label = "union" if t.get("kind") == "union" else "struct"
+                lines.append(f"### {t.get('name', '?')} ({kind_label})")
+                lines.append("")
+                members = t.get("members") or t.get("parameters")
+                if members and isinstance(members, list):
+                    for m in members:
+                        if m:
+                            lines.append(f"- `{m}`")
+                else:
+                    sig = t.get("signature", "")
+                    if sig:
+                        lines.append(f"```c\n{sig}\n```")
+                lines.append("")
+
+        if enums:
+            lines.append(f"## 枚举 ({len(enums)})")
+            lines.append("")
+            for t in enums:
+                lines.append(f"### {t.get('name', '?')}")
+                lines.append("")
+                members = t.get("members") or t.get("parameters")
+                if members and isinstance(members, list):
+                    lines.append(f"值: `{' | '.join(str(m) for m in members if m)}`")
+                else:
+                    sig = t.get("signature", "")
+                    if sig:
+                        lines.append(f"```c\n{sig}\n```")
+                lines.append("")
+
+        if typedefs:
+            lines.append(f"## 类型别名 ({len(typedefs)})")
+            lines.append("")
+            lines.append("| 名称 | 定义 |")
+            lines.append("|------|------|")
+            for t in typedefs:
+                lines.append(f"| {t.get('name', '?')} | `{t.get('signature', '')}` |")
+            lines.append("")
+
+    # Macros
+    if macros:
+        lines.append(f"## 宏 ({len(macros)})")
         lines.append("")
-        lines.append("| Name | Kind | Signature |")
-        lines.append("|------|------|-----------|")
-        for t in types:
-            lines.append(
-                f"| {t.get('name', '?')} | {t.get('kind', '?')} "
-                f"| `{t.get('signature', '')}` |"
-            )
+        lines.append("| 宏 | 定义 |")
+        lines.append("|----|------|")
+        for m in macros:
+            sig = m.get("signature") or f"#define {m['name']}"
+            # Truncate long macro definitions
+            if len(sig) > 80:
+                sig = sig[:77] + "..."
+            lines.append(f"| {m['name']} | `{sig}` |")
         lines.append("")
 
     return "\n".join(lines)
@@ -217,6 +499,7 @@ def _render_index(
     module_summaries: list[dict[str, Any]],
     total_funcs: int,
     total_types: int,
+    import_graph: dict[str, list[str]] | None = None,
 ) -> str:
     """Render L1 global index page."""
     lines: list[str] = []
@@ -225,18 +508,63 @@ def _render_index(
     lines.append(f"Total: {len(module_summaries)} modules, "
                  f"{total_funcs} functions, {total_types} types")
     lines.append("")
-    lines.append("| Module | Files | Public | Static | Extern | Types | Total |")
-    lines.append("|--------|-------|--------|--------|--------|-------|-------|")
+
+    # Module table with description column
+    lines.append("| 模块 | 职责 | 头文件 | 函数 | 类型 | 宏 |")
+    lines.append("|------|------|--------|------|------|----|")
 
     for m in module_summaries:
         safe = _sanitise_filename(m["qn"])
-        files = ", ".join(m["files"])
+        # Find header files
+        headers = [f for f in m["files"] if f.endswith((".h", ".hpp", ".hxx"))]
+        header_str = ", ".join(headers) if headers else "—"
+        desc = m.get("desc", "—")
+        macro_count = m.get("macros", 0)
+        func_count = m["public"] + m["static"] + m["extern"]
+        type_count = m["types"]
         lines.append(
-            f"| [{m['qn']}](modules/{safe}.md) | {files} "
-            f"| {m['public']} | {m['static']} | {m['extern']} "
-            f"| {m['types']} | {m['total']} |"
+            f"| [{m['qn']}](modules/{safe}.md) | {desc} "
+            f"| {header_str} | {func_count} | {type_count} | {macro_count} |"
         )
     lines.append("")
+
+    # Include dependency tree
+    if import_graph:
+        lines.append("## #include 依赖")
+        lines.append("")
+        # Find root modules (not imported by anyone)
+        all_imported: set[str] = set()
+        for targets in import_graph.values():
+            all_imported.update(targets)
+        roots = [m for m in import_graph if m not in all_imported]
+        if not roots:
+            roots = sorted(import_graph.keys())[:5]
+
+        visited: set[str] = set()
+
+        def _render_tree(mod: str, prefix: str = "", is_last: bool = True) -> None:
+            if mod in visited:
+                connector = "└── " if is_last else "├── "
+                lines.append(f"{prefix}{connector}{mod} (已展开)")
+                return
+            visited.add(mod)
+            connector = "└── " if is_last else "├── "
+            lines.append(f"{prefix}{connector}{mod}")
+            children = import_graph.get(mod, [])
+            for j, child in enumerate(children):
+                child_is_last = (j == len(children) - 1)
+                child_prefix = prefix + ("    " if is_last else "│   ")
+                _render_tree(child, child_prefix, child_is_last)
+
+        for i, root in enumerate(sorted(roots)):
+            if i > 0:
+                lines.append("")
+            lines.append(root)
+            children = import_graph.get(root, [])
+            for j, child in enumerate(children):
+                _render_tree(child, "", j == len(children) - 1)
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -249,6 +577,8 @@ def generate_api_docs(
     type_rows: list[dict[str, Any]],
     call_rows: list[dict[str, Any]],
     output_dir: Path,
+    import_rows: list[dict[str, Any]] | None = None,
+    repo_path: Path | None = None,
 ) -> dict[str, Any]:
     """Generate hierarchical API documentation from pre-fetched graph data.
 
@@ -257,6 +587,8 @@ def generate_api_docs(
         type_rows: Rows from fetch_all_types_for_docs query.
         call_rows: Rows from fetch_all_calls query.
         output_dir: Directory to write api_docs/ into.
+        import_rows: Rows from fetch_all_imports query (optional).
+        repo_path: Root path of the repository for source reading (optional).
 
     Returns:
         Summary dict with module_count, func_count, type_count.
@@ -286,7 +618,7 @@ def generate_api_docs(
         if func_qn in seen_funcs:
             continue
         seen_funcs.add(func_qn)
-        func = {
+        func: dict[str, Any] = {
             "module_qn": module_qn,
             "qn": func_qn,
             "name": r[3] or "",
@@ -299,6 +631,9 @@ def generate_api_docs(
             "end_line": r[10],
             "path": r[11] if len(r) > 11 else module_path,
         }
+        # Handle kind field (13th field, index 12)
+        if len(r) > 12:
+            func["kind"] = r[12]
         modules[module_qn]["files"].add(module_path)
         modules[module_qn]["funcs"].append(func)
 
@@ -307,15 +642,35 @@ def generate_api_docs(
         if len(r) < 6:
             continue
         module_qn = r[0] or "unknown"
-        type_info = {
+        type_info: dict[str, Any] = {
             "name": r[1],
             "kind": r[2],
             "signature": r[3],
-            "members": r[4] if len(r) > 4 else None,
-            "start_line": r[4 if len(r) <= 5 else 5],
-            "end_line": r[5 if len(r) <= 6 else 6],
         }
+        # Handle both Class rows (7 fields with parameters) and Type rows (6 fields without)
+        if len(r) >= 7:
+            type_info["members"] = r[4]  # parameters field contains members/enum values
+            type_info["start_line"] = r[5]
+            type_info["end_line"] = r[6]
+        else:
+            type_info["start_line"] = r[4]
+            type_info["end_line"] = r[5]
         modules[module_qn]["types"].append(type_info)
+
+    # ---- Build func_lookup for call tree and caller enrichment ----
+    func_lookup: dict[str, dict] = {}
+    for mod_data in modules.values():
+        for func in mod_data["funcs"]:
+            if func["qn"]:
+                func_lookup[func["qn"]] = func
+
+    # ---- Build import graph ----
+    import_graph: dict[str, list[str]] = defaultdict(list)
+    if import_rows:
+        for row in import_rows:
+            r = _unpack_row(row)
+            if len(r) >= 2:
+                import_graph[r[0]].append(r[1])
 
     # ---- Collect all known files per module ----
     # Since .c and .h share module_qn, we need to discover both file paths.
@@ -342,6 +697,9 @@ def generate_api_docs(
                 func,
                 callers=callers_of.get(qn, []),
                 callees=callees_of.get(qn, []),
+                callees_of=callees_of,
+                func_lookup=func_lookup,
+                repo_path=repo_path,
             )
             safe = _sanitise_filename(qn)
             (funcs_dir / f"{safe}.md").write_text(content, encoding="utf-8")
@@ -355,14 +713,19 @@ def generate_api_docs(
         types = mod_data["types"]
         files = sorted(mod_data["files"])
 
-        content = _render_module_page(module_qn, files, funcs, types)
+        content = _render_module_page(
+            module_qn, files, funcs, types,
+            callees_of=callees_of,
+            func_lookup=func_lookup,
+        )
         safe = _sanitise_filename(module_qn)
         (modules_dir / f"{safe}.md").write_text(content, encoding="utf-8")
 
         # Summary stats
-        vis_counts = defaultdict(int)
+        vis_counts: dict[str, int] = defaultdict(int)
         for f in funcs:
             vis_counts[f.get("visibility") or "unknown"] += 1
+        macro_count = sum(1 for f in funcs if f.get("kind") == "macro")
 
         module_summaries.append({
             "qn": module_qn,
@@ -372,11 +735,15 @@ def generate_api_docs(
             "extern": vis_counts.get("extern", 0),
             "types": len(types),
             "total": len(funcs) + len(types),
+            "macros": macro_count,
         })
 
     # ---- Generate L1: global index ----
     total_types = sum(len(m["types"]) for m in modules.values())
-    index_content = _render_index(module_summaries, total_funcs, total_types)
+    index_content = _render_index(
+        module_summaries, total_funcs, total_types,
+        import_graph=dict(import_graph) if import_graph else None,
+    )
     (api_dir / "index.md").write_text(index_content, encoding="utf-8")
 
     logger.info(
