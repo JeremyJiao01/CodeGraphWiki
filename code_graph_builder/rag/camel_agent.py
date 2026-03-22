@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from loguru import logger
 
-from .kimi_client import KimiClient, create_kimi_client
+from .client import LLMClient, create_llm_client
 from .prompt_templates import CodeAnalysisPrompts, CodeContext
 
 if TYPE_CHECKING:
@@ -57,13 +57,13 @@ class CamelAgent:
     """CAMEL-style agent for code analysis.
 
     Provides a CAMEL-like interface for single-agent code analysis tasks.
-    This implementation uses Kimi k2.5 as the underlying model.
+    This implementation uses an OpenAI-compatible LLM as the underlying model.
 
     Args:
         role: Agent's role (e.g., "Code Analyst")
         goal: Agent's goal/objective
         backstory: Agent's background/context
-        kimi_client: Kimi API client
+        llm_client: LLM API client
         verbose: Enable verbose logging
 
     Examples:
@@ -81,13 +81,13 @@ class CamelAgent:
         role: str,
         goal: str,
         backstory: str,
-        kimi_client: KimiClient | None = None,
+        llm_client: LLMClient | None = None,
         verbose: bool = False,
     ):
         self.role = role
         self.goal = goal
         self.backstory = backstory
-        self.kimi_client = kimi_client or create_kimi_client()
+        self.llm_client = llm_client or create_llm_client()
         self.verbose = verbose
         self.prompts = CodeAnalysisPrompts()
 
@@ -142,7 +142,7 @@ Respond in a professional, helpful manner."""
         ]
 
         try:
-            response = self.kimi_client.chat_with_messages(messages)
+            response = self.llm_client.chat_with_messages(messages)
             return CamelAgentResponse(
                 content=response.content,
                 metadata={
@@ -291,7 +291,7 @@ class MultiAgentRAG:
             role="Software Architect",
             goal="Analyze code architecture and design patterns",
             backstory="Senior architect with 15+ years of experience in system design",
-            kimi_client=self.rag_engine.kimi_client,
+            llm_client=self.rag_engine.llm_client,
             verbose=self.verbose,
         )
 
@@ -299,7 +299,7 @@ class MultiAgentRAG:
             role="Security Engineer",
             goal="Identify security vulnerabilities and best practices",
             backstory="Security specialist with expertise in secure coding practices",
-            kimi_client=self.rag_engine.kimi_client,
+            llm_client=self.rag_engine.llm_client,
             verbose=self.verbose,
         )
 
@@ -307,7 +307,7 @@ class MultiAgentRAG:
             role="Performance Engineer",
             goal="Optimize code performance and resource usage",
             backstory="Performance optimization specialist with deep knowledge of algorithms",
-            kimi_client=self.rag_engine.kimi_client,
+            llm_client=self.rag_engine.llm_client,
             verbose=self.verbose,
         )
 
@@ -315,7 +315,7 @@ class MultiAgentRAG:
             role="Technical Writer",
             goal="Create clear, comprehensive documentation",
             backstory="Technical writer specializing in developer documentation",
-            kimi_client=self.rag_engine.kimi_client,
+            llm_client=self.rag_engine.llm_client,
             verbose=self.verbose,
         )
 

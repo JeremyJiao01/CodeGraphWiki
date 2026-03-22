@@ -666,11 +666,11 @@ def generate_wiki(
     only_pages: list[str] | None = None,
 ) -> tuple[Path, int]:
     from code_graph_builder.rag.camel_agent import CamelAgent
-    from code_graph_builder.rag.kimi_client import create_kimi_client
+    from code_graph_builder.rag.client import create_llm_client
 
     project_name = repo_path.name
 
-    kimi_client = create_kimi_client(
+    llm_client = create_llm_client(
         api_key=os.getenv("MOONSHOT_API_KEY"),
         model=os.getenv("MOONSHOT_MODEL", "kimi-k2.5"),
         temperature=1.0,
@@ -679,7 +679,7 @@ def generate_wiki(
         role=f"{project_name} 技术文档专家",
         goal=f"结合真实源码，为 {project_name} 生成专业、准确、图文并茂的技术 Wiki",
         backstory=f"拥有丰富的技术写作和代码阅读经验，深入理解 {project_name} 源码架构",
-        kimi_client=kimi_client,
+        llm_client=llm_client,
     )
 
     vectors_path = output_dir / f"{project_name}_vectors.pkl"

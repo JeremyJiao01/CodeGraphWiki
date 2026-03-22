@@ -12,7 +12,7 @@ from code_graph_builder.rag.camel_agent import (
     MultiAgentRAG,
     create_camel_agent,
 )
-from code_graph_builder.rag.kimi_client import ChatResponse
+from code_graph_builder.rag.client import ChatResponse
 
 
 class TestCamelAgentResponse:
@@ -38,7 +38,7 @@ class TestCamelAgentResponse:
 class TestCamelAgent:
     """Tests for CamelAgent."""
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_init(self, mock_create_client):
         """Test initialization."""
         mock_client = Mock()
@@ -54,7 +54,7 @@ class TestCamelAgent:
         assert agent.backstory == "Expert programmer"
         assert "Code Analyst" in agent.system_prompt
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_build_system_prompt(self, mock_create_client):
         """Test system prompt building."""
         mock_client = Mock()
@@ -70,7 +70,7 @@ class TestCamelAgent:
         assert "Test things" in prompt
         assert "Testing expert" in prompt
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_analyze(self, mock_create_client):
         """Test analyze method."""
         mock_client = Mock()
@@ -86,7 +86,7 @@ class TestCamelAgent:
             role="Analyst",
             goal="Analyze",
             backstory="Expert",
-            kimi_client=mock_client,
+            llm_client=mock_client,
         )
         response = agent.analyze("Review this code", code="def foo(): pass")
 
@@ -94,7 +94,7 @@ class TestCamelAgent:
         assert response.content == "Analysis result"
         assert response.role == "Analyst"
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_analyze_error(self, mock_create_client):
         """Test analyze method with error."""
         mock_client = Mock()
@@ -105,14 +105,14 @@ class TestCamelAgent:
             role="Analyst",
             goal="Analyze",
             backstory="Expert",
-            kimi_client=mock_client,
+            llm_client=mock_client,
         )
         response = agent.analyze("Review this")
 
         assert "Error" in response.content
         assert "error" in response.metadata
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_review_code_general(self, mock_create_client):
         """Test general code review."""
         mock_client = Mock()
@@ -128,14 +128,14 @@ class TestCamelAgent:
             role="Reviewer",
             goal="Review code",
             backstory="Code reviewer",
-            kimi_client=mock_client,
+            llm_client=mock_client,
         )
         response = agent.review_code("def foo(): pass", review_type="general")
 
         assert isinstance(response, CamelAgentResponse)
         mock_client.chat_with_messages.assert_called_once()
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_review_code_security(self, mock_create_client):
         """Test security code review."""
         mock_client = Mock()
@@ -151,7 +151,7 @@ class TestCamelAgent:
             role="Security Expert",
             goal="Find vulnerabilities",
             backstory="Security specialist",
-            kimi_client=mock_client,
+            llm_client=mock_client,
         )
         response = agent.review_code("def foo(): pass", review_type="security")
 
@@ -160,7 +160,7 @@ class TestCamelAgent:
         messages = call_args[0][0]
         assert any("security" in msg["content"].lower() for msg in messages)
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_explain_code_brief(self, mock_create_client):
         """Test brief code explanation."""
         mock_client = Mock()
@@ -176,7 +176,7 @@ class TestCamelAgent:
             role="Explainer",
             goal="Explain code",
             backstory="Teacher",
-            kimi_client=mock_client,
+            llm_client=mock_client,
         )
         response = agent.explain_code("def foo(): pass", detail_level="brief")
 
@@ -185,7 +185,7 @@ class TestCamelAgent:
         messages = call_args[0][0]
         assert any("brief" in msg["content"].lower() for msg in messages)
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_suggest_improvements(self, mock_create_client):
         """Test improvement suggestions."""
         mock_client = Mock()
@@ -201,7 +201,7 @@ class TestCamelAgent:
             role="Improver",
             goal="Suggest improvements",
             backstory="Optimizer",
-            kimi_client=mock_client,
+            llm_client=mock_client,
         )
         response = agent.suggest_improvements(
             "def foo(): pass",
@@ -213,7 +213,7 @@ class TestCamelAgent:
         messages = call_args[0][0]
         assert any("readability" in msg["content"] for msg in messages)
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_answer_question(self, mock_create_client):
         """Test answering questions."""
         mock_client = Mock()
@@ -229,7 +229,7 @@ class TestCamelAgent:
             role="Helper",
             goal="Answer questions",
             backstory="Assistant",
-            kimi_client=mock_client,
+            llm_client=mock_client,
         )
         response = agent.answer_question("What is this?", code_context="def foo(): pass")
 
@@ -297,7 +297,7 @@ class TestMultiAgentRAG:
 class TestCreateCamelAgent:
     """Tests for create_camel_agent factory function."""
 
-    @patch("code_graph_builder.rag.camel_agent.create_kimi_client")
+    @patch("code_graph_builder.rag.camel_agent.create_llm_client")
     def test_create_agent(self, mock_create_client):
         """Test creating agent."""
         mock_client = Mock()

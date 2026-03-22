@@ -1,4 +1,4 @@
-"""Tests for Kimi client."""
+"""Tests for LLM client."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from code_graph_builder.rag.kimi_client import (
+from code_graph_builder.rag.client import (
     ChatResponse,
-    KimiClient,
-    create_kimi_client,
+    LLMClient,
+    create_llm_client,
 )
 
 
@@ -30,12 +30,12 @@ class TestChatResponse:
         assert response.model == "kimi-k2.5"
 
 
-class TestKimiClient:
-    """Tests for KimiClient."""
+class TestLLMClient:
+    """Tests for LLMClient."""
 
     def test_default_init(self):
         """Test default initialization."""
-        client = KimiClient(api_key="sk-test")
+        client = LLMClient(api_key="sk-test")
         assert client.api_key == "sk-test"
         assert client.model == "kimi-k2.5"
         assert client.base_url == "https://api.moonshot.cn/v1"
@@ -43,7 +43,7 @@ class TestKimiClient:
 
     def test_custom_init(self):
         """Test custom initialization."""
-        client = KimiClient(
+        client = LLMClient(
             api_key="sk-test",
             model="custom-model",
             base_url="https://custom.api.com/",
@@ -60,16 +60,16 @@ class TestKimiClient:
     def test_init_missing_api_key(self):
         """Test initialization fails without API key."""
         with pytest.raises(ValueError, match="API key is required"):
-            KimiClient(api_key=None)
+            LLMClient(api_key=None)
 
     def test_get_headers(self):
         """Test getting headers."""
-        client = KimiClient(api_key="sk-test")
+        client = LLMClient(api_key="sk-test")
         headers = client._get_headers()
         assert headers["Authorization"] == "Bearer sk-test"
         assert headers["Content-Type"] == "application/json"
 
-    @patch("code_graph_builder.rag.kimi_client.requests.post")
+    @patch("code_graph_builder.rag.client.requests.post")
     def test_chat_success(self, mock_post):
         """Test successful chat completion."""
         mock_response = Mock()
@@ -86,14 +86,14 @@ class TestKimiClient:
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
-        client = KimiClient(api_key="sk-test")
+        client = LLMClient(api_key="sk-test")
         response = client.chat("Hello")
 
         assert response.content == "Test response"
         assert response.model == "kimi-k2.5"
         mock_post.assert_called_once()
 
-    @patch("code_graph_builder.rag.kimi_client.requests.post")
+    @patch("code_graph_builder.rag.client.requests.post")
     def test_chat_with_context(self, mock_post):
         """Test chat with context."""
         mock_response = Mock()
@@ -110,7 +110,7 @@ class TestKimiClient:
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
-        client = KimiClient(api_key="sk-test")
+        client = LLMClient(api_key="sk-test")
         response = client.chat(
             query="Explain",
             context="def foo(): pass",
@@ -123,7 +123,7 @@ class TestKimiClient:
         json_data = call_args.kwargs["json"]
         assert any("Context:" in msg["content"] for msg in json_data["messages"])
 
-    @patch("code_graph_builder.rag.kimi_client.requests.post")
+    @patch("code_graph_builder.rag.client.requests.post")
     def test_chat_http_error(self, mock_post):
         """Test chat with HTTP error."""
         from requests.exceptions import HTTPError
@@ -138,22 +138,22 @@ class TestKimiClient:
         )
         mock_post.return_value = mock_response
 
-        client = KimiClient(api_key="sk-test")
+        client = LLMClient(api_key="sk-test")
         with pytest.raises(RuntimeError, match="API request failed"):
             client.chat("Hello")
 
-    @patch("code_graph_builder.rag.kimi_client.requests.post")
+    @patch("code_graph_builder.rag.client.requests.post")
     def test_chat_timeout(self, mock_post):
         """Test chat with timeout."""
         from requests.exceptions import Timeout
 
         mock_post.side_effect = Timeout("Request timed out")
 
-        client = KimiClient(api_key="sk-test", timeout=5)
+        client = LLMClient(api_key="sk-test", timeout=5)
         with pytest.raises(RuntimeError, match="timeout"):
             client.chat("Hello")
 
-    @patch("code_graph_builder.rag.kimi_client.requests.post")
+    @patch("code_graph_builder.rag.client.requests.post")
     def test_chat_with_messages(self, mock_post):
         """Test chat with raw messages."""
         mock_response = Mock()
@@ -170,7 +170,7 @@ class TestKimiClient:
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
-        client = KimiClient(api_key="sk-test")
+        client = LLMClient(api_key="sk-test")
         messages = [
             {"role": "system", "content": "You are helpful."},
             {"role": "user", "content": "Hello"},
@@ -182,37 +182,37 @@ class TestKimiClient:
         json_data = call_args.kwargs["json"]
         assert json_data["messages"] == messages
 
-    @patch("code_graph_builder.rag.kimi_client.requests.get")
+    @patch("code_graph_builder.rag.client.requests.get")
     def test_health_check_success(self, mock_get):
         """Test successful health check."""
         mock_response = Mock()
         mock_response.status_code = 200
         mock_get.return_value = mock_response
 
-        client = KimiClient(api_key="sk-test")
+        client = LLMClient(api_key="sk-test")
         assert client.health_check() is True
 
-    @patch("code_graph_builder.rag.kimi_client.requests.get")
+    @patch("code_graph_builder.rag.client.requests.get")
     def test_health_check_failure(self, mock_get):
         """Test failed health check."""
         mock_get.side_effect = Exception("Connection error")
 
-        client = KimiClient(api_key="sk-test")
+        client = LLMClient(api_key="sk-test")
         assert client.health_check() is False
 
 
-class TestCreateKimiClient:
-    """Tests for create_kimi_client factory function."""
+class TestCreateLLMClient:
+    """Tests for create_llm_client factory function."""
 
     def test_create_with_defaults(self):
         """Test creating client with defaults."""
-        client = create_kimi_client(api_key="sk-test")
-        assert isinstance(client, KimiClient)
+        client = create_llm_client(api_key="sk-test")
+        assert isinstance(client, LLMClient)
         assert client.model == "kimi-k2.5"
 
     def test_create_with_custom_model(self):
         """Test creating client with custom model."""
-        client = create_kimi_client(
+        client = create_llm_client(
             api_key="sk-test",
             model="custom-model",
             max_tokens=2048,

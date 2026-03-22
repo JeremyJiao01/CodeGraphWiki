@@ -13,7 +13,7 @@ import pytest
 from ..rag import RAGConfig, create_rag_engine
 from ..rag.camel_agent import CamelAgent, create_camel_agent
 from ..rag.config import MoonshotConfig, RetrievalConfig
-from ..rag.kimi_client import ChatResponse, KimiClient, create_kimi_client
+from ..rag.client import ChatResponse, LLMClient, create_llm_client
 from ..rag.markdown_generator import AnalysisResult, MarkdownGenerator, SourceReference
 from ..rag.prompt_templates import CodeAnalysisPrompts, CodeContext, RAGPrompts
 
@@ -144,23 +144,23 @@ class TestRAGConfig:
 
 
 # =============================================================================
-# KimiClient Tests
+# LLMClient Tests
 # =============================================================================
 
 
-class TestKimiClient:
-    """Test KimiClient."""
+class TestLLMClient:
+    """Test LLMClient."""
 
     def test_client_creation(self, mock_api_key: str) -> None:
         """Test creating client."""
-        client = KimiClient(api_key=mock_api_key)
+        client = LLMClient(api_key=mock_api_key)
         assert client.api_key == mock_api_key
         assert client.model == "kimi-k2.5"
 
     def test_client_missing_api_key(self) -> None:
         """Test client creation without API key."""
         with pytest.raises(ValueError, match="API key is required"):
-            KimiClient(api_key=None)
+            LLMClient(api_key=None)
 
     @patch("requests.post")
     def test_chat_request(self, mock_post, mock_api_key: str) -> None:
@@ -172,7 +172,7 @@ class TestKimiClient:
         }
         mock_post.return_value.raise_for_status = MagicMock()
 
-        client = KimiClient(api_key=mock_api_key)
+        client = LLMClient(api_key=mock_api_key)
         response = client.chat(query="Hello")
 
         assert response.content == "Hello"
@@ -310,7 +310,7 @@ class TestCamelAgent:
 
     def test_agent_creation(self) -> None:
         """Test creating agent."""
-        with patch.object(KimiClient, "__init__", return_value=None):
+        with patch.object(LLMClient, "__init__", return_value=None):
             agent = CamelAgent(
                 role="Code Analyst",
                 goal="Analyze code",
@@ -319,7 +319,7 @@ class TestCamelAgent:
             assert agent.role == "Code Analyst"
             assert agent.goal == "Analyze code"
 
-    @patch.object(KimiClient, "chat_with_messages")
+    @patch.object(LLMClient, "chat_with_messages")
     def test_analyze(self, mock_chat) -> None:
         """Test code analysis."""
         mock_chat.return_value = ChatResponse(
@@ -333,7 +333,7 @@ class TestCamelAgent:
             role="Code Analyst",
             goal="Analyze code",
             backstory="Expert programmer",
-            kimi_client=KimiClient(api_key="sk-test"),
+            llm_client=LLMClient(api_key="sk-test"),
         )
 
         response = agent.analyze("Explain this function", code="def add(a, b): return a + b")
@@ -341,7 +341,7 @@ class TestCamelAgent:
 
     def test_explain_code(self) -> None:
         """Test code explanation."""
-        with patch.object(KimiClient, "chat_with_messages") as mock_chat:
+        with patch.object(LLMClient, "chat_with_messages") as mock_chat:
             mock_chat.return_value = ChatResponse(
                 content="This function adds two numbers.",
                 usage={},
@@ -353,7 +353,7 @@ class TestCamelAgent:
                 role="Code Analyst",
                 goal="Analyze code",
                 backstory="Expert programmer",
-                kimi_client=KimiClient(api_key="sk-test"),
+                llm_client=LLMClient(api_key="sk-test"),
             )
 
             response = agent.explain_code("def add(a, b): return a + b")
@@ -361,7 +361,7 @@ class TestCamelAgent:
 
     def test_review_code(self) -> None:
         """Test code review."""
-        with patch.object(KimiClient, "chat_with_messages") as mock_chat:
+        with patch.object(LLMClient, "chat_with_messages") as mock_chat:
             mock_chat.return_value = ChatResponse(
                 content="Code looks good.",
                 usage={},
@@ -373,7 +373,7 @@ class TestCamelAgent:
                 role="Code Reviewer",
                 goal="Review code",
                 backstory="Senior engineer",
-                kimi_client=KimiClient(api_key="sk-test"),
+                llm_client=LLMClient(api_key="sk-test"),
             )
 
             response = agent.review_code("def foo(): pass", review_type="general")
@@ -385,11 +385,11 @@ class TestCamelAgent:
 # =============================================================================
 
 
-def test_create_kimi_client(mock_api_key: str) -> None:
-    """Test create_kimi_client factory."""
-    with patch.object(KimiClient, "__init__", return_value=None):
-        client = create_kimi_client(api_key=mock_api_key)
-        assert isinstance(client, KimiClient)
+def test_create_llm_client(mock_api_key: str) -> None:
+    """Test create_llm_client factory."""
+    with patch.object(LLMClient, "__init__", return_value=None):
+        client = create_llm_client(api_key=mock_api_key)
+        assert isinstance(client, LLMClient)
 
 
 def test_create_camel_agent() -> None:

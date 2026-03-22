@@ -197,9 +197,9 @@ def analyze_module_page(
 
 def generate_wiki(graph_data: dict, output_dir: Path, max_pages: int, repo_path: Path):
     from code_graph_builder.rag.camel_agent import CamelAgent
-    from code_graph_builder.rag.kimi_client import create_kimi_client
+    from code_graph_builder.rag.client import create_llm_client
 
-    kimi_client = create_kimi_client(
+    llm_client = create_llm_client(
         api_key=os.getenv("MOONSHOT_API_KEY"),
         model=os.getenv("MOONSHOT_MODEL", "kimi-k2.5"),
         temperature=1.0,
@@ -208,7 +208,7 @@ def generate_wiki(graph_data: dict, output_dir: Path, max_pages: int, repo_path:
         role="TinyCC 编译器代码分析专家",
         goal="结合真实源码系统分析 TinyCC 各模块的功能、实现细节和架构关系",
         backstory="拥有20年 C 语言和编译器开发经验，深入理解 TinyCC 源码",
-        kimi_client=kimi_client,
+        llm_client=llm_client,
     )
 
     modules = build_module_index(graph_data)

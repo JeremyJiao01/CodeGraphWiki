@@ -1,7 +1,7 @@
 """RAG module for code graph-based retrieval and generation.
 
 This module provides RAG (Retrieval-Augmented Generation) capabilities
-for code analysis using CAMEL framework and Kimi k2.5 model.
+for code analysis using CAMEL framework and OpenAI-compatible LLM APIs.
 
 Example:
     >>> from code_graph_builder.rag import RAGConfig, create_rag_engine
@@ -20,10 +20,10 @@ from .config import (
     RAGConfig,
     RetrievalConfig,
 )
-from .kimi_client import (
+from .client import (
     ChatResponse,
-    KimiClient,
-    create_kimi_client,
+    LLMClient,
+    create_llm_client,
 )
 from .markdown_generator import (
     AnalysisResult,
@@ -52,10 +52,10 @@ __all__ = [
     "RAGEngine",
     "RAGResult",
     "create_rag_engine",
-    # Kimi Client
-    "KimiClient",
+    # LLM Client
+    "LLMClient",
     "ChatResponse",
-    "create_kimi_client",
+    "create_llm_client",
     # Prompts
     "CodeAnalysisPrompts",
     "RAGPrompts",

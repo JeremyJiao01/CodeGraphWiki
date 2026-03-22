@@ -1,11 +1,11 @@
-"""Kimi k2.5 API client for RAG.
+"""OpenAI-compatible LLM client for RAG.
 
-This module provides a client for interacting with Moonshot's Kimi k2.5 model
-via the OpenAI-compatible API.
+This module provides a client for interacting with any OpenAI-compatible LLM API.
+Supported providers include Moonshot (Kimi), OpenAI, DeepSeek, and others.
 
 Examples:
-    >>> from code_graph_builder.rag.kimi_client import KimiClient
-    >>> client = KimiClient(api_key="sk-xxxxx")
+    >>> from code_graph_builder.rag.client import LLMClient
+    >>> client = LLMClient(api_key="sk-xxxxx")
     >>> response = client.chat("Explain this code", context="def foo(): pass")
 """
 
@@ -35,13 +35,13 @@ class ChatResponse:
     finish_reason: str
 
 
-class KimiClient:
-    """Client for Kimi k2.5 API.
+class LLMClient:
+    """Client for OpenAI-compatible LLM API.
 
-    Provides a simple interface for chat completions with the Kimi k2.5 model.
+    Provides a simple interface for chat completions with any OpenAI-compatible model.
 
     Args:
-        api_key: Moonshot API key
+        api_key: LLM API key
         model: Model name (default: kimi-k2.5)
         base_url: API base URL
         max_tokens: Maximum tokens for generation
@@ -49,12 +49,16 @@ class KimiClient:
         timeout: Request timeout in seconds
 
     Examples:
-        >>> client = KimiClient(api_key="sk-xxxxx")
+        >>> client = LLMClient(api_key="sk-xxxxx")
         >>> response = client.chat(
         ...     query="What does this function do?",
         ...     context="def add(a, b): return a + b"
         ... )
         >>> print(response.content)
+
+    Note:
+        DEFAULT_MODEL and DEFAULT_BASE_URL default to Moonshot/Kimi but can be
+        overridden via constructor arguments or ``create_llm_client()`` auto-detection.
     """
 
     DEFAULT_MODEL = "kimi-k2.5"
@@ -81,10 +85,10 @@ class KimiClient:
                 "LLM API key is required. "
                 "Set one of: LLM_API_KEY, OPENAI_API_KEY, or MOONSHOT_API_KEY "
                 "environment variable, or pass api_key directly. "
-                "Use create_kimi_client() for automatic provider detection."
+                "Use create_llm_client() for automatic provider detection."
             )
 
-        logger.info(f"Initialized KimiClient with model: {self.model}")
+        logger.info(f"Initialized LLMClient with model: {self.model}")
 
     def _get_headers(self) -> dict[str, str]:
         """Get API request headers."""
@@ -233,31 +237,31 @@ class KimiClient:
             return False
 
 
-def create_kimi_client(
+def create_llm_client(
     api_key: str | None = None,
     model: str | None = None,
     base_url: str | None = None,
     **kwargs: Any,
-) -> KimiClient:
-    """Factory function to create KimiClient with auto-detection.
+) -> LLMClient:
+    """Factory function to create LLMClient with auto-detection.
 
     Auto-detects API credentials from environment variables in this priority:
 
         1. ``LLM_API_KEY`` / ``LLM_BASE_URL`` / ``LLM_MODEL``   (generic, highest)
         2. ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` / ``OPENAI_MODEL``
-        3. ``MOONSHOT_API_KEY`` / ``MOONSHOT_MODEL``              (legacy default)
+        3. ``MOONSHOT_API_KEY`` / ``MOONSHOT_MODEL``              (Moonshot/Kimi default)
 
-    This allows third-party model providers (DeepSeek, OpenAI, etc.) to be used
-    seamlessly in CAMEL agents without requiring a Moonshot API key.
+    This allows any OpenAI-compatible model provider (DeepSeek, OpenAI,
+    Moonshot, etc.) to be used seamlessly.
 
     Args:
         api_key: API key (auto-detected from env if not provided)
         model: Model name (auto-detected from env if not provided)
         base_url: API base URL (auto-detected from env if not provided)
-        **kwargs: Additional arguments for KimiClient
+        **kwargs: Additional arguments for LLMClient
 
     Returns:
-        Configured KimiClient
+        Configured LLMClient
     """
     import os
 
@@ -279,14 +283,14 @@ def create_kimi_client(
                 detected_key = env_key
                 detected_url = detected_url or os.environ.get(url_env, default_url)
                 detected_model = detected_model or os.environ.get(model_env, default_model)
-                logger.info(f"KimiClient: auto-detected provider via {key_env}")
+                logger.info(f"LLMClient: auto-detected provider via {key_env}")
                 break
 
     # Apply defaults for any still-missing values
     detected_model = detected_model or "kimi-k2.5"
-    detected_url = detected_url or KimiClient.DEFAULT_BASE_URL
+    detected_url = detected_url or LLMClient.DEFAULT_BASE_URL
 
-    return KimiClient(
+    return LLMClient(
         api_key=detected_key or None,
         model=detected_model,
         base_url=detected_url,

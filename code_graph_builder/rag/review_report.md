@@ -10,7 +10,7 @@
 
 1. `__init__.py` - 模块初始化
 2. `config.py` - 配置管理
-3. `kimi_client.py` - Kimi API 客户端
+3. `client.py` - LLM API 客户端
 4. `prompt_templates.py` - 提示词模板
 5. `markdown_generator.py` - Markdown 生成器
 6. `rag_engine.py` - RAG 引擎
@@ -48,7 +48,7 @@
 **状态**: 通过，有改进建议
 
 **优点**:
-- `kimi_client.py` 有完善的异常处理 (HTTPError, Timeout)
+- `client.py` 有完善的异常处理 (HTTPError, Timeout)
 - 使用 try-except 包裹 API 调用
 - 使用 loguru 记录错误日志
 
@@ -93,7 +93,7 @@
 需要编写以下测试文件:
 
 1. `tests/test_rag_config.py` - 配置类测试
-2. `tests/test_kimi_client.py` - Kimi 客户端测试 (mock API)
+2. `tests/test_client.py` - LLM 客户端测试 (mock API)
 3. `tests/test_prompt_templates.py` - 提示词模板测试
 4. `tests/test_markdown_generator.py` - Markdown 生成器测试
 5. `tests/test_rag_engine.py` - RAG 引擎测试
@@ -151,7 +151,7 @@ pytest code_graph_builder/rag/tests/ -v
 - `test_config.py`: 17 tests - 配置类测试
 - `test_prompt_templates.py`: 14 tests - 提示词模板测试
 - `test_markdown_generator.py`: 18 tests - Markdown 生成器测试
-- `test_kimi_client.py`: 14 tests - Kimi 客户端测试 (含 mock)
+- `test_client.py`: 14 tests - LLM 客户端测试 (含 mock)
 - `test_camel_agent.py`: 15 tests - CAMEL Agent 测试
 
 ---

@@ -7,7 +7,7 @@ The RAG flow:
 1. Semantic search to find relevant code entities
 2. Graph traversal to gather context (callers, callees, related)
 3. Prompt assembly with retrieved context
-4. LLM generation (Kimi k2.5)
+4. LLM generation (OpenAI-compatible API)
 5. Markdown output generation
 
 Examples:
@@ -45,7 +45,7 @@ from ..tools.semantic_search import (
     create_semantic_search_service,
 )
 from .config import RAGConfig
-from .kimi_client import KimiClient, create_kimi_client
+from .client import LLMClient, create_llm_client
 from .markdown_generator import (
     AnalysisResult,
     MarkdownGenerator,
@@ -118,7 +118,7 @@ to provide intelligent code analysis capabilities.
 
     Args:
         config: RAG configuration
-        kimi_client: Kimi API client
+        llm_client: LLM API client
         semantic_service: Semantic search service
         graph_service: Graph query service
         prompts: RAG prompts
@@ -126,7 +126,7 @@ to provide intelligent code analysis capabilities.
     Example:
         >>> engine = RAGEngine(
         ...     config=config,
-        ...     kimi_client=kimi_client,
+        ...     llm_client=llm_client,
         ...     semantic_service=semantic_service,
         ...     graph_service=graph_service,
         ... )
@@ -136,12 +136,12 @@ to provide intelligent code analysis capabilities.
     def __init__(
         self,
         config: RAGConfig,
-        kimi_client: KimiClient,
+        llm_client: LLMClient,
         semantic_service: SemanticSearchService,
         graph_service: GraphQueryService,
     ):
         self.config = config
-        self.kimi_client = kimi_client
+        self.llm_client = llm_client
         self.semantic_service = semantic_service
         self.graph_service = graph_service
         self.prompts = RAGPrompts()
@@ -234,7 +234,7 @@ to provide intelligent code analysis capabilities.
         system_prompt = self.prompts.analysis.get_system_prompt()
         user_prompt = self.prompts.analysis.format_explain_prompt(context)
 
-        chat_response = self.kimi_client.chat_with_messages([
+        chat_response = self.llm_client.chat_with_messages([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ])
@@ -316,7 +316,7 @@ to provide intelligent code analysis capabilities.
                        for i, ctx in enumerate(contexts[:5]))
         )
 
-        chat_response = self.kimi_client.chat_with_messages([
+        chat_response = self.llm_client.chat_with_messages([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ])
@@ -520,7 +520,7 @@ to provide intelligent code analysis capabilities.
         )
 
         try:
-            response = self.kimi_client.chat_with_messages([
+            response = self.llm_client.chat_with_messages([
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ])
@@ -578,7 +578,7 @@ def create_rag_engine(
     embedder: BaseEmbedder | None = None,
     vector_store: VectorStore | None = None,
     graph_service: GraphServiceProtocol | None = None,
-    kimi_client: KimiClient | None = None,
+    llm_client: LLMClient | None = None,
 ) -> RAGEngine:
     """Factory function to create RAG engine.
 
@@ -587,7 +587,7 @@ def create_rag_engine(
         embedder: Embedder for semantic search
         vector_store: Vector store for embeddings
         graph_service: Graph service for queries
-        kimi_client: Kimi API client
+        llm_client: LLM API client
 
     Returns:
         Configured RAGEngine
@@ -601,8 +601,8 @@ def create_rag_engine(
     config.validate()
 
     # Create Kimi client if not provided
-    if kimi_client is None:
-        kimi_client = create_kimi_client(
+    if llm_client is None:
+        llm_client = create_llm_client(
             api_key=config.moonshot.api_key,
             model=config.moonshot.model,
             base_url=config.moonshot.base_url,
@@ -634,7 +634,7 @@ def create_rag_engine(
 
     return RAGEngine(
         config=config,
-        kimi_client=kimi_client,
+        llm_client=llm_client,
         semantic_service=semantic_service,
         graph_service=graph_query_service,
     )

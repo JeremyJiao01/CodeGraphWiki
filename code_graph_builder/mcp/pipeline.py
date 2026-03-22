@@ -17,10 +17,10 @@ from typing import Any
 from loguru import logger
 
 try:
-    from ..rag.kimi_client import create_kimi_client, KimiClient
+    from ..rag.client import create_llm_client, LLMClient
 except ImportError:
-    create_kimi_client = None  # type: ignore[assignment,misc]
-    KimiClient = None  # type: ignore[assignment,misc]
+    create_llm_client = None  # type: ignore[assignment,misc]
+    LLMClient = None  # type: ignore[assignment,misc]
 
 ProgressCb = Callable[[str, float], None] | None
 """Progress callback: (message, percentage_0_to_100) -> None.
@@ -265,12 +265,12 @@ def generate_descriptions_step(
     Returns:
         Summary dict with generated_count, skipped_count, error_count.
     """
-    if create_kimi_client is None:
+    if create_llm_client is None:
         logger.info("LLM client not available, skipping description generation")
         return {"generated_count": 0, "skipped_count": 0, "error_count": 0}
 
     try:
-        client = create_kimi_client()
+        client = create_llm_client()
     except (ValueError, RuntimeError) as e:
         logger.info(f"No LLM API key configured, skipping description generation: {e}")
         return {"generated_count": 0, "skipped_count": 0, "error_count": 0}
