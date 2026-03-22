@@ -113,70 +113,119 @@ async function runSetup() {
     (await ask(`  Workspace path [${WORKSPACE_DIR}]: `)).trim() || WORKSPACE_DIR;
   log("");
 
-  // --- LLM API Key ---
-  log("── 2/3  LLM API Key (for natural language queries & descriptions) ──");
+  // --- LLM Provider ---
+  log("── 2/3  LLM Provider (for natural language queries & descriptions) ──");
   log("");
-  log("  Supported providers (OpenAI-compatible):");
-  log("    - Moonshot / Kimi    https://platform.moonshot.cn");
-  log("    - OpenAI             https://platform.openai.com");
-  log("    - DeepSeek           https://platform.deepseek.com");
-  log("    - Any OpenAI-compatible endpoint");
+  log("  Select your LLM provider:");
   log("");
+  log("    1) Moonshot / Kimi    https://platform.moonshot.cn");
+  log("    2) OpenAI             https://platform.openai.com");
+  log("    3) DeepSeek           https://platform.deepseek.com");
+  log("    4) OpenRouter         https://openrouter.ai");
+  log("    5) Custom (any OpenAI-compatible endpoint)");
+  log("    6) Skip (configure later)");
+  log("");
+
+  const providers = {
+    "1": { name: "Moonshot",    url: "https://api.moonshot.cn/v1",   model: "kimi-k2.5" },
+    "2": { name: "OpenAI",      url: "https://api.openai.com/v1",    model: "gpt-4o" },
+    "3": { name: "DeepSeek",    url: "https://api.deepseek.com/v1",  model: "deepseek-chat" },
+    "4": { name: "OpenRouter",  url: "https://openrouter.ai/api/v1", model: "anthropic/claude-sonnet-4" },
+  };
 
   if (existing.LLM_API_KEY) {
-    log(`  Current key: ${mask(existing.LLM_API_KEY)}`);
+    log(`  Current: ${mask(existing.LLM_API_KEY)} → ${existing.LLM_BASE_URL || "?"}`);
   }
 
-  const llmKey =
-    (await ask("  LLM API Key (sk-...): ")).trim() || existing.LLM_API_KEY || "";
+  const choice = (await ask("  Choose provider [1-6]: ")).trim() || "6";
 
+  let llmKey = existing.LLM_API_KEY || "";
   let llmBaseUrl = existing.LLM_BASE_URL || "";
   let llmModel = existing.LLM_MODEL || "";
 
-  if (llmKey) {
-    log("");
-    log("  Detecting provider from key...");
+  if (choice !== "6") {
+    const provider = providers[choice];
 
-    if (llmKey.startsWith("sk-") && !llmKey.startsWith("sk-ant-")) {
-      // Could be Moonshot, OpenAI, or other
-      const urlInput = (
-        await ask(
-          `  API Base URL [${llmBaseUrl || "https://api.moonshot.cn/v1"}]: `
-        )
-      ).trim();
-      llmBaseUrl = urlInput || llmBaseUrl || "https://api.moonshot.cn/v1";
+    if (provider) {
+      log(`\n  → ${provider.name} selected`);
+      llmBaseUrl = provider.url;
+      llmModel = provider.model;
+    } else {
+      // Choice "5" or invalid → custom
+      log("\n  → Custom provider");
+      llmBaseUrl = (await ask("  API Base URL: ")).trim() || llmBaseUrl;
+      llmModel = (await ask("  Model name: ")).trim() || llmModel || "gpt-4o";
+    }
 
-      if (llmBaseUrl.includes("moonshot")) {
-        llmModel = (await ask(`  Model name [kimi-k2.5]: `)).trim() || "kimi-k2.5";
-      } else if (llmBaseUrl.includes("openai")) {
-        llmModel = (await ask(`  Model name [gpt-4o]: `)).trim() || "gpt-4o";
-      } else if (llmBaseUrl.includes("deepseek")) {
-        llmModel = (await ask(`  Model name [deepseek-chat]: `)).trim() || "deepseek-chat";
-      } else {
-        llmModel =
-          (await ask(`  Model name [${llmModel || "gpt-4o"}]: `)).trim() ||
-          llmModel ||
-          "gpt-4o";
-      }
+    llmKey = (await ask(`  API Key (sk-...): `)).trim() || existing.LLM_API_KEY || "";
+
+    if (llmKey) {
+      // Allow overriding URL and model
+      const urlOverride = (await ask(`  Base URL [${llmBaseUrl}]: `)).trim();
+      if (urlOverride) llmBaseUrl = urlOverride;
+      const modelOverride = (await ask(`  Model [${llmModel}]: `)).trim();
+      if (modelOverride) llmModel = modelOverride;
     }
   }
   log("");
 
-  // --- Embedding API Key ---
-  log("── 3/3  Embedding API Key (for semantic code search) ─────");
+  // --- Embedding Provider ---
+  log("── 3/3  Embedding Provider (for semantic code search) ─────");
   log("");
-  log("  Used for vector embedding of code (Qwen3 text-embedding-v4).");
-  log("  Get a free key at: https://dashscope.console.aliyun.com");
+  log("  Select your embedding provider:");
+  log("");
+  log("    1) DashScope / Qwen    https://dashscope.console.aliyun.com  (free tier)");
+  log("    2) OpenAI Embeddings   https://platform.openai.com");
+  log("    3) Custom (any OpenAI-compatible embedding endpoint)");
+  log("    4) Skip (configure later)");
   log("");
 
-  if (existing.DASHSCOPE_API_KEY) {
-    log(`  Current key: ${mask(existing.DASHSCOPE_API_KEY)}`);
+  const embedProviders = {
+    "1": { name: "DashScope",  url: "https://dashscope.aliyuncs.com/api/v1", model: "text-embedding-v4", keyEnv: "DASHSCOPE_API_KEY", urlEnv: "DASHSCOPE_BASE_URL" },
+    "2": { name: "OpenAI",     url: "https://api.openai.com/v1",             model: "text-embedding-3-small", keyEnv: "OPENAI_API_KEY", urlEnv: "OPENAI_BASE_URL" },
+  };
+
+  if (existing.DASHSCOPE_API_KEY || existing.EMBED_API_KEY) {
+    const ek = existing.DASHSCOPE_API_KEY || existing.EMBED_API_KEY;
+    log(`  Current: ${mask(ek)} → ${existing.DASHSCOPE_BASE_URL || existing.EMBED_BASE_URL || "?"}`);
   }
 
-  const dashscopeKey =
-    (await ask("  DashScope API Key (sk-...): ")).trim() ||
-    existing.DASHSCOPE_API_KEY ||
-    "";
+  const embedChoice = (await ask("  Choose provider [1-4]: ")).trim() || "4";
+
+  let embedKey = "";
+  let embedUrl = "";
+  let embedModel = "";
+  let embedKeyEnv = "DASHSCOPE_API_KEY";
+  let embedUrlEnv = "DASHSCOPE_BASE_URL";
+
+  if (embedChoice !== "4") {
+    const ep = embedProviders[embedChoice];
+
+    if (ep) {
+      log(`\n  → ${ep.name} selected`);
+      embedUrl = ep.url;
+      embedModel = ep.model;
+      embedKeyEnv = ep.keyEnv;
+      embedUrlEnv = ep.urlEnv;
+    } else {
+      // Choice "3" or invalid → custom
+      log("\n  → Custom embedding provider");
+      embedUrl = (await ask("  Embedding API Base URL: ")).trim();
+      embedModel = (await ask("  Embedding model name: ")).trim() || "text-embedding-3-small";
+      embedKeyEnv = "EMBED_API_KEY";
+      embedUrlEnv = "EMBED_BASE_URL";
+    }
+
+    embedKey = (await ask(`  API Key: `)).trim() ||
+      existing[embedKeyEnv] || existing.DASHSCOPE_API_KEY || "";
+
+    if (embedKey) {
+      const urlOverride = (await ask(`  Base URL [${embedUrl}]: `)).trim();
+      if (urlOverride) embedUrl = urlOverride;
+      const modelOverride = (await ask(`  Model [${embedModel}]: `)).trim();
+      if (modelOverride) embedModel = modelOverride;
+    }
+  }
 
   rl.close();
 
@@ -186,18 +235,27 @@ async function runSetup() {
     LLM_API_KEY: llmKey,
     LLM_BASE_URL: llmBaseUrl,
     LLM_MODEL: llmModel,
-    DASHSCOPE_API_KEY: dashscopeKey,
-    DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com/api/v1",
   };
 
+  // Save embedding config with the correct env var names
+  if (embedKey) {
+    config[embedKeyEnv] = embedKey;
+    config[embedUrlEnv] = embedUrl;
+    if (embedModel) config.EMBED_MODEL = embedModel;
+  }
+
   saveEnvFile(config);
+
+  const embedDisplay = embedKey
+    ? `${mask(embedKey)} → ${embedModel || embedUrl}`
+    : "not configured (optional)";
 
   log("");
   log("── Configuration saved ─────────────────────────────────────");
   log(`  File: ${ENV_FILE}`);
   log("");
   log("  LLM:       " + (llmKey ? `${mask(llmKey)} → ${llmModel}` : "not configured (optional)"));
-  log("  Embedding: " + (dashscopeKey ? mask(dashscopeKey) : "not configured (optional)"));
+  log("  Embedding: " + embedDisplay);
   log("  Workspace: " + workspace);
   log("");
   log("── Next steps ──────────────────────────────────────────────");
