@@ -787,6 +787,10 @@ class MCPToolsRegistry:
             total_steps = 3  # graph + api_docs + embeddings
 
         try:
+            # Close existing MCP connection first so the builder can
+            # open the database without lock contention.
+            self.close()
+
             # Step 1: build graph — returns a CodeGraphBuilder
             builder = build_graph(
                 repo_path, db_path, rebuild, progress_cb=lambda msg, pct: _step_progress(1, total_steps, msg, pct),
@@ -1693,11 +1697,19 @@ class MCPToolsRegistry:
         db_path = artifact_dir / "graph.db"
 
         try:
+            # Close existing MCP connection first so the builder can
+            # open the database without lock contention.
+            self.close()
+
             builder = build_graph(
                 repo_path, db_path, rebuild, progress_cb, backend=backend,
             )
 
-            stats = builder.get_statistics()
+            # Hold a session for get_statistics, then release before
+            # _load_services opens its own long-lived connection.
+            with builder:
+                stats = builder.get_statistics()
+
             save_meta(artifact_dir, repo_path, 0)
             self._set_active(artifact_dir)
             self._load_services(artifact_dir)
