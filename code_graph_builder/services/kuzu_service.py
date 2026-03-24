@@ -388,7 +388,7 @@ class KuzuIngestor:
                             kind: {self._value_to_cypher(kind)}
                         }})
                     """
-                    self._execute_with_retry(cypher)
+                    self._conn.execute(cypher)
                 except Exception as e:
                     logger.debug(f"Error creating node: {e}")
 
@@ -425,7 +425,7 @@ class KuzuIngestor:
                           (b:{to_label} {{{to_key}: {self._value_to_cypher(to_val)}}})
                     CREATE (a)-[:{actual_rel}]->(b)
                 """
-                self._execute_with_retry(cypher)
+                self._conn.execute(cypher)
             except Exception as e:
                 logger.debug(f"Error creating relationship: {e}")
 

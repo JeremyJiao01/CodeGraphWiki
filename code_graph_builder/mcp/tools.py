@@ -805,6 +805,7 @@ class MCPToolsRegistry:
                 generate_api_docs_step(
                     builder, artifact_dir, rebuild,
                     progress_cb=lambda msg, pct: _step_progress(2, total_steps, msg, pct),
+                    repo_path=repo_path,
                 )
 
                 # Step 2b: LLM description generation for undocumented functions
@@ -1768,6 +1769,7 @@ class MCPToolsRegistry:
 
             result = generate_api_docs_step(
                 self._ingestor, artifact_dir, rebuild, progress_cb,
+                repo_path=repo_path,
             )
 
             # LLM description generation for undocumented functions

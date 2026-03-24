@@ -158,6 +158,7 @@ def generate_api_docs_step(
     artifact_dir: Path,
     rebuild: bool,
     progress_cb: ProgressCb = None,
+    repo_path: Path | None = None,
 ) -> dict[str, Any]:
     """Generate hierarchical API docs from the knowledge graph.
 
@@ -184,7 +185,9 @@ def generate_api_docs_step(
             progress_cb(msg, 15.0)
         return {"status": "skipped", "error": str(exc)}
 
-    result = generate_api_docs(func_rows, type_rows, call_rows, artifact_dir)
+    result = generate_api_docs(
+        func_rows, type_rows, call_rows, artifact_dir, repo_path=repo_path,
+    )
     if progress_cb:
         progress_cb(
             f"API docs generated: "

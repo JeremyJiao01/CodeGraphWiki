@@ -629,7 +629,7 @@ def generate_api_docs(
             "docstring": r[8],
             "start_line": r[9],
             "end_line": r[10],
-            "path": r[11] if len(r) > 11 else module_path,
+            "path": (r[11] if len(r) > 11 else None) or module_path,
         }
         # Handle kind field (13th field, index 12)
         if len(r) > 12:
