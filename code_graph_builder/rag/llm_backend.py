@@ -81,7 +81,7 @@ class LLMBackend:
             )
 
         headers = {
-            "Authentication": self.api_key,
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
         payload: dict[str, Any] = {
@@ -126,7 +126,7 @@ class LLMBackend:
             )
 
         headers = {
-            "Authentication": self.api_key,
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
         payload: dict[str, Any] = {
