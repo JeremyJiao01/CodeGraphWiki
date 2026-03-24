@@ -99,6 +99,7 @@ class KuzuIngestor:
         self.batch_size = batch_size
         self._db: kuzu.Database | None = None
         self._conn: kuzu.Connection | None = None
+        self._ref_count: int = 0  # Reentrant context manager reference count
         self.node_buffer: list[tuple[str, dict[str, PropertyValue]]] = []
         self.relationship_buffer: list[
             tuple[
@@ -113,10 +114,20 @@ class KuzuIngestor:
     def __enter__(self) -> KuzuIngestor:
         """Enter context manager and initialize database.
 
+        Reentrant: if already connected, increments the reference count and
+        returns immediately — no new database handle is opened.  This allows
+        ``build_graph()`` to hold a long-lived session while ``query()`` calls
+        within the same pipeline reuse it via nested ``with ingestor:`` blocks.
+
         If the database is locked by another process, retries with exponential
         backoff up to ``DB_LOCK_MAX_RETRIES`` times.  On the first lock error
         the method also attempts to clean up stale lock files.
         """
+        # Reentrant: already connected — just bump the ref count
+        if self._conn is not None:
+            self._ref_count += 1
+            return self
+
         import kuzu
 
         logger.info(f"Opening Kùzu database at {self.db_path}")
@@ -127,6 +138,7 @@ class KuzuIngestor:
             try:
                 self._db = kuzu.Database(str(self.db_path))
                 self._conn = kuzu.Connection(self._db)
+                self._ref_count = 1
                 if attempt > 0:
                     logger.info(
                         f"Kùzu database opened successfully after {attempt} retries"
@@ -169,7 +181,16 @@ class KuzuIngestor:
         exc_val: Exception | None,
         exc_tb: types.TracebackType | None,
     ) -> None:
-        """Exit context manager and cleanup."""
+        """Exit context manager and cleanup.
+
+        Reentrant: decrements the reference count and only performs the real
+        close (flush buffers, release connection) when it reaches zero.
+        """
+        self._ref_count -= 1
+        if self._ref_count > 0:
+            # Still held by an outer ``with`` block — do nothing
+            return
+
         if exc_type:
             logger.exception(f"Exception during ingest: {exc_val}")
             try:

@@ -787,58 +787,63 @@ class MCPToolsRegistry:
             total_steps = 3  # graph + api_docs + embeddings
 
         try:
-            # Step 1: build graph
+            # Step 1: build graph — returns a CodeGraphBuilder
             builder = build_graph(
                 repo_path, db_path, rebuild, progress_cb=lambda msg, pct: _step_progress(1, total_steps, msg, pct),
                 backend=backend,
             )
 
-            # Step 2: generate API docs
-            generate_api_docs_step(
-                builder, artifact_dir, rebuild,
-                progress_cb=lambda msg, pct: _step_progress(2, total_steps, msg, pct),
-            )
-
-            # Step 2b: LLM description generation for undocumented functions
-            generate_descriptions_step(
-                artifact_dir=artifact_dir,
-                repo_path=repo_path,
-                progress_cb=lambda msg, pct: _step_progress(2, total_steps, msg, pct),
-            )
-
-            page_count = 0
-            index_path = wiki_dir / "index.md"
-            skipped = []
-
-            if not skip_embed:
-                # Step 3: build embeddings
-                vector_store, embedder, func_map = build_vector_index(
-                    builder, repo_path, vectors_path, rebuild,
-                    progress_cb=lambda msg, pct: _step_progress(3, total_steps, msg, pct),
+            # Hold a single DB session for all remaining steps so we
+            # never repeatedly open/close the database (which causes
+            # lock contention and wastes time).
+            with builder:
+                # Step 2: generate API docs
+                generate_api_docs_step(
+                    builder, artifact_dir, rebuild,
+                    progress_cb=lambda msg, pct: _step_progress(2, total_steps, msg, pct),
                 )
 
-                if not skip_wiki:
-                    # Step 4: generate wiki
-                    index_path, page_count = run_wiki_generation(
-                        builder=builder,
-                        repo_path=repo_path,
-                        output_dir=wiki_dir,
-                        max_pages=max_pages,
-                        rebuild=rebuild,
-                        comprehensive=comprehensive,
-                        vector_store=vector_store,
-                        embedder=embedder,
-                        func_map=func_map,
-                        progress_cb=lambda msg, pct: _step_progress(4, total_steps, msg, pct),
-                    )
-                else:
-                    skipped.append("wiki")
-                    _step_progress(4, total_steps, "Wiki generation skipped.", 100.0)
-            else:
-                skipped.extend(["embed", "wiki"])
-                _step_progress(3, total_steps, "Embedding skipped.", 40.0)
-                _step_progress(4, total_steps, "Wiki skipped (requires embeddings).", 100.0)
+                # Step 2b: LLM description generation for undocumented functions
+                generate_descriptions_step(
+                    artifact_dir=artifact_dir,
+                    repo_path=repo_path,
+                    progress_cb=lambda msg, pct: _step_progress(2, total_steps, msg, pct),
+                )
 
+                page_count = 0
+                index_path = wiki_dir / "index.md"
+                skipped = []
+
+                if not skip_embed:
+                    # Step 3: build embeddings
+                    vector_store, embedder, func_map = build_vector_index(
+                        builder, repo_path, vectors_path, rebuild,
+                        progress_cb=lambda msg, pct: _step_progress(3, total_steps, msg, pct),
+                    )
+
+                    if not skip_wiki:
+                        # Step 4: generate wiki
+                        index_path, page_count = run_wiki_generation(
+                            builder=builder,
+                            repo_path=repo_path,
+                            output_dir=wiki_dir,
+                            max_pages=max_pages,
+                            rebuild=rebuild,
+                            comprehensive=comprehensive,
+                            vector_store=vector_store,
+                            embedder=embedder,
+                            func_map=func_map,
+                            progress_cb=lambda msg, pct: _step_progress(4, total_steps, msg, pct),
+                        )
+                    else:
+                        skipped.append("wiki")
+                        _step_progress(4, total_steps, "Wiki generation skipped.", 100.0)
+                else:
+                    skipped.extend(["embed", "wiki"])
+                    _step_progress(3, total_steps, "Embedding skipped.", 40.0)
+                    _step_progress(4, total_steps, "Wiki skipped (requires embeddings).", 100.0)
+
+            # Session closed — safe to load services (which opens a new connection)
             save_meta(artifact_dir, repo_path, page_count)
             self._set_active(artifact_dir)
             self._load_services(artifact_dir)

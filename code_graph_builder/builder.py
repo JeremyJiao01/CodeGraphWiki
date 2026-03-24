@@ -126,6 +126,34 @@ class CodeGraphBuilder:
         self._ingestor: MemgraphIngestor | KuzuIngestor | None = None
         self._embedder: Any | None = None
         self._vector_store: Any | None = None
+        self._session_active: bool = False
+
+    # ------------------------------------------------------------------
+    # Context manager: hold a single DB connection across multiple calls
+    # ------------------------------------------------------------------
+
+    def __enter__(self) -> CodeGraphBuilder:
+        """Open a long-lived database session.
+
+        When used as a context manager, the underlying ingestor connection
+        stays open so that ``build_graph()``, ``query()``, etc. reuse the
+        same connection instead of opening / closing one per call.
+        """
+        ingestor = self._get_ingestor()
+        ingestor.__enter__()
+        self._session_active = True
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type | None,
+        exc_val: Exception | None,
+        exc_tb: Any | None,
+    ) -> None:
+        """Close the long-lived database session."""
+        self._session_active = False
+        if self._ingestor is not None:
+            self._ingestor.__exit__(exc_type, exc_val, exc_tb)
 
     def _load_parsers(self) -> None:
         """Load Tree-sitter parsers for supported languages."""
