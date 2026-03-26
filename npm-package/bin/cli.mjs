@@ -285,7 +285,134 @@ async function runSetup() {
   log("  Embedding: " + embedDisplay);
   log("  Workspace: " + workspace);
   log("");
-  log("── Next steps ──────────────────────────────────────────────");
+
+  // --- Verify installation ---
+  log("── Verifying installation ──────────────────────────────────");
+  log("");
+
+  // Step 1: Python available?
+  if (!PYTHON_CMD) {
+    log("  ✗ Python 3 not found on PATH");
+    log("    Install Python 3.10+ and re-run: npx code-graph-builder --setup");
+    log("");
+    rl.close();
+    return;
+  }
+  log(`  ✓ Python found: ${PYTHON_CMD}`);
+
+  // Step 2: Package installed? If not, auto-install.
+  if (!pythonPackageInstalled()) {
+    log(`  … Installing ${PYTHON_PACKAGE} via pip...`);
+    const pip = findPip();
+    if (pip) {
+      try {
+        execSync(
+          [...pip, "install", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
+          { stdio: "pipe", shell: true }
+        );
+      } catch { /* handled below */ }
+    }
+  }
+
+  if (pythonPackageInstalled()) {
+    log(`  ✓ Python package installed: ${PYTHON_PACKAGE}`);
+  } else {
+    log(`  ✗ Python package not installed`);
+    log(`    Run manually: pip install ${PYTHON_PACKAGE}`);
+    log("");
+    rl.close();
+    return;
+  }
+
+  // Step 3: MCP server smoke test — spawn server, send initialize, check tools/list
+  log("  … Starting MCP server smoke test...");
+
+  const verified = await new Promise((resolve) => {
+    const envVars = loadEnvFile();
+    const mergedEnv = { ...process.env, ...envVars };
+    if (!mergedEnv.CGB_WORKSPACE) mergedEnv.CGB_WORKSPACE = WORKSPACE_DIR;
+
+    const child = spawn(PYTHON_CMD, ["-m", MODULE_PATH], {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: mergedEnv,
+      shell: IS_WIN,
+    });
+
+    let stdout = "";
+    let resolved = false;
+
+    const finish = (success, detail) => {
+      if (resolved) return;
+      resolved = true;
+      try { child.kill(); } catch {}
+      resolve({ success, detail });
+    };
+
+    // Timeout after 15s
+    const timer = setTimeout(() => finish(false, "Server did not respond within 15s"), 15000);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+      // Look for a valid JSON-RPC response
+      const lines = stdout.split("\n");
+      for (const line of lines) {
+        // MCP uses Content-Length header framing
+        if (line.startsWith("{")) {
+          try {
+            const msg = JSON.parse(line);
+            if (msg.result && msg.result.capabilities) {
+              // Got initialize response, now request tools/list
+              const toolsReq =
+                `Content-Length: 80\r\n\r\n` +
+                JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+              child.stdin.write(toolsReq);
+              stdout = "";
+              return;
+            }
+            if (msg.result && msg.result.tools) {
+              clearTimeout(timer);
+              finish(true, `${msg.result.tools.length} tools available`);
+              return;
+            }
+          } catch { /* partial JSON, wait for more */ }
+        }
+      }
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      finish(false, err.message);
+    });
+
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      if (!resolved) finish(false, `Server exited with code ${code}`);
+    });
+
+    // Send MCP initialize request
+    const initReq = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "setup-verify", version: "1.0.0" },
+      },
+    });
+    const header = `Content-Length: ${Buffer.byteLength(initReq)}\r\n\r\n`;
+    child.stdin.write(header + initReq);
+  });
+
+  if (verified.success) {
+    log(`  ✓ MCP server started successfully (${verified.detail})`);
+  } else {
+    log(`  ✗ MCP server smoke test failed: ${verified.detail}`);
+    log("    The server may still work — try: npx code-graph-builder --server");
+  }
+
+  log("");
+  log("── Setup complete ─────────────────────────────────────────");
   log("");
   log("  Add to your MCP client config:");
   log("");
@@ -396,6 +523,94 @@ function autoInstallAndStart(extraArgs) {
   runServer(PYTHON_CMD, ["-m", MODULE_PATH]);
 }
 
+// ---------------------------------------------------------------------------
+// Uninstall — remove Python package, config, workspace data, Claude MCP entry
+// ---------------------------------------------------------------------------
+
+async function runUninstall() {
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+  const log = (msg) => process.stderr.write(msg + "\n");
+
+  log("");
+  log("╔══════════════════════════════════════════════════════════╗");
+  log("║        code-graph-builder  Uninstall                    ║");
+  log("╚══════════════════════════════════════════════════════════╝");
+  log("");
+
+  // 1. Show what will be removed
+  const pip = findPip();
+  const hasPythonPkg = pythonPackageInstalled();
+  const hasWorkspace = existsSync(WORKSPACE_DIR);
+  const hasEnv = existsSync(ENV_FILE);
+
+  // Check Claude Code MCP config
+  let hasClaudeConfig = false;
+  try {
+    execFileSync("claude", ["mcp", "list"], { stdio: "pipe" });
+    hasClaudeConfig = true;
+  } catch { /* claude CLI not available */ }
+
+  log("  The following will be removed:");
+  log("");
+  if (hasPythonPkg) log("    ✓ Python package: code-graph-builder");
+  else              log("    - Python package: not installed");
+  if (hasWorkspace)  log(`    ✓ Workspace data: ${WORKSPACE_DIR}`);
+  else               log("    - Workspace data: not found");
+  if (hasEnv)        log(`    ✓ Config file:    ${ENV_FILE}`);
+  if (hasClaudeConfig) log("    ✓ Claude Code MCP server entry");
+  log("");
+
+  const answer = (await ask("  Proceed with uninstall? [y/N]: ")).trim().toLowerCase();
+  rl.close();
+
+  if (answer !== "y" && answer !== "yes") {
+    log("\n  Uninstall cancelled.\n");
+    process.exit(0);
+  }
+
+  log("");
+
+  // 2. Remove Claude Code MCP entry
+  if (hasClaudeConfig) {
+    try {
+      execSync("claude mcp remove code-graph-builder", { stdio: "pipe", shell: true });
+      log("  ✓ Removed Claude Code MCP entry");
+    } catch {
+      log("  ⚠ Could not remove Claude Code MCP entry (may not exist)");
+    }
+  }
+
+  // 3. Uninstall Python package
+  if (hasPythonPkg && pip) {
+    try {
+      execSync(
+        [...pip, "uninstall", "-y", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
+        { stdio: "inherit", shell: true }
+      );
+      log("  ✓ Uninstalled Python package");
+    } catch {
+      log("  ⚠ Failed to uninstall Python package. Try manually: pip uninstall code-graph-builder");
+    }
+  }
+
+  // 4. Remove workspace data
+  if (hasWorkspace) {
+    const { rmSync } = await import("node:fs");
+    try {
+      rmSync(WORKSPACE_DIR, { recursive: true, force: true });
+      log(`  ✓ Removed workspace: ${WORKSPACE_DIR}`);
+    } catch (err) {
+      log(`  ⚠ Failed to remove workspace: ${err.message}`);
+    }
+  }
+
+  log("");
+  log("  Uninstall complete.");
+  log("  To also clear the npx cache: npx clear-npx-cache");
+  log("");
+}
+
 function startServer(extraArgs = []) {
   // Prefer pip-installed package first (most reliable, includes all deps)
   if (pythonPackageInstalled()) {
@@ -436,14 +651,17 @@ if (mode === "--setup") {
   } else {
     startServer(args.slice(1));
   }
+} else if (mode === "--uninstall") {
+  runUninstall();
 } else if (mode === "--help" || mode === "-h") {
   process.stderr.write(
     `code-graph-builder - Code knowledge graph MCP server\n\n` +
       `Usage:\n` +
-      `  npx code-graph-builder            Interactive setup wizard\n` +
-      `  npx code-graph-builder --server   Start MCP server\n` +
-      `  npx code-graph-builder --setup    Re-run setup wizard\n` +
-      `  npx code-graph-builder --help     Show this help\n\n` +
+      `  npx code-graph-builder              Interactive setup wizard\n` +
+      `  npx code-graph-builder --server     Start MCP server\n` +
+      `  npx code-graph-builder --setup      Re-run setup wizard\n` +
+      `  npx code-graph-builder --uninstall  Completely uninstall\n` +
+      `  npx code-graph-builder --help       Show this help\n\n` +
       `Config: ${ENV_FILE}\n`
   );
 } else {
