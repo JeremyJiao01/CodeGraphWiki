@@ -10,16 +10,17 @@
  *   npx code-graph-builder --pip        # force python3 direct mode
  */
 
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, execFileSync, execSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
 
 const PYTHON_PACKAGE = "code-graph-builder";
 const MODULE_PATH = "code_graph_builder.mcp.server";
 const WORKSPACE_DIR = join(homedir(), ".code-graph-builder");
 const ENV_FILE = join(WORKSPACE_DIR, ".env");
+const IS_WIN = platform() === "win32";
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -27,16 +28,40 @@ const ENV_FILE = join(WORKSPACE_DIR, ".env");
 
 function commandExists(cmd) {
   try {
-    execFileSync("which", [cmd], { stdio: "pipe" });
+    // "which" on Unix/macOS, "where" on Windows
+    const checker = IS_WIN ? "where" : "which";
+    execFileSync(checker, [cmd], { stdio: "pipe" });
     return true;
   } catch {
     return false;
   }
 }
 
+/**
+ * Find a working Python command.  On Windows the command is typically
+ * "python" (the py-launcher or Store stub), while on Unix it is "python3".
+ * Returns the command string or null if none is found.
+ */
+function findPython() {
+  const candidates = IS_WIN
+    ? ["python", "python3", "py"]
+    : ["python3", "python"];
+  for (const cmd of candidates) {
+    try {
+      const ver = execFileSync(cmd, ["--version"], { stdio: "pipe" }).toString().trim();
+      // Ensure it is Python 3.x
+      if (ver.includes("3.")) return cmd;
+    } catch { /* skip */ }
+  }
+  return null;
+}
+
+const PYTHON_CMD = findPython();
+
 function pythonPackageInstalled() {
+  if (!PYTHON_CMD) return false;
   try {
-    execFileSync("python3", ["-c", `import ${MODULE_PATH.split(".")[0]}`], {
+    execFileSync(PYTHON_CMD, ["-c", `import ${MODULE_PATH.split(".")[0]}`], {
       stdio: "pipe",
     });
     return true;
@@ -294,6 +319,7 @@ function runServer(cmd, args) {
   const child = spawn(cmd, args, {
     stdio: "inherit",
     env: mergedEnv,
+    shell: IS_WIN,  // Windows needs shell for .cmd/.ps1 scripts (uvx, pipx, etc.)
   });
 
   child.on("error", (err) => {
@@ -314,13 +340,20 @@ function startServer(extraArgs = []) {
   } else if (commandExists("pipx")) {
     runServer("pipx", ["run", PYTHON_PACKAGE, ...extraArgs]);
   } else if (pythonPackageInstalled()) {
-    runServer("python3", ["-m", MODULE_PATH]);
+    runServer(PYTHON_CMD, ["-m", MODULE_PATH]);
   } else {
+    const pipCmd = IS_WIN ? "pip" : "pip install";
+    const uvInstall = IS_WIN
+      ? "powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\""
+      : "curl -LsSf https://astral.sh/uv/install.sh | sh";
     process.stderr.write(
       `code-graph-builder requires Python 3.10+.\n\n` +
+        (PYTHON_CMD
+          ? `Python found (${PYTHON_CMD}) but package not installed.\n\n`
+          : `Python 3 not found on PATH.\n\n`) +
         `Install options:\n` +
-        `  1. pip install ${PYTHON_PACKAGE}\n` +
-        `  2. curl -LsSf https://astral.sh/uv/install.sh | sh  (installs uv)\n` +
+        `  1. ${pipCmd} install ${PYTHON_PACKAGE}\n` +
+        `  2. ${uvInstall}  (installs uv)\n` +
         `  3. pip install pipx\n\n` +
         `Then run: npx code-graph-builder --server\n`
     );
@@ -341,14 +374,14 @@ if (mode === "--setup") {
 } else if (mode === "--server" || mode === "--pip" || mode === "--python") {
   // Start MCP server directly
   if (mode === "--pip" || mode === "--python") {
-    if (!pythonPackageInstalled()) {
+    if (!PYTHON_CMD || !pythonPackageInstalled()) {
       process.stderr.write(
         `Error: Python package '${PYTHON_PACKAGE}' is not installed.\n` +
           `Run: pip install ${PYTHON_PACKAGE}\n`
       );
       process.exit(1);
     }
-    runServer("python3", ["-m", MODULE_PATH]);
+    runServer(PYTHON_CMD, ["-m", MODULE_PATH]);
   } else {
     startServer(args.slice(1));
   }
