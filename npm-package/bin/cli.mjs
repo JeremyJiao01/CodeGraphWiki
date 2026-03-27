@@ -351,31 +351,32 @@ async function runSetup() {
     // Timeout after 15s
     const timer = setTimeout(() => finish(false, "Server did not respond within 15s"), 15000);
 
+    child.stderr.on("data", () => {}); // Suppress server logs
+
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
-      // Look for a valid JSON-RPC response
+      // MCP stdio uses JSON lines (one JSON-RPC message per line)
       const lines = stdout.split("\n");
       for (const line of lines) {
-        // MCP uses Content-Length header framing
-        if (line.startsWith("{")) {
-          try {
-            const msg = JSON.parse(line);
-            if (msg.result && msg.result.capabilities) {
-              // Got initialize response, now request tools/list
-              const toolsReq =
-                `Content-Length: 80\r\n\r\n` +
-                JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
-              child.stdin.write(toolsReq);
-              stdout = "";
-              return;
-            }
-            if (msg.result && msg.result.tools) {
-              clearTimeout(timer);
-              finish(true, `${msg.result.tools.length} tools available`);
-              return;
-            }
-          } catch { /* partial JSON, wait for more */ }
-        }
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("{")) continue;
+        try {
+          const msg = JSON.parse(trimmed);
+          if (msg.result && msg.result.capabilities) {
+            // Got initialize response, now request tools/list
+            const toolsReq = JSON.stringify({
+              jsonrpc: "2.0", id: 2, method: "tools/list", params: {},
+            });
+            child.stdin.write(toolsReq + "\n");
+            stdout = "";
+            return;
+          }
+          if (msg.result && msg.result.tools) {
+            clearTimeout(timer);
+            finish(true, `${msg.result.tools.length} tools available`);
+            return;
+          }
+        } catch { /* partial JSON, wait for more */ }
       }
     });
 
@@ -389,7 +390,7 @@ async function runSetup() {
       if (!resolved) finish(false, `Server exited with code ${code}`);
     });
 
-    // Send MCP initialize request
+    // Send MCP initialize request as JSON line
     const initReq = JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
@@ -400,8 +401,7 @@ async function runSetup() {
         clientInfo: { name: "setup-verify", version: "1.0.0" },
       },
     });
-    const header = `Content-Length: ${Buffer.byteLength(initReq)}\r\n\r\n`;
-    child.stdin.write(header + initReq);
+    child.stdin.write(initReq + "\n");
   });
 
   if (verified.success) {
@@ -411,21 +411,48 @@ async function runSetup() {
     log("    The server may still work — try: npx code-graph-builder --server");
   }
 
+  // Step 4: Auto-register in Claude Code if available
+  log("");
+  log("── Registering MCP server ─────────────────────────────────");
+  log("");
+
+  if (commandExists("claude")) {
+    try {
+      // Remove existing entry first (ignore errors if not found)
+      try {
+        execSync("claude mcp remove code-graph-builder", { stdio: "pipe", shell: true });
+      } catch { /* not found, fine */ }
+
+      const addCmd = IS_WIN
+        ? 'claude mcp add --scope user --transport stdio code-graph-builder -- cmd /c npx -y code-graph-builder@latest --server'
+        : 'claude mcp add --scope user --transport stdio code-graph-builder -- npx -y code-graph-builder@latest --server';
+
+      execSync(addCmd, { stdio: "pipe", shell: true });
+      log("  ✓ Registered in Claude Code (global): code-graph-builder");
+    } catch (err) {
+      log("  ⚠ Failed to register in Claude Code automatically");
+      log("    Run manually:");
+      if (IS_WIN) {
+        log('    claude mcp add --scope user --transport stdio code-graph-builder -- cmd /c npx -y code-graph-builder@latest --server');
+      } else {
+        log('    claude mcp add --scope user --transport stdio code-graph-builder -- npx -y code-graph-builder@latest --server');
+      }
+    }
+  } else {
+    log("  Claude Code CLI not found. Add manually to your MCP client config:");
+    log("");
+    log('  {');
+    log('    "mcpServers": {');
+    log('      "code-graph-builder": {');
+    log('        "command": "npx",');
+    log('        "args": ["-y", "code-graph-builder@latest", "--server"]');
+    log("      }");
+    log("    }");
+    log("  }");
+  }
+
   log("");
   log("── Setup complete ─────────────────────────────────────────");
-  log("");
-  log("  Add to your MCP client config:");
-  log("");
-  log('  {');
-  log('    "mcpServers": {');
-  log('      "code-graph-builder": {');
-  log('        "command": "npx",');
-  log('        "args": ["-y", "code-graph-builder@latest", "--server"]');
-  log("      }");
-  log("    }");
-  log("  }");
-  log("");
-  log("  Or run directly:  npx code-graph-builder --server");
   log("");
 }
 
@@ -544,11 +571,11 @@ async function runUninstall() {
   const hasWorkspace = existsSync(WORKSPACE_DIR);
   const hasEnv = existsSync(ENV_FILE);
 
-  // Check Claude Code MCP config
+  // Check if code-graph-builder is registered in Claude Code
   let hasClaudeConfig = false;
   try {
-    execFileSync("claude", ["mcp", "list"], { stdio: "pipe" });
-    hasClaudeConfig = true;
+    const mcpList = execFileSync("claude", ["mcp", "list"], { stdio: "pipe" }).toString();
+    hasClaudeConfig = mcpList.includes("code-graph-builder");
   } catch { /* claude CLI not available */ }
 
   log("  The following will be removed:");
