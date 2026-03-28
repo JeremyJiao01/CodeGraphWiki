@@ -170,7 +170,17 @@ class KuzuIngestor:
                         f"retrying in {wait:.1f}s... ({exc})"
                     )
                     time.sleep(wait)
-                    # Reset state for next attempt
+                    # Explicitly close before next attempt to release file handles
+                    if self._conn:
+                        try:
+                            self._conn.close()
+                        except Exception:
+                            pass
+                    if self._db:
+                        try:
+                            self._db.close()
+                        except Exception:
+                            pass
                     self._db = None
                     self._conn = None
 
@@ -206,10 +216,16 @@ class KuzuIngestor:
             self.flush_all()
 
         if self._conn:
-            # Kùzu connection doesn't need explicit close
+            try:
+                self._conn.close()
+            except Exception as e:
+                logger.debug(f"Error closing connection: {e}")
             self._conn = None
         if self._db:
-            # Kùzu database doesn't need explicit close
+            try:
+                self._db.close()
+            except Exception as e:
+                logger.debug(f"Error closing database: {e}")
             self._db = None
         logger.info("Kùzu database closed")
 
@@ -480,6 +496,12 @@ class KuzuIngestor:
         """Attempt to re-establish the database connection."""
         if self._db is None:
             return
+        # Close stale connection first to release file handles (critical on Windows)
+        if self._conn:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
         try:
             import kuzu
             self._conn = kuzu.Connection(self._db)
