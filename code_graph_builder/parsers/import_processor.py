@@ -299,73 +299,34 @@ class ImportProcessor:
     def _resolve_c_header_to_module_qn(
         self, header_path: str, current_module_qn: str
     ) -> str | None:
-        """Resolve a C #include path to the module qualified name of the .c file.
+        """Resolve a C #include path to the module qualified name.
 
-        For ``#include "utils.h"`` found in ``project.src.main``, tries to find
-        ``src/utils.h`` or ``src/utils.c`` and returns the module_qn like
-        ``project.src.utils``.
-
-        Strategy:
-            1. Look in the same directory as the including file.
-            2. Try common include directories (include/, src/).
-            3. Search from repo root.
+        Assumes .c and .h files are uniquely named across the repo.
+        Simply searches the entire repo for a matching filename,
+        preferring the .c/.cpp implementation over the .h header.
         """
-        # Derive the directory of the current module
-        # module_qn = "project.src.main" → parts = ["project", "src", "main"]
-        parts = current_module_qn.split(cs.SEPARATOR_DOT)
-        if len(parts) < 2:
+        project_name = current_module_qn.split(cs.SEPARATOR_DOT)[0]
+        header_stem = Path(header_path).stem
+
+        # Build file name cache on first call (scan once, reuse)
+        if not hasattr(self, "_file_cache"):
+            self._file_cache: dict[str, Path] = {}
+            for f in self.repo_path.rglob("*"):
+                if f.is_file() and f.suffix in (".c", ".cpp", ".cc", ".h", ".hpp"):
+                    self._file_cache.setdefault(f.stem, f)
+
+        # Prefer .c implementation file, fallback to .h header
+        found = self._file_cache.get(header_stem)
+        if not found:
             return None
 
-        project_name = parts[0]
-        # The directory path relative to repo is parts[1:-1]
-        current_dir = self.repo_path
-        for p in parts[1:-1]:
-            current_dir = current_dir / p
-
-        header_file = Path(header_path)
-        # Strip directory prefix from header (e.g., "../utils.h" → "utils.h")
-        header_name = header_file.name
-        header_stem = header_file.stem
-
-        # Search candidates: same dir, then repo-wide
-        search_dirs = [current_dir]
-        # Also try parent dirs for relative includes like "../foo.h"
-        if current_dir != self.repo_path:
-            search_dirs.append(current_dir.parent)
-        # Common include directories
-        for inc_dir in ("include", "inc", "src"):
-            candidate = self.repo_path / inc_dir
-            if candidate.is_dir():
-                search_dirs.append(candidate)
-        search_dirs.append(self.repo_path)
-
-        for search_dir in search_dirs:
-            # Try to find the header itself
-            header_candidate = search_dir / header_name
-            if header_candidate.exists():
-                try:
-                    rel = header_candidate.relative_to(self.repo_path)
-                    module_qn = cs.SEPARATOR_DOT.join(
-                        [project_name] + list(rel.with_suffix("").parts)
-                    )
-                    return module_qn
-                except ValueError:
-                    continue
-
-            # Also try the corresponding .c file (same stem)
-            for ext in (".c", ".cpp", ".cc"):
-                c_candidate = search_dir / (header_stem + ext)
-                if c_candidate.exists():
-                    try:
-                        rel = c_candidate.relative_to(self.repo_path)
-                        module_qn = cs.SEPARATOR_DOT.join(
-                            [project_name] + list(rel.with_suffix("").parts)
-                        )
-                        return module_qn
-                    except ValueError:
-                        continue
-
-        return None
+        try:
+            rel = found.relative_to(self.repo_path)
+            return cs.SEPARATOR_DOT.join(
+                [project_name] + list(rel.with_suffix("").parts)
+            )
+        except ValueError:
+            return None
 
     def _get_dotted_name(self, node: Node) -> str | None:
         """Get dotted name from a node."""
