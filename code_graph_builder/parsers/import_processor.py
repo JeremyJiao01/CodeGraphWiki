@@ -262,7 +262,13 @@ class ImportProcessor:
             self.import_mapping[module_qn][key] = path
 
     def _parse_c_cpp_imports(self, captures: dict, module_qn: str) -> None:
-        """Parse C/C++ #include directives."""
+        """Parse C/C++ #include directives.
+
+        For each ``#include "header.h"`` (local include), resolves the header
+        path to a module qualified name and stores it.  This allows
+        ``_resolve_via_imports`` to search the included module's functions
+        when resolving cross-file calls.
+        """
         import_nodes = captures.get(cs.CAPTURE_IMPORT, [])
 
         for node in import_nodes:
@@ -275,8 +281,91 @@ class ImportProcessor:
                         header = safe_decode_text(child)
                         if header:
                             header = header.strip('"<>')
+                            # Store raw header name (legacy)
                             key = header.replace(".", "_")
                             self.import_mapping[module_qn][key] = header
+
+                            # Resolve local header to module qualified name
+                            # so cross-file call resolution works.
+                            header_module_qn = self._resolve_c_header_to_module_qn(
+                                header, module_qn
+                            )
+                            if header_module_qn:
+                                # Store with a special prefix so _resolve_via_imports
+                                # can enumerate imported modules for C.
+                                c_key = f"__c_module__{header_module_qn}"
+                                self.import_mapping[module_qn][c_key] = header_module_qn
+
+    def _resolve_c_header_to_module_qn(
+        self, header_path: str, current_module_qn: str
+    ) -> str | None:
+        """Resolve a C #include path to the module qualified name of the .c file.
+
+        For ``#include "utils.h"`` found in ``project.src.main``, tries to find
+        ``src/utils.h`` or ``src/utils.c`` and returns the module_qn like
+        ``project.src.utils``.
+
+        Strategy:
+            1. Look in the same directory as the including file.
+            2. Try common include directories (include/, src/).
+            3. Search from repo root.
+        """
+        # Derive the directory of the current module
+        # module_qn = "project.src.main" → parts = ["project", "src", "main"]
+        parts = current_module_qn.split(cs.SEPARATOR_DOT)
+        if len(parts) < 2:
+            return None
+
+        project_name = parts[0]
+        # The directory path relative to repo is parts[1:-1]
+        current_dir = self.repo_path
+        for p in parts[1:-1]:
+            current_dir = current_dir / p
+
+        header_file = Path(header_path)
+        # Strip directory prefix from header (e.g., "../utils.h" → "utils.h")
+        header_name = header_file.name
+        header_stem = header_file.stem
+
+        # Search candidates: same dir, then repo-wide
+        search_dirs = [current_dir]
+        # Also try parent dirs for relative includes like "../foo.h"
+        if current_dir != self.repo_path:
+            search_dirs.append(current_dir.parent)
+        # Common include directories
+        for inc_dir in ("include", "inc", "src"):
+            candidate = self.repo_path / inc_dir
+            if candidate.is_dir():
+                search_dirs.append(candidate)
+        search_dirs.append(self.repo_path)
+
+        for search_dir in search_dirs:
+            # Try to find the header itself
+            header_candidate = search_dir / header_name
+            if header_candidate.exists():
+                try:
+                    rel = header_candidate.relative_to(self.repo_path)
+                    module_qn = cs.SEPARATOR_DOT.join(
+                        [project_name] + list(rel.with_suffix("").parts)
+                    )
+                    return module_qn
+                except ValueError:
+                    continue
+
+            # Also try the corresponding .c file (same stem)
+            for ext in (".c", ".cpp", ".cc"):
+                c_candidate = search_dir / (header_stem + ext)
+                if c_candidate.exists():
+                    try:
+                        rel = c_candidate.relative_to(self.repo_path)
+                        module_qn = cs.SEPARATOR_DOT.join(
+                            [project_name] + list(rel.with_suffix("").parts)
+                        )
+                        return module_qn
+                    except ValueError:
+                        continue
+
+        return None
 
     def _get_dotted_name(self, node: Node) -> str | None:
         """Get dotted name from a node."""
