@@ -690,8 +690,12 @@ class KuzuIngestor:
     def fetch_all_calls(self) -> list[ResultRow]:
         """Fetch all CALLS relationships in the graph.
 
-        Returns a list of rows, each containing
-        [caller_qn, callee_qn, callee_path, callee_start_line].
+        Returns a list of rows, each containing 7 fields:
+        [caller_qn, callee_qn, callee_path, callee_start_line,
+         caller_path, caller_start_line, caller_end_line].
+
+        This matches the field order expected by
+        ``api_doc_generator._build_call_graph()``.
         """
         if not self._conn:
             raise ConnectionError("Not connected to database")
@@ -701,7 +705,10 @@ class KuzuIngestor:
             RETURN DISTINCT caller.qualified_name AS caller_qn,
                    callee.qualified_name AS callee_qn,
                    callee.path AS callee_path,
-                   callee.start_line AS callee_start_line
+                   callee.start_line AS callee_start_line,
+                   caller.path AS caller_path,
+                   caller.start_line AS caller_start_line,
+                   caller.end_line AS caller_end_line
         """
         try:
             return self.query(cypher)
