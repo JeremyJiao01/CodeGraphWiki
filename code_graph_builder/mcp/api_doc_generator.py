@@ -457,6 +457,7 @@ def _render_module_page(
     callees_of: dict[str, list[dict]] | None = None,
     func_lookup: dict[str, dict] | None = None,
     module_desc: str = "",
+    macros: list[dict[str, Any]] | None = None,
 ) -> str:
     """Render L2 module index page."""
     if callees_of is None:
@@ -480,9 +481,10 @@ def _render_module_page(
         lines.append(f"**文件**: {', '.join(files)}")
     lines.append("")
 
-    # Separate macros from regular functions
-    regular_funcs = [f for f in funcs if f.get("kind") != "macro"]
-    macros = [f for f in funcs if f.get("kind") == "macro"]
+    # funcs now only contains real functions (macros are passed separately)
+    regular_funcs = funcs
+    if macros is None:
+        macros = []
 
     # Call tree for public entry points
     public_funcs = [f for f in regular_funcs if f.get("visibility") == "public"]
@@ -703,7 +705,7 @@ def generate_api_docs(
     # ---- Group functions by module ----
     # module_qn → {files: set, funcs: list, types: list}
     modules: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"files": set(), "funcs": [], "types": []}
+        lambda: {"files": set(), "funcs": [], "types": [], "macros": []}
     )
     seen_funcs: set[str] = set()
 
@@ -734,7 +736,11 @@ def generate_api_docs(
         if len(r) > 12:
             func["kind"] = r[12]
         modules[module_qn]["files"].add(module_path)
-        modules[module_qn]["funcs"].append(func)
+        # Macros go to a separate list; only real functions in "funcs"
+        if func.get("kind") == "macro":
+            modules[module_qn]["macros"].append(func)
+        else:
+            modules[module_qn]["funcs"].append(func)
 
     for row in type_rows:
         r = _unpack_row(row)
@@ -800,7 +806,7 @@ def generate_api_docs(
     # We also query for any .h counterpart by checking the func paths.
     for mod_data in modules.values():
         paths = set()
-        for f in mod_data["funcs"]:
+        for f in mod_data["funcs"] + mod_data["macros"]:
             p = f.get("path") or ""
             if p:
                 paths.add(Path(p).name)
@@ -847,12 +853,14 @@ def generate_api_docs(
         mod_data = modules[module_qn]
         funcs = mod_data["funcs"]
         types = mod_data["types"]
+        macros = mod_data["macros"]
         files = sorted(mod_data["files"])
 
         content = _render_module_page(
             module_qn, files, funcs, types,
             callees_of=callees_of,
             func_lookup=func_lookup,
+            macros=macros,
         )
         safe = _sanitise_filename(module_qn)
         (modules_dir / f"{safe}.md").write_text(content, encoding="utf-8")
@@ -860,7 +868,7 @@ def generate_api_docs(
         vis_counts: dict[str, int] = defaultdict(int)
         for f in funcs:
             vis_counts[f.get("visibility") or "unknown"] += 1
-        macro_count = sum(1 for f in funcs if f.get("kind") == "macro")
+        macro_count = len(macros)
 
         return {
             "qn": module_qn,
