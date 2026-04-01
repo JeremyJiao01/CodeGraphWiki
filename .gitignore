@@ -58,6 +58,13 @@ tinycc_kuzu/
 tinycc_memory/
 extracted_prompts/
 
+# Generated HTML documentation (build artifacts)
+docs/*.html
+
+# Review reports and temporary analysis files
+**/review_report.md
+**/analysis_report.md
+
 #claude
 .claude/
 CLAUDE.md
@@ -67,3 +74,8 @@ CLAUDE.md
 
 # npm binary packages
 npm-package/*.tgz
+npm-package/node_modules/
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
