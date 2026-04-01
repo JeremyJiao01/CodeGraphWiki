@@ -299,10 +299,34 @@ def _render_func_detail(
     lines.append("")
 
     # Semantic description line — the most important line for embedding retrieval
+    # Supports bilingual descriptions (Chinese/English) for better cross-language search
     doc = (func.get("docstring") or "").strip()
+
+    # Parse bilingual description format
+    import re
+    chinese_desc = ""
+    english_desc = ""
+
     if doc:
-        first_sentence = doc.split(".")[0].strip() + "." if "." in doc else doc
-        lines.append(f"> {first_sentence}")
+        # Look for explicit bilingual markers
+        chinese_match = re.search(r'(?:中文[:：]\s*)([^\n]+)', doc)
+        english_match = re.search(r'(?:English[:：]\s*)([^\n]+)', doc)
+
+        if chinese_match:
+            chinese_desc = chinese_match.group(1).strip()
+        if english_match:
+            english_desc = english_match.group(1).strip()
+
+        # If no explicit markers, use the whole doc as-is
+        if not chinese_desc and not english_desc:
+            first_sentence = doc.split(".")[0].strip() + "." if "." in doc else doc
+            lines.append(f"> {first_sentence}")
+        else:
+            # Display bilingual description
+            if chinese_desc:
+                lines.append(f"> 中文：{chinese_desc}")
+            if english_desc:
+                lines.append(f"> English：{english_desc}")
     else:
         lines.append(f"> <!-- TODO: LLM generate description for {name} -->")
     lines.append("")
@@ -338,11 +362,31 @@ def _render_func_detail(
         lines.append(f"- 模块: {module_qn}")
     lines.append("")
 
-    # Full docstring (if longer than the summary line)
-    if doc and len(doc) > 80:
+    # Full docstring (if longer than the summary line or contains bilingual content)
+    # Always show full description if bilingual markers are present
+    has_bilingual = "中文：" in doc or "English：" in doc
+    if doc and (len(doc) > 80 or has_bilingual):
         lines.append("## 描述")
         lines.append("")
-        lines.append(doc)
+        # If we have bilingual markers, format them nicely
+        if has_bilingual:
+            # Parse and format bilingual description
+            import re
+
+            # Extract Chinese description
+            chinese_match = re.search(r'中文[：:]\s*([^\n]+(?:\n(?![中文英文]:).*)*)', doc)
+            english_match = re.search(r'English[：:]\s*([^\n]+(?:\n(?![中文英文]:).*)*)', doc)
+
+            if chinese_match:
+                chinese_text = chinese_match.group(1).strip()
+                lines.append(f"**中文：** {chinese_text}")
+                lines.append("")
+            if english_match:
+                english_text = english_match.group(1).strip()
+                lines.append(f"**English:** {english_text}")
+                lines.append("")
+        else:
+            lines.append(doc)
         lines.append("")
 
     # Call tree (2-level, visual)

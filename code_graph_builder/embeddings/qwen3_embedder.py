@@ -87,7 +87,7 @@ class Qwen3Embedder(BaseEmbedder):
     DEFAULT_BASE_URL = "http://dingpan.digitalpower.huawei.com/MaasPlatform/v1"
     DEFAULT_BATCH_SIZE = 25  # API limit
     MAX_BATCH_SIZE = 25
-    CODE_RETRIEVAL_TASK = "Given a code query, retrieve relevant code snippets"
+    CODE_RETRIEVAL_TASK = "Given a code query in Chinese or English, retrieve relevant code snippets. Match queries to function descriptions, signatures, and source code regardless of language."
     EMBEDDING_DIMENSION = 2560  # text-embedding-v4 output dimension
 
     def __init__(
@@ -326,14 +326,23 @@ class Qwen3Embedder(BaseEmbedder):
         """Generate embedding for a query.
 
         This is for search queries (with instruction for better retrieval).
+        Supports bilingual (Chinese/English) queries for cross-language search.
 
         Args:
-            query: Query text
+            query: Query text (can be in Chinese or English)
 
         Returns:
             Embedding vector as list of floats
         """
-        return self.embed_code(query, use_instruction=True)
+        # Detect if query contains Chinese characters
+        has_chinese = any('\u4e00' <= c <= '\u9fff' for c in query)
+
+        if has_chinese:
+            # For Chinese queries, add bilingual retrieval instruction
+            bilingual_query = f"{query}\n(Chinese query for code retrieval)"
+            return self.embed_code(bilingual_query, use_instruction=True)
+        else:
+            return self.embed_code(query, use_instruction=True)
 
     def _get_detailed_instruct(self, task_description: str, query: str) -> str:
         """Format query with instruction for better retrieval performance.

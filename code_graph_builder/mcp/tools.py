@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import pickle
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -170,9 +171,10 @@ class MCPToolsRegistry:
         except Exception as exc:
             logger.warning(f"File editor unavailable: {exc}")
 
-        ingestor = KuzuIngestor(db_path, read_only=True)
-        ingestor.__enter__()
-        self._ingestor = ingestor
+        # Note: We don't keep a persistent ingestor connection open anymore
+        # to avoid file locks. Each tool that needs Kuzu will create a temporary
+        # connection and close it after use.
+        self._db_path = db_path
 
         llm = create_llm_backend()
         cypher_gen: CypherGenerator | None = None
@@ -181,6 +183,8 @@ class MCPToolsRegistry:
         else:
             logger.warning("LLM not configured — query_code_graph will be unavailable")
 
+        # Load semantic search service without graph_service (Kuzu) dependency
+        # find_api will work with vector search only, avoiding Kuzu file locks
         semantic_service: SemanticSearchService | None = None
         if vectors_path.exists():
             try:
@@ -190,7 +194,7 @@ class MCPToolsRegistry:
                 semantic_service = SemanticSearchService(
                     embedder=embedder,
                     vector_store=vector_store,
-                    graph_service=ingestor,
+                    graph_service=None,  # No Kuzu dependency for find_api
                 )
                 logger.info(f"Loaded vector store: {vector_store.get_stats()}")
             except Exception as exc:
@@ -217,9 +221,33 @@ class MCPToolsRegistry:
             self._ingestor = None
         self._file_editor = None
 
+    @contextmanager
+    def _temporary_ingestor(self):
+        """Context manager for temporary Kuzu ingestor connection.
+
+        Usage:
+            with self._temporary_ingestor() as ingestor:
+                # Use ingestor for queries
+                rows = ingestor.query(...)
+            # Connection automatically closed here
+        """
+        if self._active_artifact_dir is None:
+            raise ToolError("No active repository. Call initialize_repository first.")
+
+        db_path = self._active_artifact_dir / "graph.db"
+        if not db_path.exists():
+            raise ToolError("Graph database not found. Run initialize_repository first.")
+
+        ingestor = KuzuIngestor(db_path, read_only=True)
+        try:
+            ingestor.__enter__()
+            yield ingestor
+        finally:
+            ingestor.__exit__(None, None, None)
+
     def _require_active(self) -> None:
         """Raise :class:`ToolError` when no repository has been indexed."""
-        if self._ingestor is None:
+        if self._active_artifact_dir is None:
             raise ToolError("No repository indexed yet. Call initialize_repository first.")
 
     def _require_repo_path(self) -> None:
@@ -235,6 +263,7 @@ class MCPToolsRegistry:
                     "Index a code repository: builds the knowledge graph, generates "
                     "API documentation, and creates vector embeddings for semantic search. "
                     "Must be called before using any query tools. "
+                    "Always performs a fresh build (cached data is ignored). "
                     "Takes 2-10 minutes depending on repo size."
                 ),
                 input_schema={
@@ -247,8 +276,8 @@ class MCPToolsRegistry:
                         "rebuild": {
                             "type": "boolean",
                             "description": (
-                                "If true, force-rebuild graph, API docs, and embeddings "
-                                "even if cached data exists. Default: false."
+                                "Always forces a fresh rebuild. This parameter is kept for "
+                                "compatibility but rebuild is always enabled. Default: true."
                             ),
                         },
                         "skip_embed": {
@@ -493,7 +522,7 @@ class MCPToolsRegistry:
     async def _handle_initialize_repository(
         self,
         repo_path: str,
-        rebuild: bool = False,
+        rebuild: bool = True,
         wiki_mode: str = "comprehensive",
         backend: str = "kuzu",
         skip_wiki: bool = False,
@@ -510,10 +539,13 @@ class MCPToolsRegistry:
             if _progress_cb is not None:
                 asyncio.run_coroutine_threadsafe(_progress_cb(msg, pct), loop)
 
+        # Force rebuild to ensure fresh graph data
+        effective_rebuild = True
+
         result = await loop.run_in_executor(
             None,
             lambda: self._run_pipeline(
-                repo, rebuild, wiki_mode, sync_progress,
+                repo, effective_rebuild, wiki_mode, sync_progress,
                 backend=backend, skip_wiki=skip_wiki, skip_embed=skip_embed,
             ),
         )
@@ -649,36 +681,36 @@ class MCPToolsRegistry:
         if warnings:
             result["warnings"] = warnings
 
-        # Merge graph statistics + language stats
-        if self._ingestor is not None:
-            try:
-                result["graph_stats"] = self._ingestor.get_statistics()
-            except Exception as exc:
-                result["graph_stats"] = {"error": str(exc)}
+        # Merge graph statistics + language stats using temporary connection
+        try:
+            with self._temporary_ingestor() as ingestor:
+                result["graph_stats"] = ingestor.get_statistics()
 
-            # Language extraction stats
-            try:
-                file_rows = self._ingestor.query(
-                    "MATCH (f:File) RETURN f.path AS path"
-                )
-                from ..language_spec import get_language_for_extension
-                lang_counts: dict[str, int] = {}
-                total_files = 0
-                for row in file_rows:
-                    raw = row.get("result", row)
-                    fpath = raw[0] if isinstance(raw, (list, tuple)) else raw
-                    if isinstance(fpath, str):
-                        ext = Path(fpath).suffix.lower()
-                        lang = get_language_for_extension(ext)
-                        if lang:
-                            lang_counts[lang.value] = lang_counts.get(lang.value, 0) + 1
-                            total_files += 1
-                result["language_stats"] = {
-                    "total_code_files": total_files,
-                    "by_language": dict(sorted(lang_counts.items(), key=lambda x: -x[1])),
-                }
-            except Exception:
-                pass  # language stats are optional
+                # Language extraction stats
+                try:
+                    file_rows = ingestor.query(
+                        "MATCH (f:File) RETURN f.path AS path"
+                    )
+                    from ..language_spec import get_language_for_extension
+                    lang_counts: dict[str, int] = {}
+                    total_files = 0
+                    for row in file_rows:
+                        raw = row.get("result", row)
+                        fpath = raw[0] if isinstance(raw, (list, tuple)) else raw
+                        if isinstance(fpath, str):
+                            ext = Path(fpath).suffix.lower()
+                            lang = get_language_for_extension(ext)
+                            if lang:
+                                lang_counts[lang.value] = lang_counts.get(lang.value, 0) + 1
+                                total_files += 1
+                    result["language_stats"] = {
+                        "total_code_files": total_files,
+                        "by_language": dict(sorted(lang_counts.items(), key=lambda x: -x[1])),
+                    }
+                except Exception:
+                    pass  # language stats are optional
+        except Exception as exc:
+            result["graph_stats"] = {"error": str(exc)}
 
         # Supported languages
         from ..constants import LANGUAGE_METADATA, LanguageStatus
@@ -890,7 +922,6 @@ class MCPToolsRegistry:
                 "LLM not configured. Set one of: LLM_API_KEY, OPENAI_API_KEY, "
                 "or MOONSHOT_API_KEY in the MCP server environment."
             )
-        assert self._ingestor is not None
 
         try:
             cypher = self._cypher_gen.generate(question)
@@ -898,20 +929,21 @@ class MCPToolsRegistry:
             raise ToolError({"error": f"Cypher generation failed: {exc}", "question": question}) from exc
 
         try:
-            rows = self._ingestor.query(cypher)
-            serialisable = []
-            for row in rows:
-                raw = row.get("result", row)
-                if isinstance(raw, (list, tuple)):
-                    serialisable.append(list(raw))
-                else:
-                    serialisable.append(raw)
-            return {
-                "question": question,
-                "cypher": cypher,
-                "row_count": len(serialisable),
-                "rows": serialisable,
-            }
+            with self._temporary_ingestor() as ingestor:
+                rows = ingestor.query(cypher)
+                serialisable = []
+                for row in rows:
+                    raw = row.get("result", row)
+                    if isinstance(raw, (list, tuple)):
+                        serialisable.append(list(raw))
+                    else:
+                        serialisable.append(raw)
+                return {
+                    "question": question,
+                    "cypher": cypher,
+                    "row_count": len(serialisable),
+                    "rows": serialisable,
+                }
         except Exception as exc:
             raise ToolError({
                 "error": f"Query execution failed: {exc}",
@@ -926,8 +958,6 @@ class MCPToolsRegistry:
     async def _handle_get_code_snippet(self, qualified_name: str) -> dict[str, Any]:
         self._require_active()
 
-        assert self._ingestor is not None
-
         safe_qn = qualified_name.replace("'", "\\'")
         cypher = (
             f"MATCH (n) WHERE n.qualified_name = '{safe_qn}' "
@@ -936,7 +966,8 @@ class MCPToolsRegistry:
         )
 
         try:
-            rows = self._ingestor.query(cypher)
+            with self._temporary_ingestor() as ingestor:
+                rows = ingestor.query(cypher)
         except Exception as exc:
             raise ToolError({"error": f"Graph query failed: {exc}", "qualified_name": qualified_name}) from exc
 
@@ -1117,15 +1148,14 @@ class MCPToolsRegistry:
     ) -> dict[str, Any]:
         self._require_active()
 
-        assert self._ingestor is not None
-
         vis_filter = None if visibility == "all" else visibility
 
         try:
-            rows = self._ingestor.fetch_module_apis(
-                module_qn=module,
-                visibility=vis_filter,
-            )
+            with self._temporary_ingestor() as ingestor:
+                rows = ingestor.fetch_module_apis(
+                    module_qn=module,
+                    visibility=vis_filter,
+                )
 
             # Group function results by module
             by_module: dict[str, list[dict[str, Any]]] = {}
@@ -1155,8 +1185,8 @@ class MCPToolsRegistry:
 
             # Fetch type APIs (structs, unions, enums, typedefs) if requested
             type_count = 0
-            if include_types and hasattr(self._ingestor, "fetch_module_type_apis"):
-                type_rows = self._ingestor.fetch_module_type_apis(module_qn=module)
+            if include_types and hasattr(ingestor, "fetch_module_type_apis"):
+                type_rows = ingestor.fetch_module_type_apis(module_qn=module)
                 for row in type_rows:
                     raw = row.get("result", row)
                     if isinstance(raw, (list, tuple)) and len(raw) >= 6:
@@ -1273,7 +1303,7 @@ class MCPToolsRegistry:
         query: str,
         top_k: int = 5,
     ) -> dict[str, Any]:
-        self._require_active()
+        self._require_active_repo_path()
 
         if self._semantic_service is None:
             raise ToolError(
@@ -1393,20 +1423,19 @@ class MCPToolsRegistry:
             if rebuild and structure_cache.exists():
                 structure_cache.unlink()
 
-            assert self._ingestor is not None
-
-            index_path, page_count = run_wiki_generation(
-                builder=self._ingestor,
-                repo_path=repo_path,
-                output_dir=wiki_dir,
-                max_pages=max_pages,
-                rebuild=rebuild,
-                comprehensive=comprehensive,
-                vector_store=vector_store,
-                embedder=embedder,
-                func_map=func_map,
-                progress_cb=progress_cb,
-            )
+            with self._temporary_ingestor() as ingestor:
+                index_path, page_count = run_wiki_generation(
+                    builder=ingestor,
+                    repo_path=repo_path,
+                    output_dir=wiki_dir,
+                    max_pages=max_pages,
+                    rebuild=rebuild,
+                    comprehensive=comprehensive,
+                    vector_store=vector_store,
+                    embedder=embedder,
+                    func_map=func_map,
+                    progress_cb=progress_cb,
+                )
 
             save_meta(artifact_dir, repo_path, page_count)
 
@@ -1474,11 +1503,10 @@ class MCPToolsRegistry:
         vectors_path = artifact_dir / "vectors.pkl"
 
         try:
-            assert self._ingestor is not None
-
-            vector_store, embedder, func_map = build_vector_index(
-                self._ingestor, repo_path, vectors_path, rebuild, progress_cb
-            )
+            with self._temporary_ingestor() as ingestor:
+                vector_store, embedder, func_map = build_vector_index(
+                    ingestor, repo_path, vectors_path, rebuild, progress_cb
+                )
 
             # Preserve existing wiki_page_count in meta
             meta_file = artifact_dir / "meta.json"
@@ -1626,12 +1654,11 @@ class MCPToolsRegistry:
         """
         try:
             if mode == "full":
-                assert self._ingestor is not None
-
-                result = generate_api_docs_step(
-                    self._ingestor, artifact_dir, True, progress_cb,
-                    repo_path=repo_path,
-                )
+                with self._temporary_ingestor() as ingestor:
+                    result = generate_api_docs_step(
+                        ingestor, artifact_dir, True, progress_cb,
+                        repo_path=repo_path,
+                    )
 
                 # LLM description generation for undocumented functions
                 if repo_path is not None:
@@ -1746,7 +1773,7 @@ class MCPToolsRegistry:
         tool_set = MCPToolSet(
             semantic_service=self._semantic_service,
             cypher_gen=self._cypher_gen,
-            ingestor=self._ingestor,
+            ingestor_factory=self._temporary_ingestor,
             artifact_dir=self._active_artifact_dir,
         )
         agent = GuidanceAgent(toolset=tool_set, llm=llm)
@@ -1832,9 +1859,14 @@ class MCPToolsRegistry:
         }
 
         # --- Service status ---
+        # Check if graph database exists (without opening persistent connection)
+        has_graph = (
+            self._active_artifact_dir is not None
+            and (self._active_artifact_dir / "graph.db").exists()
+        )
         services: dict[str, bool] = {
-            "graph_database": self._ingestor is not None,
-            "cypher_query": self._cypher_gen is not None,
+            "graph_database": has_graph,
+            "cypher_query": self._cypher_gen is not None and has_graph,
             "semantic_search": self._semantic_service is not None,
             "file_editor": self._file_editor is not None,
         }

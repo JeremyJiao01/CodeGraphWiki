@@ -212,12 +212,16 @@ def generate_api_docs_step(
 _DESC_SYSTEM_PROMPT = """\
 You are a code documentation assistant. Given a function's signature, \
 source code, module context, call relationships, and usage examples, \
-generate a single concise sentence (in the same language as any existing \
-comments in the code, defaulting to English) describing what the function \
-does and how it is typically used. Focus on the function's PURPOSE and its \
-role in the codebase, not low-level implementation details. Do NOT include \
-the function name in the description. \
-Reply with ONLY the description sentence, nothing else."""
+generate a BILINGUAL description (Chinese and English) describing what \
+the function does and how it is typically used. \
+
+Format your response EXACTLY as follows:
+中文：<concise Chinese description>
+English：<concise English description>
+
+Focus on the function's PURPOSE and its role in the codebase, not low-level \
+implementation details. Do NOT include the function name in the description. \
+Both descriptions should convey the same meaning but be natural in each language."""
 
 _DESC_BATCH_SIZE = 10
 
@@ -258,21 +262,40 @@ def _build_desc_prompt(funcs: list[dict]) -> str:
 
 
 def _parse_desc_response(response: str, count: int) -> list[str]:
-    """Parse numbered descriptions from LLM response."""
+    """Parse numbered descriptions from LLM response.
+
+    Supports bilingual descriptions in the format:
+    [N] 中文：<Chinese description> English：<English description>
+    """
     import re
 
     descriptions: list[str] = [""] * count
+    current_idx = -1
+    current_desc_lines = []
+
     for line in response.strip().splitlines():
         line = line.strip()
         if not line:
             continue
+
         # Match "[N] desc", "N. desc", or "N) desc" with regex
         m = re.match(r"^\[?(\d+)[.\)\]]\s*(.*)", line)
         if m:
+            # Save previous description if exists
+            if 0 <= current_idx < count and current_desc_lines:
+                descriptions[current_idx] = " ".join(current_desc_lines).strip()
+
             idx = int(m.group(1)) - 1  # 1-based to 0-based
-            desc = m.group(2).strip()
-            if 0 <= idx < count and desc:
-                descriptions[idx] = desc
+            current_idx = idx
+            current_desc_lines = [m.group(2).strip()] if m.group(2).strip() else []
+        elif current_idx >= 0:
+            # Continuation of previous description (for multi-line descriptions)
+            current_desc_lines.append(line)
+
+    # Save the last description
+    if 0 <= current_idx < count and current_desc_lines:
+        descriptions[current_idx] = " ".join(current_desc_lines).strip()
+
     return descriptions
 
 
@@ -854,9 +877,12 @@ def _build_embedding_text(
     """Build a de-formatted semantic text optimised for embedding retrieval.
 
     Strips Markdown syntax (headings, backticks, table borders, fences) and
-    assembles a plain-text representation ordered by semantic importance:
+    assembles a plain-text representation ordered by semantic importance.
 
-        1. Identity + description  (always included)
+    Supports bilingual (Chinese/English) descriptions for better cross-language
+    semantic search.
+
+        1. Identity + bilingual description  (always included)
         2. Call tree               (high value for structural queries)
         3. Callers                 (medium value)
         4. Source code             (lowest priority, truncated first)
@@ -871,7 +897,6 @@ def _build_embedding_text(
     sig = func_info.get("signature", name)
     kind = func_info.get("kind", "function")
     module = func_info.get("module", "")
-    desc = func_info.get("description", "")
     ret = func_info.get("return_type", "")
 
     identity = f"[{kind}] {sig}"
@@ -881,14 +906,62 @@ def _build_embedding_text(
 
     if module:
         parts.append(f"模块: {module}")
-    if desc:
-        parts.append(desc)
 
-    # Full docstring from description section (if longer than the summary)
+    # --- 2. Bilingual descriptions (high priority for cross-language search) ---
+    # Extract Chinese and English descriptions from description section
+    desc_text = ""
     if "description" in sections:
-        full_doc = _strip_markdown("\n".join(sections["description"])).strip()
-        if full_doc and full_doc != desc:
-            parts.append(full_doc)
+        desc_text = _strip_markdown("\n".join(sections["description"])).strip()
+
+    # Also check header description (the "> " quote line)
+    header_desc = func_info.get("description", "")
+
+    # Combine and parse bilingual content
+    combined_desc = f"{header_desc}\n{desc_text}".strip()
+
+    # Look for explicit bilingual markers
+    chinese_match = None
+    english_match = None
+
+    # Try to find "中文：" or "Chinese:" patterns
+    import re
+    chinese_patterns = re.findall(r'(?:中文[:：]\s*)([^\n]+(?:\n(?![中文英文]:).*)*)', combined_desc, re.MULTILINE)
+    english_patterns = re.findall(r'(?:English[:：]\s*)([^\n]+(?:\n(?![中文英文]:).*)*)', combined_desc, re.MULTILINE)
+
+    if chinese_patterns:
+        chinese_match = chinese_patterns[0].strip()
+    if english_patterns:
+        english_match = english_patterns[0].strip()
+
+    # If no explicit markers, treat first non-English line as Chinese, rest as English
+    if not chinese_match and not english_match and combined_desc:
+        lines = combined_desc.split('\n')
+        chinese_lines = []
+        english_lines = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Simple heuristic: if line contains Chinese characters, it's Chinese
+            if any('\u4e00' <= c <= '\u9fff' for c in line):
+                chinese_lines.append(line)
+            else:
+                english_lines.append(line)
+
+        if chinese_lines:
+            chinese_match = ' '.join(chinese_lines)
+        if english_lines:
+            english_match = ' '.join(english_lines)
+
+    # Add bilingual descriptions to embedding text
+    if chinese_match:
+        parts.append(f"描述: {chinese_match}")
+    if english_match:
+        parts.append(f"Description: {english_match}")
+
+    # Fallback: add raw description if parsing failed
+    if not chinese_match and not english_match and combined_desc:
+        parts.append(combined_desc)
 
     # --- 2. Call tree (high value for "what does X call" queries) ---
     if "call_tree" in sections:

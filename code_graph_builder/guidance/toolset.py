@@ -131,13 +131,13 @@ class MCPToolSet:
         self,
         semantic_service: Any | None,
         cypher_gen: Any | None,
-        ingestor: Any | None,
+        ingestor_factory: Any | None,
         artifact_dir: Path | None,
         max_result_chars: int = _DEFAULT_MAX_RESULT_CHARS,
     ) -> None:
         self._semantic_service = semantic_service
         self._cypher_gen = cypher_gen
-        self._ingestor = ingestor
+        self._ingestor_factory = ingestor_factory
         self._artifact_dir = artifact_dir
         self._max_chars = max_result_chars
 
@@ -153,7 +153,7 @@ class MCPToolSet:
         if self._semantic_service is not None:
             specs.append(_SEMANTIC_SEARCH_SPEC)
             specs.append(_FIND_API_SPEC)
-        if self._cypher_gen is not None and self._ingestor is not None:
+        if self._cypher_gen is not None and self._ingestor_factory is not None:
             specs.append(_QUERY_CODE_GRAPH_SPEC)
         return specs
 
@@ -243,18 +243,19 @@ class MCPToolSet:
         self, question: str, **_: Any
     ) -> dict[str, Any]:
         assert self._cypher_gen is not None
-        assert self._ingestor is not None
+        assert self._ingestor_factory is not None
 
         cypher = self._cypher_gen.generate(question)
-        rows = self._ingestor.query(cypher)
+        with self._ingestor_factory() as ingestor:
+            rows = ingestor.query(cypher)
 
-        serialisable = []
-        for row in rows:
-            raw = row.get("result", row)
-            if isinstance(raw, (list, tuple)):
-                serialisable.append(list(raw))
-            else:
-                serialisable.append(raw)
+            serialisable = []
+            for row in rows:
+                raw = row.get("result", row)
+                if isinstance(raw, (list, tuple)):
+                    serialisable.append(list(raw))
+                else:
+                    serialisable.append(raw)
 
         return {
             "question": question,
