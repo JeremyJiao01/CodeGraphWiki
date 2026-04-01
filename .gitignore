@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+.env.example
 
 # Python
 __pycache__/
@@ -57,9 +58,9 @@ tinycc_kuzu/
 tinycc_memory/
 extracted_prompts/
 
-# Project-specific files not for this repo
-core_system_prompt.md
-CLAUDE_CODE_GUIDE.md
-
 #claude
 .claude/
+CLAUDE.md
+
+#entire
+.entire/

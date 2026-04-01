@@ -20,8 +20,18 @@ Your Code Repository
 MCP Server  <──────────────  Semantic Search
     |
     v
-Claude Code / OpenCode / Cursor / Any MCP Client
+Claude Code / Cursor / Windsurf / Any MCP Client
 ```
+
+**Core workflow for AI agents:**
+
+```
+initialize_repository  →  find_api  →  get_api_doc
+```
+
+1. Index the codebase once
+2. Search by vague semantic description ("PWM duty cycle update")
+3. Get precise function signatures, call trees, and usage examples
 
 ## Quick Start
 
@@ -29,16 +39,17 @@ Claude Code / OpenCode / Cursor / Any MCP Client
 
 ```bash
 # First run — interactive setup wizard
-npx code-graph-builder
+npx code-graph-builder@latest --setup
 
-# Subsequent runs — MCP clients use this
-npx code-graph-builder --server
+# Start MCP server
+npx code-graph-builder@latest --server
 ```
 
-The setup wizard guides you through:
-1. Workspace directory
-2. LLM provider (Moonshot / OpenAI / DeepSeek / OpenRouter / Custom)
-3. Embedding provider (DashScope / OpenAI / Custom)
+The setup wizard:
+1. Auto-installs the Python package if not found
+2. Configures workspace, LLM provider, and embedding provider
+3. Runs an MCP smoke test to verify the server works
+4. Optionally registers as a global MCP server for Claude Code (`claude mcp add --scope user`)
 
 ### Install via pip
 
@@ -47,9 +58,17 @@ pip install "code-graph-builder[treesitter-c,semantic]"
 cgb-mcp  # Start MCP server
 ```
 
+### Uninstall
+
+```bash
+npx code-graph-builder@latest --uninstall
+```
+
+Removes: Claude MCP registration, Python package, workspace data.
+
 ### MCP Client Configuration
 
-Add to your MCP client config (Claude Code, OpenCode, Cursor, etc.):
+Add to your MCP client config (Claude Code, Cursor, Windsurf, etc.):
 
 ```json
 {
@@ -62,62 +81,72 @@ Add to your MCP client config (Claude Code, OpenCode, Cursor, etc.):
 }
 ```
 
+On Windows, use:
+
+```json
+{
+  "mcpServers": {
+    "code-graph-builder": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "code-graph-builder@latest", "--server"]
+    }
+  }
+}
+```
+
 ## Pipeline
 
 | Step | What | Input | Output |
 |------|------|-------|--------|
 | 1. graph-build | Tree-sitter AST parsing | Source code | Kuzu graph database |
 | 2. api-doc-gen | Query graph, render docs | Graph | 3-level Markdown (index / module / function) |
-| 2b. desc-gen | LLM generates descriptions | Functions without comments | `> description` in Markdown |
-| 3. embed-gen | Vectorize function docs | L3 Markdown | Vector store (pickle) |
-| 4. wiki-gen | LLM generates wiki pages | Embeddings + graph | Multi-page wiki |
+| 2b. desc-gen | LLM generates descriptions | Functions without docstrings | Descriptions in L3 Markdown |
+| 3. embed-gen | Vectorize function docs | L3 Markdown files | Vector store (pickle) |
 
-All steps run automatically via `initialize_repository`, or individually:
+Steps 1-3 run automatically via `initialize_repository`. Wiki generation is available separately via `generate_wiki`.
 
 ```
-initialize_repository  →  Steps 1-4 (full pipeline)
+initialize_repository  →  Steps 1-3 (full pipeline)
 build_graph            →  Step 1 only
-generate_api_docs      →  Step 2 + 2b
+generate_api_docs      →  Step 2 + 2b (modes: full / resume / enhance)
 rebuild_embeddings     →  Step 3
-generate_wiki          →  Step 4
+generate_wiki          →  Separate (not in main pipeline)
 ```
 
-## MCP Tools (19 tools)
+### API Doc Generation Modes
 
-### Repository Management
+| Mode | Behavior |
+|------|----------|
+| `full` | Rebuild all docs from graph |
+| `resume` | Generate only for functions with TODO placeholders |
+| `enhance` | LLM-powered module summaries + API usage workflows |
+
+## MCP Tools
+
+### Primary Tools (10 exposed)
+
+#### Repository Management
 | Tool | Description |
 |------|-------------|
-| `initialize_repository` | Index a repo: graph + API docs + embeddings + wiki |
-| `get_repository_info` | Active repo metadata and graph statistics |
-| `list_repositories` | All indexed repos in workspace |
-| `switch_repository` | Switch active repo |
+| `initialize_repository` | Index a repo: graph + API docs + embeddings |
+| `get_repository_info` | Active repo stats (node/relationship counts, service status) |
+| `list_repositories` | All indexed repos with pipeline completion status |
+| `switch_repository` | Switch active repo for queries |
+| `link_repository` | Reuse existing index for a different repo path (no re-indexing) |
 
-### Code Search & Navigation
+#### Code Search & Documentation
 | Tool | Description |
 |------|-------------|
-| `find_api` | Semantic search + API doc attachment (primary search tool) |
-| `semantic_search` | Vector similarity search across codebase |
-| `query_code_graph` | Natural language → Cypher → graph query |
-| `get_code_snippet` | Retrieve source code by qualified name |
-| `locate_function` | Find function in file using Tree-sitter |
+| `find_api` | Semantic search + API doc (primary search tool) |
+| `list_api_docs` | Browse L1 module index or L2 module details |
+| `get_api_doc` | L3 function detail: signature, call tree, usage examples, source |
+| `generate_api_docs` | Generate/update API docs (full / resume / enhance) |
+| `get_config` | Show server configuration and service availability |
 
-### API Documentation
-| Tool | Description |
-|------|-------------|
-| `list_api_docs` | Browse L1 index or L2 module details |
-| `get_api_doc` | L3 function detail (signature, call tree, source) |
-| `list_api_interfaces` | List public APIs by module/visibility |
-| `generate_api_docs` | Regenerate API documentation |
+### Hidden Tools (11 available via handler)
 
-### Wiki & Analysis
-| Tool | Description |
-|------|-------------|
-| `list_wiki_pages` | List generated wiki pages |
-| `get_wiki_page` | Read wiki page content |
-| `generate_wiki` | Regenerate wiki pages |
-| `rebuild_embeddings` | Rebuild vector embeddings |
-| `build_graph` | Build/rebuild knowledge graph |
-| `prepare_guidance` | Analyze design doc, generate code guidance |
+These tools are superseded by the API-doc-based workflow above but remain accessible:
+`query_code_graph`, `get_code_snippet`, `semantic_search`, `locate_function`, `list_api_interfaces`, `list_wiki_pages`, `get_wiki_page`, `generate_wiki`, `rebuild_embeddings`, `build_graph`, `prepare_guidance`
 
 ## API Documentation Format
 
@@ -175,6 +204,8 @@ int parse_btype(CType *type, AttributeDef *ad, int ignore_label) {
 - Static/public/extern visibility classification
 - Memory ownership inference from signatures
 - Header/implementation file split
+- Cross-file function call resolution via `#include` header mapping
+- GB2312/GBK encoding support for source files
 
 ## Supported Languages
 
