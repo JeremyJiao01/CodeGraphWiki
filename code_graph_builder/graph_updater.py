@@ -190,6 +190,9 @@ class BoundedASTCache:
         if key in self.cache:
             del self.cache[key]
 
+    def __len__(self) -> int:
+        return len(self.cache)
+
     def __contains__(self, key: Path) -> bool:
         return key in self.cache
 
