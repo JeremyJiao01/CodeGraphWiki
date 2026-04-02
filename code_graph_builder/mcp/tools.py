@@ -1303,7 +1303,7 @@ class MCPToolsRegistry:
         query: str,
         top_k: int = 5,
     ) -> dict[str, Any]:
-        self._require_active_repo_path()
+        self._require_active()
 
         if self._semantic_service is None:
             raise ToolError(

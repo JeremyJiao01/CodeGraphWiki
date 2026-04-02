@@ -21,7 +21,8 @@ const MODULE_PATH = "code_graph_builder.mcp.server";
 const WORKSPACE_DIR = join(homedir(), ".code-graph-builder");
 const ENV_FILE = join(WORKSPACE_DIR, ".env");
 const IS_WIN = platform() === "win32";
-const PYPI_INDEX = "https://pypi.org/simple";
+// Removed hardcoded PyPI index — pip will use the user's configured source
+// (e.g. mirrors in pip.conf / pip.ini)
 
 // ---------------------------------------------------------------------------
 // Tree-style UI helpers
@@ -540,7 +541,7 @@ async function runSetup() {
     if (pip) {
       try {
         execSync(
-          [...pip, "install", "--upgrade", "-i", PYPI_INDEX, PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
+          [...pip, "install", "--upgrade", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
           { stdio: "pipe", shell: true }
         );
       } catch { /* handled below */ }
@@ -551,7 +552,7 @@ async function runSetup() {
     if (pip) {
       try {
         execSync(
-          [...pip, "install", "--upgrade", "-i", PYPI_INDEX, PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
+          [...pip, "install", "--upgrade", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
           { stdio: "pipe", shell: true }
         );
       } catch { /* upgrade is best-effort */ }
@@ -563,7 +564,7 @@ async function runSetup() {
     log(`  ${T.BRANCH} ${T.OK} ${PYTHON_PACKAGE} ${ver || ""}`);
   } else {
     log(`  ${T.BRANCH} ${T.FAIL} Package not installed`);
-    log(`  ${T.LAST}   Run manually: pip install -i ${PYPI_INDEX} ${PYTHON_PACKAGE}`);
+    log(`  ${T.LAST}   Run manually: pip install ${PYTHON_PACKAGE}`);
     log();
     return;
   }
@@ -738,13 +739,13 @@ function autoInstallAndStart(extraArgs) {
 
   try {
     execSync(
-      [...pip, "install", "-i", PYPI_INDEX, PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
+      [...pip, "install", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
       { stdio: "inherit", shell: true }
     );
   } catch (err) {
     process.stderr.write(
       `\nFailed to install ${PYTHON_PACKAGE}.\n` +
-        `Try manually: ${pip.join(" ")} install -i ${PYPI_INDEX} ${PYTHON_PACKAGE}\n`
+        `Try manually: ${pip.join(" ")} install ${PYTHON_PACKAGE}\n`
     );
     process.exit(1);
   }
@@ -752,7 +753,7 @@ function autoInstallAndStart(extraArgs) {
   if (!pythonPackageInstalled()) {
     process.stderr.write(
       `\nInstallation completed but package not importable.\n` +
-        `Try manually: ${pip.join(" ")} install -i ${PYPI_INDEX} ${PYTHON_PACKAGE}\n`
+        `Try manually: ${pip.join(" ")} install ${PYTHON_PACKAGE}\n`
     );
     process.exit(1);
   }
@@ -879,7 +880,7 @@ if (mode === "--setup") {
     if (!PYTHON_CMD || !pythonPackageInstalled()) {
       process.stderr.write(
         `Error: Python package '${PYTHON_PACKAGE}' is not installed.\n` +
-          `Run: pip install -i ${PYPI_INDEX} ${PYTHON_PACKAGE}\n`
+          `Run: pip install ${PYTHON_PACKAGE}\n`
       );
       process.exit(1);
     }
