@@ -98,7 +98,7 @@ def ingest_method(
     elif (text := method_name_node.text) is None:
         return
     else:
-        method_name = text.decode(cs.ENCODING_UTF8)
+        method_name = text.decode(cs.ENCODING_UTF8, errors="replace")
 
     method_qn = method_qualified_name or f"{container_qn}.{method_name}"
 

@@ -16,7 +16,7 @@ def _python_get_name(node: Node) -> str | None:
     """Extract name from Python AST node."""
     name_node = node.child_by_field_name("name")
     return (
-        name_node.text.decode(cs.ENCODING_UTF8)
+        name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
         if name_node and name_node.text
         else None
     )
@@ -39,7 +39,7 @@ def _js_get_name(node: Node) -> str | None:
     if node.type in cs.JS_NAME_NODE_TYPES:
         name_node = node.child_by_field_name(cs.FIELD_NAME)
         return (
-            name_node.text.decode(cs.ENCODING_UTF8)
+            name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
             if name_node and name_node.text
             else None
         )
@@ -62,12 +62,12 @@ def _generic_get_name(node: Node) -> str | None:
     """Extract name from generic AST node."""
     name_node = node.child_by_field_name("name")
     if name_node and name_node.text:
-        return name_node.text.decode(cs.ENCODING_UTF8)
+        return name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
 
     for field_name in cs.NAME_FIELDS:
         name_node = node.child_by_field_name(field_name)
         if name_node and name_node.text:
-            return name_node.text.decode(cs.ENCODING_UTF8)
+            return name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
 
     return None
 
@@ -86,11 +86,11 @@ def _rust_get_name(node: Node) -> str | None:
     if node.type in cs.RS_TYPE_NODE_TYPES:
         name_node = node.child_by_field_name(cs.FIELD_NAME)
         if name_node and name_node.type == cs.TS_TYPE_IDENTIFIER and name_node.text:
-            return name_node.text.decode(cs.ENCODING_UTF8)
+            return name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
     elif node.type in cs.RS_IDENT_NODE_TYPES:
         name_node = node.child_by_field_name(cs.FIELD_NAME)
         if name_node and name_node.type == cs.TS_IDENTIFIER and name_node.text:
-            return name_node.text.decode(cs.ENCODING_UTF8)
+            return name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
 
     return _generic_get_name(node)
 
@@ -112,13 +112,13 @@ def _cpp_get_name(node: Node) -> str | None:
     if node.type in cs.CPP_NAME_NODE_TYPES:
         name_node = node.child_by_field_name(cs.FIELD_NAME)
         if name_node and name_node.text:
-            return name_node.text.decode(cs.ENCODING_UTF8)
+            return name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
     elif node.type == cs.TS_CPP_FUNCTION_DEFINITION:
         declarator = node.child_by_field_name(cs.FIELD_DECLARATOR)
         if declarator and declarator.type == cs.TS_CPP_FUNCTION_DECLARATOR:
             name_node = declarator.child_by_field_name(cs.FIELD_DECLARATOR)
             if name_node and name_node.type == cs.TS_IDENTIFIER and name_node.text:
-                return name_node.text.decode(cs.ENCODING_UTF8)
+                return name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
 
     return _generic_get_name(node)
 

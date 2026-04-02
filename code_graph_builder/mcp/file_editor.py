@@ -36,7 +36,7 @@ class FileEditor:
 
     def _extract_declarator_name(self, node: Node) -> str | None:
         if node.type == "identifier" and node.text:
-            return node.text.decode(cs.ENCODING_UTF8)
+            return node.text.decode(cs.ENCODING_UTF8, errors="replace")
         child = node.child_by_field_name("declarator")
         if child:
             return self._extract_declarator_name(child)
@@ -45,7 +45,7 @@ class FileEditor:
     def _extract_function_name(self, node: Node) -> str | None:
         name_node = node.child_by_field_name("name")
         if name_node and name_node.text:
-            return name_node.text.decode(cs.ENCODING_UTF8)
+            return name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
         declarator = node.child_by_field_name("declarator")
         if declarator:
             return self._extract_declarator_name(declarator)
@@ -100,7 +100,7 @@ class FileEditor:
             if node.type in lang_config.class_node_types:
                 name_node = node.child_by_field_name("name")
                 if name_node and name_node.text:
-                    current_class = name_node.text.decode(cs.ENCODING_UTF8)
+                    current_class = name_node.text.decode(cs.ENCODING_UTF8, errors="replace")
 
             for child in node.children:
                 traverse(child, current_class)
@@ -118,7 +118,7 @@ class FileEditor:
                 return None
             return {
                 "qualified_name": m["qualified_name"],
-                "source_code": node.text.decode(cs.ENCODING_UTF8),
+                "source_code": node.text.decode(cs.ENCODING_UTF8, errors="replace"),
                 "start_line": m["line_number"],
                 "end_line": node.end_point[0] + 1,
                 "file_path": str(file_path),

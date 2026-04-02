@@ -143,7 +143,7 @@ class MCPToolsRegistry:
         active_file = self._workspace / "active.txt"
         if not active_file.exists():
             return
-        artifact_dir_name = active_file.read_text(encoding="utf-8").strip()
+        artifact_dir_name = active_file.read_text(encoding="utf-8", errors="replace").strip()
         artifact_dir = self._workspace / artifact_dir_name
         if artifact_dir.exists():
             try:
@@ -158,7 +158,7 @@ class MCPToolsRegistry:
         if not meta_file.exists():
             raise FileNotFoundError(f"meta.json not found in {artifact_dir}")
 
-        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
         repo_path = Path(meta["repo_path"])
         db_path = artifact_dir / "graph.db"
         vectors_path = artifact_dir / "vectors.pkl"
@@ -651,7 +651,7 @@ class MCPToolsRegistry:
             raise ToolError("No active repository. Call initialize_repository first.")
 
         meta_file = self._active_artifact_dir / "meta.json"
-        meta = json.loads(meta_file.read_text(encoding="utf-8")) if meta_file.exists() else {}
+        meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace")) if meta_file.exists() else {}
 
         wiki_pages = []
         wiki_subdir = self._active_artifact_dir / "wiki" / "wiki"
@@ -729,7 +729,7 @@ class MCPToolsRegistry:
         active_name = None
         active_file = self._workspace / "active.txt"
         if active_file.exists():
-            active_name = active_file.read_text(encoding="utf-8").strip()
+            active_name = active_file.read_text(encoding="utf-8", errors="replace").strip()
 
         repos: list[dict[str, Any]] = []
         for child in sorted(self._workspace.iterdir()):
@@ -739,8 +739,8 @@ class MCPToolsRegistry:
             if not meta_file.exists():
                 continue
             try:
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
+                meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 continue
 
             repos.append({
@@ -782,8 +782,8 @@ class MCPToolsRegistry:
                 if not meta_file.exists():
                     continue
                 try:
-                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
+                    meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
+                except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                     continue
                 if meta.get("repo_name") == repo_name:
                     target = child
@@ -804,7 +804,7 @@ class MCPToolsRegistry:
                 "repo_name": repo_name,
             }) from exc
 
-        meta = json.loads((target / "meta.json").read_text(encoding="utf-8"))
+        meta = json.loads((target / "meta.json").read_text(encoding="utf-8", errors="replace"))
         return {
             "status": "success",
             "active_repo": meta.get("repo_name", target.name),
@@ -842,8 +842,8 @@ class MCPToolsRegistry:
                 if not meta_file.exists():
                     continue
                 try:
-                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
+                    meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
+                except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                     continue
                 if meta.get("repo_name") == source_repo:
                     source_dir = child
@@ -880,7 +880,7 @@ class MCPToolsRegistry:
 
         # Write meta.json (not symlinked — stores this repo's own path)
         source_meta = json.loads(
-            (source_dir / "meta.json").read_text(encoding="utf-8")
+            (source_dir / "meta.json").read_text(encoding="utf-8", errors="replace")
         )
         new_meta = {
             **source_meta,
@@ -1512,7 +1512,7 @@ class MCPToolsRegistry:
             meta_file = artifact_dir / "meta.json"
             page_count = 0
             if meta_file.exists():
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
                 page_count = meta.get("wiki_page_count", 0)
 
             save_meta(artifact_dir, repo_path, page_count)

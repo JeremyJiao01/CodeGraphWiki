@@ -62,7 +62,7 @@ class Workspace:
         active_file = self.root / "active.txt"
         if not active_file.exists():
             return None
-        name = active_file.read_text(encoding="utf-8").strip()
+        name = active_file.read_text(encoding="utf-8", errors="replace").strip()
         d = self.root / name
         return d if d.exists() else None
 
@@ -73,7 +73,7 @@ class Workspace:
         meta_file = d / "meta.json"
         if not meta_file.exists():
             return None
-        return json.loads(meta_file.read_text(encoding="utf-8"))
+        return json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
 
     def set_active(self, artifact_dir: Path) -> None:
         (self.root / "active.txt").write_text(artifact_dir.name, encoding="utf-8")
@@ -373,7 +373,7 @@ def cmd_list_repos(_args: argparse.Namespace, ws: Workspace) -> None:
     active_file = ws.root / "active.txt"
     active_name = ""
     if active_file.exists():
-        active_name = active_file.read_text(encoding="utf-8").strip()
+        active_name = active_file.read_text(encoding="utf-8", errors="replace").strip()
 
     repos = []
     for child in sorted(ws.root.iterdir()):
@@ -383,8 +383,8 @@ def cmd_list_repos(_args: argparse.Namespace, ws: Workspace) -> None:
         if not meta_file.exists():
             continue
         try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+            meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
 
         repos.append({
@@ -430,8 +430,8 @@ def cmd_switch_repo(args: argparse.Namespace, ws: Workspace) -> None:
             if not meta_file.exists():
                 continue
             try:
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
+                meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 continue
             if meta.get("repo_name") == repo_name:
                 target = child
@@ -441,7 +441,7 @@ def cmd_switch_repo(args: argparse.Namespace, ws: Workspace) -> None:
         _die(f"Repository not found: {repo_name}. Run /list-repos to see available repos.")
 
     ws.set_active(target)
-    meta = json.loads((target / "meta.json").read_text(encoding="utf-8"))
+    meta = json.loads((target / "meta.json").read_text(encoding="utf-8", errors="replace"))
 
     _progress(f"Switched to: {meta.get('repo_name', target.name)}")
     _result_json({

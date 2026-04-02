@@ -1100,6 +1100,22 @@ def build_vector_index(
 
         batch_embeddings = embedder.embed_batch(batch_texts)
 
+        if batch_embeddings is None:
+            logger.warning(
+                "embed_batch returned None for batch at offset {}. "
+                "Skipping {} texts.",
+                batch_start, len(batch_texts),
+            )
+            continue
+
+        if len(batch_embeddings) != len(batch):
+            logger.warning(
+                "embed_batch returned {} embeddings for {} inputs at offset {}. "
+                "Skipping mismatched batch.",
+                len(batch_embeddings), len(batch), batch_start,
+            )
+            continue
+
         for (node_id, func, _), embedding in zip(batch, batch_embeddings):
             records.append(VectorRecord(
                 node_id=node_id,
@@ -1327,8 +1343,8 @@ def save_meta(artifact_dir: Path, repo_path: Path, wiki_page_count: int) -> None
     existing: dict = {}
     if meta_file.exists():
         try:
-            existing = json.loads(meta_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+            existing = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             pass
 
     # Auto-detect which artifacts exist
