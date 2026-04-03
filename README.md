@@ -257,21 +257,43 @@ int parse_btype(CType *type, AttributeDef *ad, int ignore_label) {
 
 ## Installation Options
 
+### Install from PyPI
+
 ```bash
 # Core only (graph building)
 pip install code-graph-builder
 
-# With C/C++ support
-pip install "code-graph-builder[treesitter-c]"
-
-# With all languages
+# With all language grammars
 pip install "code-graph-builder[treesitter-full]"
+```
 
-# With semantic search
-pip install "code-graph-builder[semantic]"
+### Install from local source
 
-# Everything
-pip install "code-graph-builder[treesitter-full,semantic,rag]"
+```bash
+git clone https://github.com/JeremyJiao01/CodeGraphWiki.git
+cd CodeGraphWiki
+
+# Install with all language grammars
+pip install ".[treesitter-full]"
+
+# Or install in editable mode for development
+pip install -e ".[treesitter-full]"
+```
+
+### Build and install from wheel
+
+```bash
+git clone https://github.com/JeremyJiao01/CodeGraphWiki.git
+cd CodeGraphWiki
+
+# Build wheel and sdist
+python3 -m build
+
+# Install the wheel
+pip install dist/code_graph_builder-*.whl
+
+# Or force reinstall over existing version
+pip install --force-reinstall dist/code_graph_builder-*.whl
 ```
 
 ## Development
@@ -279,7 +301,7 @@ pip install "code-graph-builder[treesitter-full,semantic,rag]"
 ```bash
 git clone https://github.com/JeremyJiao01/CodeGraphWiki.git
 cd CodeGraphWiki
-pip install -e ".[treesitter-full,semantic,rag]"
+pip install -e ".[treesitter-full]"
 
 # Run tests
 python3 -m pytest code_graph_builder/tests/ -v

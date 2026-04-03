@@ -52,14 +52,16 @@ const T = {
 /**
  * Interactive single-select menu.
  * Arrow keys to navigate, Space to select, Enter to confirm.
- * Returns the index of the selected option, or -1 if cancelled (Ctrl+C).
+ * Returns the index of the selected option, -1 if cancelled (Ctrl+C),
+ * or -2 if the user pressed ← (back to previous step).
  *
  * @param {string[]} options - Display labels for each option
  * @param {string} prefix - Tree prefix for each line (e.g. "  │  ")
  * @param {number} defaultIndex - Initially highlighted index
+ * @param {boolean} allowBack - Whether ← arrow triggers back (-2)
  * @returns {Promise<number>}
  */
-function selectMenu(options, prefix = "  ", defaultIndex = 0) {
+function selectMenu(options, prefix = "  ", defaultIndex = 0, allowBack = false) {
   return new Promise((resolve) => {
     const out = process.stderr;
     let cursor = defaultIndex;
@@ -72,10 +74,12 @@ function selectMenu(options, prefix = "  ", defaultIndex = 0) {
     const CYAN  = "\x1b[36m";
     const RESET = "\x1b[0m";
 
+    const backHint = allowBack ? `${DIM}  ← back${RESET}` : "";
+
     function render(initial = false) {
       // Move cursor up to overwrite previous render (skip on first draw)
       if (!initial) {
-        out.write(`\x1b[${options.length}A`);
+        out.write(`\x1b[${options.length + (allowBack ? 1 : 0)}A`);
       }
       for (let i = 0; i < options.length; i++) {
         const isActive = i === cursor;
@@ -88,6 +92,9 @@ function selectMenu(options, prefix = "  ", defaultIndex = 0) {
           : `${options[i]}`;
         // Clear line then write
         out.write(`\x1b[2K${prefix}${radio} ${label}\n`);
+      }
+      if (allowBack) {
+        out.write(`\x1b[2K${prefix}${DIM}← Back to previous step${RESET}\n`);
       }
     }
 
@@ -114,6 +121,13 @@ function selectMenu(options, prefix = "  ", defaultIndex = 0) {
       if (key === "\x03") {
         cleanup();
         resolve(-1);
+        return;
+      }
+
+      // Arrow left — back to previous step
+      if (key === "\x1b[D" && allowBack) {
+        cleanup();
+        resolve(-2);
         return;
       }
 
@@ -329,28 +343,18 @@ async function runSetup() {
   // Load existing config
   const existing = loadEnvFile();
 
-  // --- Step 1: Workspace ---
-  log(`  ${T.DOT} Step 1/3  Workspace`);
-  log(`  ${T.SIDE}`);
-  log(`  ${T.BRANCH} Stores indexed repos, graphs, and embeddings`);
-
-  const workspace =
-    (await ask(`  ${T.SIDE}  Path [${WORKSPACE_DIR}]: `)).trim() || WORKSPACE_DIR;
-
-  log(`  ${T.LAST} ${T.OK} ${workspace}`);
-  log();
-
-  // --- Step 2: LLM Provider ---
-  log(`  ${T.DOT} Step 2/3  LLM Provider`);
-  log(`  ${T.SIDE}`);
-  log(`  ${T.BRANCH} For natural language queries & descriptions`);
-  log(`  ${T.SIDE}  Use ↑↓ to navigate, Space to select, Enter to confirm`);
-  log(`  ${T.SIDE}`);
-
-  if (existing.LLM_API_KEY) {
-    log(`  ${T.SIDE}  Current: ${mask(existing.LLM_API_KEY)} → ${existing.LLM_BASE_URL || "?"}`);
-    log(`  ${T.SIDE}`);
-  }
+  // Step results — preserved across back/forward navigation
+  let workspace = existing.CGB_WORKSPACE || WORKSPACE_DIR;
+  let llmKey = existing.LLM_API_KEY || "";
+  let llmBaseUrl = existing.LLM_BASE_URL || "";
+  let llmModel = existing.LLM_MODEL || "";
+  let llmProviderName = "skipped";
+  let embedKey = "";
+  let embedUrl = "";
+  let embedModel = "";
+  let embedKeyEnv = "DASHSCOPE_API_KEY";
+  let embedUrlEnv = "DASHSCOPE_BASE_URL";
+  let embedProviderName = "skipped";
 
   const llmOptions = [
     "Moonshot / Kimi      platform.moonshot.cn",
@@ -370,66 +374,6 @@ async function runSetup() {
     { name: "LiteLLM",    url: "http://localhost:4000/v1",     model: "gpt-4o" },
   ];
 
-  // Close readline before raw mode menu, reopen after
-  rl.close();
-  const llmChoice = await selectMenu(llmOptions, `  ${T.SIDE}  `, 6);
-  rl = createInterface({ input: process.stdin, output: process.stderr });
-  ask = (q) => new Promise((resolve) => rl.question(q, resolve));
-
-  let llmKey = existing.LLM_API_KEY || "";
-  let llmBaseUrl = existing.LLM_BASE_URL || "";
-  let llmModel = existing.LLM_MODEL || "";
-  let llmProviderName = "skipped";
-
-  if (llmChoice >= 0 && llmChoice < 5) {
-    // Known provider
-    const provider = llmProviders[llmChoice];
-    llmBaseUrl = provider.url;
-    llmModel = provider.model;
-    llmProviderName = provider.name;
-
-    log(`  ${T.SIDE}`);
-    llmKey = (await ask(`  ${T.SIDE}  API Key (sk-...): `)).trim() || existing.LLM_API_KEY || "";
-
-    if (llmKey) {
-      const urlOverride = (await ask(`  ${T.SIDE}  Base URL [${llmBaseUrl}]: `)).trim();
-      if (urlOverride) llmBaseUrl = urlOverride;
-      const modelOverride = (await ask(`  ${T.SIDE}  Model [${llmModel}]: `)).trim();
-      if (modelOverride) llmModel = modelOverride;
-    }
-  } else if (llmChoice === 5) {
-    // Custom
-    llmProviderName = "Custom";
-    const defUrl = llmBaseUrl || existing.LLM_BASE_URL || "";
-    const defModel = llmModel || existing.LLM_MODEL || "gpt-4o";
-    const defKey = existing.LLM_API_KEY || "";
-    log(`  ${T.SIDE}`);
-    llmBaseUrl = (await ask(`  ${T.SIDE}  API Base URL${defUrl ? ` [${defUrl}]` : ""}: `)).trim() || defUrl;
-    llmModel = (await ask(`  ${T.SIDE}  Model${defModel ? ` [${defModel}]` : ""}: `)).trim() || defModel;
-    llmKey = (await ask(`  ${T.SIDE}  API Key${defKey ? ` [${mask(defKey)}]` : " (sk-...)"}: `)).trim() || defKey;
-  }
-  // llmChoice === 6 or -1 → skip
-
-  if (llmKey) {
-    log(`  ${T.LAST} ${T.OK} ${llmProviderName} / ${llmModel}`);
-  } else {
-    log(`  ${T.LAST} ${T.WARN} Skipped (configure later in ${ENV_FILE})`);
-  }
-  log();
-
-  // --- Step 3: Embedding Provider ---
-  log(`  ${T.DOT} Step 3/3  Embedding Provider`);
-  log(`  ${T.SIDE}`);
-  log(`  ${T.BRANCH} For semantic code search`);
-  log(`  ${T.SIDE}  Use ↑↓ to navigate, Space to select, Enter to confirm`);
-  log(`  ${T.SIDE}`);
-
-  if (existing.DASHSCOPE_API_KEY || existing.EMBED_API_KEY) {
-    const ek = existing.DASHSCOPE_API_KEY || existing.EMBED_API_KEY;
-    log(`  ${T.SIDE}  Current: ${mask(ek)} → ${existing.DASHSCOPE_BASE_URL || existing.EMBED_BASE_URL || "?"}`);
-    log(`  ${T.SIDE}`);
-  }
-
   const embedOptions = [
     "DashScope / Qwen     dashscope.console.aliyun.com  (free tier)",
     "OpenAI Embeddings    platform.openai.com",
@@ -442,56 +386,157 @@ async function runSetup() {
     { name: "OpenAI",    url: "https://api.openai.com/v1",             model: "text-embedding-3-small", keyEnv: "OPENAI_API_KEY", urlEnv: "OPENAI_BASE_URL" },
   ];
 
-  rl.close();
-  const embedChoice = await selectMenu(embedOptions, `  ${T.SIDE}  `, 3);
-  rl = createInterface({ input: process.stdin, output: process.stderr });
-  ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+  // --- Step-based wizard with ← back support ---
+  let step = 1;
 
-  let embedKey = "";
-  let embedUrl = "";
-  let embedModel = "";
-  let embedKeyEnv = "DASHSCOPE_API_KEY";
-  let embedUrlEnv = "DASHSCOPE_BASE_URL";
-  let embedProviderName = "skipped";
+  while (step >= 1 && step <= 3) {
 
-  if (embedChoice >= 0 && embedChoice < 2) {
-    // Known provider
-    const ep = embedProvidersList[embedChoice];
-    embedUrl = ep.url;
-    embedModel = ep.model;
-    embedKeyEnv = ep.keyEnv;
-    embedUrlEnv = ep.urlEnv;
-    embedProviderName = ep.name;
+    // ─── Step 1: Workspace ───
+    if (step === 1) {
+      log(`  ${T.DOT} Step 1/3  Workspace`);
+      log(`  ${T.SIDE}`);
+      log(`  ${T.BRANCH} Stores indexed repos, graphs, and embeddings`);
 
-    log(`  ${T.SIDE}`);
-    embedKey = (await ask(`  ${T.SIDE}  API Key: `)).trim() ||
-      existing[embedKeyEnv] || existing.DASHSCOPE_API_KEY || "";
+      workspace =
+        (await ask(`  ${T.SIDE}  Path [${WORKSPACE_DIR}]: `)).trim() || WORKSPACE_DIR;
 
-    if (embedKey) {
-      const urlOverride = (await ask(`  ${T.SIDE}  Base URL [${embedUrl}]: `)).trim();
-      if (urlOverride) embedUrl = urlOverride;
-      const modelOverride = (await ask(`  ${T.SIDE}  Model [${embedModel}]: `)).trim();
-      if (modelOverride) embedModel = modelOverride;
+      log(`  ${T.LAST} ${T.OK} ${workspace}`);
+      log();
+      step = 2;
+      continue;
     }
-  } else if (embedChoice === 2) {
-    // Custom
-    embedProviderName = "Custom";
-    const defEmbedUrl = existing.EMBED_BASE_URL || existing.DASHSCOPE_BASE_URL || "";
-    const defEmbedModel = existing.EMBED_MODEL || "text-embedding-3-small";
-    const defEmbedKey = existing.EMBED_API_KEY || existing.DASHSCOPE_API_KEY || "";
-    log(`  ${T.SIDE}`);
-    embedUrl = (await ask(`  ${T.SIDE}  API Base URL${defEmbedUrl ? ` [${defEmbedUrl}]` : ""}: `)).trim() || defEmbedUrl;
-    embedModel = (await ask(`  ${T.SIDE}  Model${defEmbedModel ? ` [${defEmbedModel}]` : ""}: `)).trim() || defEmbedModel;
-    embedKey = (await ask(`  ${T.SIDE}  API Key${defEmbedKey ? ` [${mask(defEmbedKey)}]` : ""}: `)).trim() || defEmbedKey;
-    embedKeyEnv = "EMBED_API_KEY";
-    embedUrlEnv = "EMBED_BASE_URL";
-  }
-  // embedChoice === 3 or -1 → skip
 
-  if (embedKey) {
-    log(`  ${T.LAST} ${T.OK} ${embedProviderName} / ${embedModel}`);
-  } else {
-    log(`  ${T.LAST} ${T.WARN} Skipped (configure later in ${ENV_FILE})`);
+    // ─── Step 2: LLM Provider ───
+    if (step === 2) {
+      log(`  ${T.DOT} Step 2/3  LLM Provider`);
+      log(`  ${T.SIDE}`);
+      log(`  ${T.BRANCH} For natural language queries & descriptions`);
+      log(`  ${T.SIDE}  Use ↑↓ navigate, Enter confirm, ← back`);
+      log(`  ${T.SIDE}`);
+
+      if (existing.LLM_API_KEY) {
+        log(`  ${T.SIDE}  Current: ${mask(existing.LLM_API_KEY)} → ${existing.LLM_BASE_URL || "?"}`);
+        log(`  ${T.SIDE}`);
+      }
+
+      rl.close();
+      const llmChoice = await selectMenu(llmOptions, `  ${T.SIDE}  `, 6, true);
+      rl = createInterface({ input: process.stdin, output: process.stderr });
+      ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+
+      if (llmChoice === -2) { log(); step = 1; continue; }
+      if (llmChoice === -1) { rl.close(); return; }
+
+      llmKey = existing.LLM_API_KEY || "";
+      llmBaseUrl = existing.LLM_BASE_URL || "";
+      llmModel = existing.LLM_MODEL || "";
+      llmProviderName = "skipped";
+
+      if (llmChoice >= 0 && llmChoice < 5) {
+        const provider = llmProviders[llmChoice];
+        llmBaseUrl = provider.url;
+        llmModel = provider.model;
+        llmProviderName = provider.name;
+
+        log(`  ${T.SIDE}`);
+        llmKey = (await ask(`  ${T.SIDE}  API Key (sk-...): `)).trim() || existing.LLM_API_KEY || "";
+
+        if (llmKey) {
+          const urlOverride = (await ask(`  ${T.SIDE}  Base URL [${llmBaseUrl}]: `)).trim();
+          if (urlOverride) llmBaseUrl = urlOverride;
+          const modelOverride = (await ask(`  ${T.SIDE}  Model [${llmModel}]: `)).trim();
+          if (modelOverride) llmModel = modelOverride;
+        }
+      } else if (llmChoice === 5) {
+        llmProviderName = "Custom";
+        const defUrl = llmBaseUrl || existing.LLM_BASE_URL || "";
+        const defModel = llmModel || existing.LLM_MODEL || "gpt-4o";
+        const defKey = existing.LLM_API_KEY || "";
+        log(`  ${T.SIDE}`);
+        llmBaseUrl = (await ask(`  ${T.SIDE}  API Base URL${defUrl ? ` [${defUrl}]` : ""}: `)).trim() || defUrl;
+        llmModel = (await ask(`  ${T.SIDE}  Model${defModel ? ` [${defModel}]` : ""}: `)).trim() || defModel;
+        llmKey = (await ask(`  ${T.SIDE}  API Key${defKey ? ` [${mask(defKey)}]` : " (sk-...)"}: `)).trim() || defKey;
+      }
+
+      if (llmKey) {
+        log(`  ${T.LAST} ${T.OK} ${llmProviderName} / ${llmModel}`);
+      } else {
+        log(`  ${T.LAST} ${T.WARN} Skipped (configure later in ${ENV_FILE})`);
+      }
+      log();
+      step = 3;
+      continue;
+    }
+
+    // ─── Step 3: Embedding Provider ───
+    if (step === 3) {
+      log(`  ${T.DOT} Step 3/3  Embedding Provider`);
+      log(`  ${T.SIDE}`);
+      log(`  ${T.BRANCH} For semantic code search`);
+      log(`  ${T.SIDE}  Use ↑↓ navigate, Enter confirm, ← back`);
+      log(`  ${T.SIDE}`);
+
+      if (existing.DASHSCOPE_API_KEY || existing.EMBED_API_KEY) {
+        const ek = existing.DASHSCOPE_API_KEY || existing.EMBED_API_KEY;
+        log(`  ${T.SIDE}  Current: ${mask(ek)} → ${existing.DASHSCOPE_BASE_URL || existing.EMBED_BASE_URL || "?"}`);
+        log(`  ${T.SIDE}`);
+      }
+
+      rl.close();
+      const embedChoice = await selectMenu(embedOptions, `  ${T.SIDE}  `, 3, true);
+      rl = createInterface({ input: process.stdin, output: process.stderr });
+      ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+
+      if (embedChoice === -2) { log(); step = 2; continue; }
+      if (embedChoice === -1) { rl.close(); return; }
+
+      embedKey = "";
+      embedUrl = "";
+      embedModel = "";
+      embedKeyEnv = "DASHSCOPE_API_KEY";
+      embedUrlEnv = "DASHSCOPE_BASE_URL";
+      embedProviderName = "skipped";
+
+      if (embedChoice >= 0 && embedChoice < 2) {
+        const ep = embedProvidersList[embedChoice];
+        embedUrl = ep.url;
+        embedModel = ep.model;
+        embedKeyEnv = ep.keyEnv;
+        embedUrlEnv = ep.urlEnv;
+        embedProviderName = ep.name;
+
+        log(`  ${T.SIDE}`);
+        embedKey = (await ask(`  ${T.SIDE}  API Key: `)).trim() ||
+          existing[embedKeyEnv] || existing.DASHSCOPE_API_KEY || "";
+
+        if (embedKey) {
+          const urlOverride = (await ask(`  ${T.SIDE}  Base URL [${embedUrl}]: `)).trim();
+          if (urlOverride) embedUrl = urlOverride;
+          const modelOverride = (await ask(`  ${T.SIDE}  Model [${embedModel}]: `)).trim();
+          if (modelOverride) embedModel = modelOverride;
+        }
+      } else if (embedChoice === 2) {
+        embedProviderName = "Custom";
+        const defEmbedUrl = existing.EMBED_BASE_URL || existing.DASHSCOPE_BASE_URL || "";
+        const defEmbedModel = existing.EMBED_MODEL || "text-embedding-3-small";
+        const defEmbedKey = existing.EMBED_API_KEY || existing.DASHSCOPE_API_KEY || "";
+        log(`  ${T.SIDE}`);
+        embedUrl = (await ask(`  ${T.SIDE}  API Base URL${defEmbedUrl ? ` [${defEmbedUrl}]` : ""}: `)).trim() || defEmbedUrl;
+        embedModel = (await ask(`  ${T.SIDE}  Model${defEmbedModel ? ` [${defEmbedModel}]` : ""}: `)).trim() || defEmbedModel;
+        embedKey = (await ask(`  ${T.SIDE}  API Key${defEmbedKey ? ` [${mask(defEmbedKey)}]` : ""}: `)).trim() || defEmbedKey;
+        embedKeyEnv = "EMBED_API_KEY";
+        embedUrlEnv = "EMBED_BASE_URL";
+      }
+
+      if (embedKey) {
+        log(`  ${T.LAST} ${T.OK} ${embedProviderName} / ${embedModel}`);
+      } else {
+        log(`  ${T.LAST} ${T.WARN} Skipped (configure later in ${ENV_FILE})`);
+      }
+
+      step = 4; // done
+      continue;
+    }
   }
 
   rl.close();

@@ -64,6 +64,12 @@ docs/*.html
 **/review_report.md
 **/analysis_report.md
 
+# Development-only directories (not needed in production)
+code_graph_builder/examples/
+code_graph_builder/tests/
+code_graph_builder/rag/tests/
+code_graph_builder/rag/review_report.md
+
 #claude
 .claude/
 CLAUDE.md
