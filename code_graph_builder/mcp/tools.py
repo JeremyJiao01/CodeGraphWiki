@@ -478,6 +478,32 @@ class MCPToolsRegistry:
                 input_schema={"type": "object", "properties": {}, "required": []},
             ),
             # -----------------------------------------------------------------
+            # Call graph queries
+            # -----------------------------------------------------------------
+            ToolDefinition(
+                name="find_callers",
+                description=(
+                    "Find all functions that call a specific function (i.e. its "
+                    "callers / references). Accepts a qualified name like "
+                    "'module.Class.method' or a simple name like 'parse_btype'. "
+                    "Returns caller qualified names, file paths, and line numbers. "
+                    "Does NOT require an LLM — queries the graph directly."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "function_name": {
+                            "type": "string",
+                            "description": (
+                                "Function name or qualified name to search for. "
+                                "Examples: 'parse_btype', 'tinycc.tccgen.parse_btype'"
+                            ),
+                        },
+                    },
+                    "required": ["function_name"],
+                },
+            ),
+            # -----------------------------------------------------------------
             # Embedding
             # -----------------------------------------------------------------
             ToolDefinition(
@@ -537,6 +563,7 @@ class MCPToolsRegistry:
             "build_graph": self._handle_build_graph,
             "generate_api_docs": self._handle_generate_api_docs,
             "prepare_guidance": self._handle_prepare_guidance,
+            "find_callers": self._handle_find_callers,
             "get_config": self._handle_get_config,
         }
         return handlers.get(name)
@@ -1819,6 +1846,67 @@ class MCPToolsRegistry:
             raise ToolError({"error": str(exc), "status": "error"}) from exc
 
         return {"guidance": guidance}
+
+    # -------------------------------------------------------------------------
+    # find_callers — find all functions that call a specific function
+    # -------------------------------------------------------------------------
+
+    async def _handle_find_callers(self, function_name: str) -> dict[str, Any]:
+        """Find all functions that call the given function via the CALLS graph."""
+        self._require_active()
+
+        # Query both Function and Method nodes as callers/callees
+        cypher = """
+            MATCH (caller)-[:CALLS]->(callee)
+            WHERE callee.qualified_name = $name
+               OR callee.name = $name
+            RETURN DISTINCT
+                   caller.qualified_name AS caller_qn,
+                   caller.name           AS caller_name,
+                   caller.path           AS caller_path,
+                   caller.start_line     AS caller_start,
+                   caller.end_line       AS caller_end,
+                   callee.qualified_name AS callee_qn
+        """
+
+        with self._temporary_ingestor() as ingestor:
+            rows = ingestor.query(cypher, {"name": function_name})
+
+        if not rows:
+            return {
+                "function": function_name,
+                "caller_count": 0,
+                "callers": [],
+                "message": f"No callers found for '{function_name}'.",
+            }
+
+        callers = []
+        for r in rows:
+            callers.append({
+                "qualified_name": r.get("caller_qn", ""),
+                "name": r.get("caller_name", ""),
+                "path": r.get("caller_path", ""),
+                "start_line": r.get("caller_start"),
+                "end_line": r.get("caller_end"),
+            })
+
+        # Deduplicate (same caller may appear via qualified_name + name match)
+        seen = set()
+        unique: list[dict] = []
+        for c in callers:
+            key = c["qualified_name"]
+            if key and key not in seen:
+                seen.add(key)
+                unique.append(c)
+
+        # Use the matched callee qualified_name for clarity
+        matched_qn = rows[0].get("callee_qn", function_name)
+
+        return {
+            "function": matched_qn,
+            "caller_count": len(unique),
+            "callers": unique,
+        }
 
     # -------------------------------------------------------------------------
     # get_config — show current server configuration
