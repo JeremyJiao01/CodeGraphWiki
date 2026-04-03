@@ -555,6 +555,14 @@ class MCPToolsRegistry:
         skip_embed: bool = False,
         _progress_cb: ProgressCb = None,
     ) -> dict[str, Any]:
+        # Hot-reload config from .env / settings.json before running the
+        # pipeline, so any changes made via --setup or manual edits take
+        # effect without restarting the MCP server.
+        from ..settings import reload_env
+        changes = reload_env(workspace=self._workspace)
+        if changes.get("updated") or changes.get("removed"):
+            logger.info(f"Config hot-reloaded before initialize: {changes}")
+
         repo = Path(repo_path).resolve()
         if not repo.exists():
             raise ToolError(f"Repository path does not exist: {repo}")
@@ -1925,3 +1933,4 @@ class MCPToolsRegistry:
             "services": services,
             "environment_variables": env_status,
         }
+
