@@ -187,8 +187,8 @@ class CodeGraphBuilder:
             return None, None
 
         if self._embedder is None or self._vector_store is None:
-            from code_graph_builder.embeddings.qwen3_embedder import create_embedder
-            from code_graph_builder.embeddings.vector_store import create_vector_store
+            from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
+            from code_graph_builder.domains.core.embedding.vector_store import create_vector_store
 
             # Create embedder
             self._embedder = create_embedder(

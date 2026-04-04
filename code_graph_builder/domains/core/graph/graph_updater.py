@@ -26,8 +26,8 @@ from code_graph_builder.foundation.types.types import (
 )
 
 if TYPE_CHECKING:
-    from code_graph_builder.embeddings.qwen3_embedder import BaseEmbedder
-    from code_graph_builder.embeddings.vector_store import VectorStore
+    from code_graph_builder.domains.core.embedding.qwen3_embedder import BaseEmbedder
+    from code_graph_builder.domains.core.embedding.vector_store import VectorStore
     from code_graph_builder.foundation.utils.path_utils import should_skip_path
 
 
