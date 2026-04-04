@@ -407,7 +407,7 @@ class GraphUpdater:
             return
 
         try:
-            from code_graph_builder.embeddings.vector_store import VectorRecord
+            from code_graph_builder.domains.core.embedding.vector_store import VectorRecord
 
             records_to_store: list[VectorRecord] = []
             texts_to_embed: list[str] = []
@@ -464,7 +464,7 @@ class GraphUpdater:
             node_info: Tuple of (node_id, qualified_name, metadata)
             records: Accumulated records list
         """
-        from code_graph_builder.embeddings.vector_store import VectorRecord
+        from code_graph_builder.domains.core.embedding.vector_store import VectorRecord
 
         if not self.embedder or not self.vector_store:
             return

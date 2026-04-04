@@ -9,9 +9,9 @@ from loguru import logger
 from tree_sitter import Node, Parser
 
 from code_graph_builder import constants as cs
-from code_graph_builder.language_spec import get_language_for_extension, get_language_spec
-from code_graph_builder.parser_loader import load_parsers
-from code_graph_builder.utils.encoding import normalize_to_utf8_bytes
+from code_graph_builder.foundation.parsers.language_spec import get_language_for_extension, get_language_spec
+from code_graph_builder.foundation.parsers.parser_loader import load_parsers
+from code_graph_builder.foundation.utils.encoding import normalize_to_utf8_bytes
 
 
 class FileEditor:
@@ -176,7 +176,7 @@ class FileEditor:
             if not file_path.is_file():
                 return {"success": False, "error": f"File not found: {file_path}"}
 
-            from code_graph_builder.utils.encoding import read_source_file
+            from code_graph_builder.foundation.utils.encoding import read_source_file
             original = read_source_file(file_path)
 
             if target_block not in original:

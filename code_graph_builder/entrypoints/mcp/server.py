@@ -36,7 +36,7 @@ _ws = Path(os.environ.get("CGB_WORKSPACE", Path.home() / ".code-graph-builder"))
 load_dotenv(_ws.expanduser() / ".env", override=False)
 load_dotenv(override=False)
 
-from code_graph_builder.settings import load_settings  # noqa: E402
+from code_graph_builder.foundation.utils.settings import load_settings  # noqa: E402
 
 load_settings()
 

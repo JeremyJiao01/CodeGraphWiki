@@ -10,7 +10,7 @@ from tree_sitter import Node, QueryCursor
 
 from code_graph_builder.foundation.types import constants as cs
 from .utils import safe_decode_text
-from code_graph_builder.services import IngestorProtocol
+from code_graph_builder.foundation.services import IngestorProtocol
 from code_graph_builder.foundation.types.types import FunctionRegistryTrieProtocol
 
 if TYPE_CHECKING:

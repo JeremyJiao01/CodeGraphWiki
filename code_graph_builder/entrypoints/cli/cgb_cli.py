@@ -13,7 +13,7 @@ import sys
 
 def main():
     try:
-        from code_graph_builder.commands_cli import main as cli_main
+        from code_graph_builder.entrypoints.cli.commands_cli import main as cli_main
     except ImportError:
         print(
             "ERROR: code_graph_builder package is not installed.\n"

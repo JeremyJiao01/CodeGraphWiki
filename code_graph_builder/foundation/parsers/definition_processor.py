@@ -9,7 +9,7 @@ from loguru import logger
 from tree_sitter import Node, QueryCursor
 
 from code_graph_builder.foundation.types import constants as cs
-from code_graph_builder.services import IngestorProtocol
+from code_graph_builder.foundation.services import IngestorProtocol
 from code_graph_builder.foundation.types.types import LanguageQueries, NodeType, PropertyDict, SimpleNameLookup
 from code_graph_builder.foundation.utils.encoding import normalize_to_utf8_bytes
 from .utils import safe_decode_text

@@ -14,7 +14,7 @@ from code_graph_builder.foundation.types.types import ASTNode, LanguageQueries, 
 
 if TYPE_CHECKING:
     from .language_spec import LanguageSpec
-    from code_graph_builder.services import IngestorProtocol
+    from code_graph_builder.foundation.services import IngestorProtocol
     from code_graph_builder.foundation.types.types import FunctionRegistryTrieProtocol
 
 

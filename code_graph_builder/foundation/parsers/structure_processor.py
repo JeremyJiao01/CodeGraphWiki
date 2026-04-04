@@ -5,7 +5,7 @@ from pathlib import Path
 from loguru import logger
 
 from code_graph_builder.foundation.types import constants as cs
-from code_graph_builder.services import IngestorProtocol
+from code_graph_builder.foundation.services import IngestorProtocol
 from code_graph_builder.foundation.types.types import LanguageQueries, NodeIdentifier
 from code_graph_builder.foundation.utils.path_utils import should_skip_path
 

@@ -17,7 +17,7 @@ from typing import Any
 from loguru import logger
 
 try:
-    from code_graph_builder.rag.client import create_llm_client, LLMClient
+    from code_graph_builder.domains.upper.rag.client import create_llm_client, LLMClient
 except ImportError:
     create_llm_client = None  # type: ignore[assignment,misc]
     LLMClient = None  # type: ignore[assignment,misc]
@@ -62,7 +62,7 @@ def _read_function_source(func: dict, repo_path: Path) -> str | None:
     if file_path is None:
         return None
     try:
-        from code_graph_builder.utils.encoding import read_source_file
+        from code_graph_builder.foundation.utils.encoding import read_source_file
         content = read_source_file(file_path)
         lines = content.splitlines(keepends=True)
         source = "".join(lines[start_line - 1: end_line])
@@ -124,7 +124,7 @@ def build_graph(
     This step only creates the graph database.  API docs, embeddings, and
     wiki generation are separate steps.
     """
-    from code_graph_builder.builder import CodeGraphBuilder
+    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
 
     builder = CodeGraphBuilder(
         repo_path=str(repo_path),
@@ -170,7 +170,7 @@ def generate_api_docs_step(
 
     Requires only a populated graph database — no embeddings or LLM needed.
     """
-    from code_graph_builder.mcp.api_doc_generator import generate_api_docs
+    from code_graph_builder.domains.upper.apidoc.api_doc_generator import generate_api_docs
 
     api_dir = artifact_dir / "api_docs"
     index_file = api_dir / "index.md"
@@ -1049,8 +1049,8 @@ def build_vector_index(
     No graph database access needed — reads directly from api_docs/funcs/*.md.
     The ``builder`` parameter is kept for backward compatibility but is not used.
     """
-    from code_graph_builder.embeddings.qwen3_embedder import create_embedder
-    from code_graph_builder.embeddings.vector_store import MemoryVectorStore, VectorRecord
+    from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
+    from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore, VectorRecord
 
     embedder = create_embedder(batch_size=_EMBED_BATCH_SIZE)
 
@@ -1180,8 +1180,8 @@ def run_wiki_generation(
         semantic_search_funcs,
         validate_mermaid_blocks,
     )
-    from code_graph_builder.rag.camel_agent import CamelAgent
-    from code_graph_builder.rag.llm_backend import create_llm_backend
+    from code_graph_builder.domains.upper.rag.camel_agent import CamelAgent
+    from code_graph_builder.domains.upper.rag.llm_backend import create_llm_backend
 
     project_name = repo_path.name
     output_dir.mkdir(parents=True, exist_ok=True)

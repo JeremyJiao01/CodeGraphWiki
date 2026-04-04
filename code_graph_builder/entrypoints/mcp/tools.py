@@ -29,12 +29,12 @@ from typing import Any
 
 from loguru import logger
 
-from code_graph_builder.embeddings.qwen3_embedder import Qwen3Embedder
-from code_graph_builder.embeddings.vector_store import MemoryVectorStore, VectorRecord
-from code_graph_builder.rag.cypher_generator import CypherGenerator
-from code_graph_builder.rag.llm_backend import create_llm_backend
-from code_graph_builder.services.kuzu_service import KuzuIngestor
-from code_graph_builder.tools.semantic_search import SemanticSearchService
+from code_graph_builder.domains.core.embedding.qwen3_embedder import Qwen3Embedder
+from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore, VectorRecord
+from code_graph_builder.domains.upper.rag.cypher_generator import CypherGenerator
+from code_graph_builder.domains.upper.rag.llm_backend import create_llm_backend
+from code_graph_builder.foundation.services.kuzu_service import KuzuIngestor
+from code_graph_builder.domains.core.search.semantic_search import SemanticSearchService
 from code_graph_builder.entrypoints.mcp.file_editor import FileEditor
 from code_graph_builder.entrypoints.mcp.pipeline import (
     ProgressCb,
@@ -189,7 +189,7 @@ class MCPToolsRegistry:
         if vectors_path.exists():
             try:
                 vector_store = _load_vector_store(vectors_path)
-                from code_graph_builder.embeddings.qwen3_embedder import create_embedder
+                from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
                 embedder = create_embedder(batch_size=10)
                 semantic_service = SemanticSearchService(
                     embedder=embedder,
@@ -691,7 +691,7 @@ class MCPToolsRegistry:
                     file_rows = ingestor.query(
                         "MATCH (f:File) RETURN f.path AS path"
                     )
-                    from code_graph_builder.language_spec import get_language_for_extension
+                    from code_graph_builder.foundation.parsers.language_spec import get_language_for_extension
                     lang_counts: dict[str, int] = {}
                     total_files = 0
                     for row in file_rows:
@@ -713,7 +713,7 @@ class MCPToolsRegistry:
             result["graph_stats"] = {"error": str(exc)}
 
         # Supported languages
-        from code_graph_builder.constants import LANGUAGE_METADATA, LanguageStatus
+        from code_graph_builder.foundation.types.constants import LANGUAGE_METADATA, LanguageStatus
         result["supported_languages"] = {
             "full": [m.display_name for _, m in LANGUAGE_METADATA.items() if m.status == LanguageStatus.FULL],
             "in_development": [m.display_name for _, m in LANGUAGE_METADATA.items() if m.status == LanguageStatus.DEV],
@@ -987,7 +987,7 @@ class MCPToolsRegistry:
             if not fp.is_absolute() and self._active_repo_path:
                 fp = self._active_repo_path / fp
             try:
-                from code_graph_builder.utils.encoding import read_source_file
+                from code_graph_builder.foundation.utils.encoding import read_source_file
                 lines = read_source_file(fp).splitlines(keepends=True)
                 s = max(0, int(start_line) - 1)
                 e = min(len(lines), int(end_line))
@@ -1415,7 +1415,7 @@ class MCPToolsRegistry:
                 cache = pickle.load(fh)
             vector_store = cache["vector_store"]
             func_map: dict[int, dict] = cache["func_map"]
-            from code_graph_builder.embeddings.qwen3_embedder import create_embedder
+            from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
             embedder = create_embedder()
 
             # Delete structure cache if rebuild
@@ -1767,8 +1767,8 @@ class MCPToolsRegistry:
                 "or MOONSHOT_API_KEY to use prepare_guidance."
             )
 
-        from code_graph_builder.guidance.agent import GuidanceAgent
-        from code_graph_builder.guidance.toolset import MCPToolSet
+        from code_graph_builder.domains.upper.guidance.agent import GuidanceAgent
+        from code_graph_builder.domains.upper.guidance.toolset import MCPToolSet
 
         tool_set = MCPToolSet(
             semantic_service=self._semantic_service,
@@ -1812,7 +1812,7 @@ class MCPToolsRegistry:
         }
 
         # Detect which provider env var was used
-        from code_graph_builder.rag.llm_backend import _PROVIDER_ENVS
+        from code_graph_builder.domains.upper.rag.llm_backend import _PROVIDER_ENVS
         detected_provider = None
         for key_env, *_ in _PROVIDER_ENVS:
             if _os.environ.get(key_env):
@@ -1823,7 +1823,7 @@ class MCPToolsRegistry:
         # --- Embedding configuration ---
         embedding_config: dict[str, Any] = {}
         try:
-            from code_graph_builder.embeddings.qwen3_embedder import create_embedder
+            from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
             embedder = create_embedder()
             embedder_type = type(embedder).__name__
 

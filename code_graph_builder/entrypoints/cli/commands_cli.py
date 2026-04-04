@@ -40,7 +40,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from code_graph_builder.settings import load_settings  # noqa: E402
+from code_graph_builder.foundation.utils.settings import load_settings  # noqa: E402
 
 load_settings()
 
@@ -109,7 +109,7 @@ def _die(msg: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _open_ingestor(artifact_dir: Path):
-    from code_graph_builder.services.kuzu_service import KuzuIngestor
+    from code_graph_builder.foundation.services.kuzu_service import KuzuIngestor
 
     db_path = artifact_dir / "graph.db"
     if not db_path.exists():
@@ -120,7 +120,7 @@ def _open_ingestor(artifact_dir: Path):
 
 
 def _load_vector_store(vectors_path: Path):
-    from code_graph_builder.embeddings.vector_store import MemoryVectorStore, VectorRecord
+    from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore, VectorRecord
 
     if not vectors_path.exists():
         return None
@@ -151,7 +151,7 @@ def _load_vector_store(vectors_path: Path):
 def cmd_init(args: argparse.Namespace, ws: Workspace) -> None:
     """Orchestrate: graph-build → api-doc-gen → embed-gen → wiki-gen."""
     from code_graph_builder.examples.generate_wiki import MAX_PAGES_COMPREHENSIVE, MAX_PAGES_CONCISE
-    from code_graph_builder.mcp.pipeline import (
+    from code_graph_builder.entrypoints.mcp.pipeline import (
         artifact_dir_for,
         build_graph,
         build_vector_index,
@@ -271,7 +271,7 @@ def cmd_init(args: argparse.Namespace, ws: Workspace) -> None:
 
 def cmd_graph_build(args: argparse.Namespace, ws: Workspace) -> None:
     """Build the code knowledge graph only (step 1)."""
-    from code_graph_builder.mcp.pipeline import artifact_dir_for, build_graph, save_meta
+    from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for, build_graph, save_meta
 
     repo_path = Path(args.repo_path).resolve()
     if not repo_path.exists():
@@ -321,7 +321,7 @@ def cmd_graph_build(args: argparse.Namespace, ws: Workspace) -> None:
 
 def cmd_api_doc_gen(args: argparse.Namespace, ws: Workspace) -> None:
     """Generate API docs from existing knowledge graph (step 2)."""
-    from code_graph_builder.mcp.pipeline import generate_api_docs_step, save_meta
+    from code_graph_builder.entrypoints.mcp.pipeline import generate_api_docs_step, save_meta
 
     artifact_dir = ws.require_active()
     meta = ws.load_meta()
@@ -485,7 +485,7 @@ def cmd_info(_args: argparse.Namespace, ws: Workspace) -> None:
                 file_rows = ingestor.query(
                     "MATCH (f:File) RETURN f.path AS path"
                 )
-                from code_graph_builder.language_spec import get_language_for_extension
+                from code_graph_builder.foundation.parsers.language_spec import get_language_for_extension
                 lang_counts: dict[str, int] = {}
                 total_files = 0
                 for row in file_rows:
@@ -510,14 +510,14 @@ def cmd_info(_args: argparse.Namespace, ws: Workspace) -> None:
             result["graph_stats"] = {"error": str(exc)}
 
     # Language support info
-    from code_graph_builder.constants import LANGUAGE_METADATA, LanguageStatus
+    from code_graph_builder.foundation.types.constants import LANGUAGE_METADATA, LanguageStatus
     result["supported_languages"] = {
         "full": [m.display_name for lang, m in LANGUAGE_METADATA.items() if m.status == LanguageStatus.FULL],
         "in_development": [m.display_name for lang, m in LANGUAGE_METADATA.items() if m.status == LanguageStatus.DEV],
     }
 
     # Service availability
-    from code_graph_builder.rag.llm_backend import create_llm_backend
+    from code_graph_builder.domains.upper.rag.llm_backend import create_llm_backend
 
     llm = create_llm_backend()
     result["cypher_query_available"] = llm.available
@@ -543,8 +543,8 @@ def cmd_info(_args: argparse.Namespace, ws: Workspace) -> None:
 def cmd_query(args: argparse.Namespace, ws: Workspace) -> None:
     artifact_dir = ws.require_active()
 
-    from code_graph_builder.rag.cypher_generator import CypherGenerator
-    from code_graph_builder.rag.llm_backend import create_llm_backend
+    from code_graph_builder.domains.upper.rag.cypher_generator import CypherGenerator
+    from code_graph_builder.domains.upper.rag.llm_backend import create_llm_backend
 
     llm = create_llm_backend()
     if not llm.available:
@@ -629,7 +629,7 @@ def cmd_snippet(args: argparse.Namespace, ws: Workspace) -> None:
         if not fp.is_absolute():
             fp = repo_path / fp
         try:
-            from code_graph_builder.utils.encoding import read_source_file
+            from code_graph_builder.foundation.utils.encoding import read_source_file
             lines = read_source_file(fp).splitlines(keepends=True)
             s = max(0, int(start_line) - 1)
             e = min(len(lines), int(end_line))
@@ -659,8 +659,8 @@ def cmd_search(args: argparse.Namespace, ws: Workspace) -> None:
     if not vectors_path.exists():
         _die("Embeddings not found. Run /init-repo first to build vector index.")
 
-    from code_graph_builder.embeddings.qwen3_embedder import create_embedder
-    from code_graph_builder.tools.semantic_search import SemanticSearchService
+    from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
+    from code_graph_builder.domains.core.search.semantic_search import SemanticSearchService
 
     vector_store = _load_vector_store(vectors_path)
     if vector_store is None:
@@ -767,7 +767,7 @@ def cmd_locate(args: argparse.Namespace, ws: Workspace) -> None:
     meta = ws.load_meta() or {}
     repo_path = Path(meta.get("repo_path", ".")).resolve()
 
-    from code_graph_builder.mcp.file_editor import FileEditor
+    from code_graph_builder.entrypoints.mcp.file_editor import FileEditor
 
     try:
         editor = FileEditor(repo_path)
@@ -935,8 +935,8 @@ def cmd_api_find(args: argparse.Namespace, ws: Workspace) -> None:
     if not vectors_path.exists():
         _die("Embeddings not found. Run /repo-init first to build vector index.")
 
-    from code_graph_builder.embeddings.qwen3_embedder import create_embedder
-    from code_graph_builder.tools.semantic_search import SemanticSearchService
+    from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
+    from code_graph_builder.domains.core.search.semantic_search import SemanticSearchService
 
     vector_store = _load_vector_store(vectors_path)
     if vector_store is None:
@@ -1008,7 +1008,7 @@ def cmd_api_find(args: argparse.Namespace, ws: Workspace) -> None:
 
 def cmd_wiki_gen(args: argparse.Namespace, ws: Workspace) -> None:
     from code_graph_builder.examples.generate_wiki import MAX_PAGES_COMPREHENSIVE, MAX_PAGES_CONCISE
-    from code_graph_builder.mcp.pipeline import build_vector_index, run_wiki_generation, save_meta
+    from code_graph_builder.entrypoints.mcp.pipeline import build_vector_index, run_wiki_generation, save_meta
 
     artifact_dir = ws.require_active()
     meta = ws.load_meta()
@@ -1051,7 +1051,7 @@ def cmd_wiki_gen(args: argparse.Namespace, ws: Workspace) -> None:
         vector_store = cache["vector_store"]
         func_map = cache["func_map"]
 
-        from code_graph_builder.embeddings.qwen3_embedder import create_embedder
+        from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
         embedder = create_embedder()
 
         _progress("Loaded existing graph and embeddings. Starting wiki generation...")
@@ -1097,7 +1097,7 @@ def cmd_wiki_gen(args: argparse.Namespace, ws: Workspace) -> None:
 # ---------------------------------------------------------------------------
 
 def cmd_embed_gen(args: argparse.Namespace, ws: Workspace) -> None:
-    from code_graph_builder.mcp.pipeline import build_vector_index, save_meta
+    from code_graph_builder.entrypoints.mcp.pipeline import build_vector_index, save_meta
 
     artifact_dir = ws.require_active()
     meta = ws.load_meta()

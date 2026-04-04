@@ -28,8 +28,8 @@ from typing import Any
 from loguru import logger
 
 from code_graph_builder import __version__
-from code_graph_builder.builder import CodeGraphBuilder
-from code_graph_builder.config import (
+from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+from code_graph_builder.foundation.types.config import (
     KuzuConfig,
     MemgraphConfig,
     MemoryConfig,
