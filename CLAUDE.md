@@ -23,6 +23,7 @@ See `contributing/architecture.md` for full rules.
 1. Read `contributing/add-feature.md` to find which files to touch.
 2. Run `python tools/dep_check.py` before committing.
 3. Run `python -m pytest code_graph_builder/tests/ -v` to verify.
+4. Check `contributing/testing.md` Impact-Based Testing table — if your change touches listed files, run the mapped tests locally before pushing.
 
 ## Key Entry Points
 

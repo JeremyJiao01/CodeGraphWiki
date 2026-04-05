@@ -61,6 +61,34 @@ File checklists per scenario. Follow the layer rules in `contributing/architectu
 
 ---
 
+## Adding a Call Trace Feature (L3)
+
+1. `code_graph_builder/domains/upper/calltrace/tracer.py` -- BFS tracing algorithm, data models.
+2. `code_graph_builder/domains/upper/calltrace/formatter.py` -- tree text formatting.
+3. `code_graph_builder/domains/upper/calltrace/wiki_writer.py` -- Wiki investigation worksheet generation.
+4. `code_graph_builder/domains/core/search/graph_query.py` -- extend `GraphQueryService` if new query methods needed.
+5. `code_graph_builder/entrypoints/mcp/tools.py` -- register MCP tool + handler.
+6. `code_graph_builder/tests/domains/upper/calltrace/` -- unit tests for tracer, formatter, wiki_writer.
+
+**Layer rule:** Calltrace (L3) imports L2 (`GraphQueryService`) only. Do not import MCP, CLI, or other L3 domains.
+
+---
+
+## Enhancing Function Pointer / Indirect Call Detection (L1)
+
+1. `code_graph_builder/foundation/types/constants.py` -- add query/capture constants.
+2. `code_graph_builder/foundation/types/models.py` -- add query field to `LanguageSpec` if new pattern.
+3. `code_graph_builder/foundation/parsers/language_spec.py` -- add Tree-sitter query to target language spec.
+4. `code_graph_builder/foundation/parsers/parser_loader.py` -- compile and register the new query.
+5. `code_graph_builder/foundation/parsers/call_processor.py` -- add detection method.
+6. `code_graph_builder/foundation/parsers/call_resolver.py` -- add resolution mapping if needed.
+7. `code_graph_builder/domains/core/graph/graph_updater.py` -- wire into build pipeline.
+8. `code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py` -- add test cases.
+
+**Layer rule:** Parsers (L1) import L0 only. GraphUpdater (L2) calls L1 methods.
+
+---
+
 ## Adding a RAG Feature (L3)
 
 1. `code_graph_builder/rag/<feature>.py` -- implement feature.
