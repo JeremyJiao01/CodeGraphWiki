@@ -211,3 +211,38 @@ def test_global_assignment_skipped():
     )
 
     assert not ingestor.ensure_relationship_batch.called
+
+
+def test_multiple_assignments_same_file():
+    """Multiple struct field assignments in one file create multiple edges."""
+    code = """
+    void init() {
+        handlers.on_start = start_func;
+        handlers.on_stop = stop_func;
+        handlers.on_error = error_func;
+    }
+    """
+    root_node, lang = _parse_c(code)
+    queries = _make_func_ptr_queries(lang)
+
+    registry_entries = {
+        "project.fake.repo.test.start_func",
+        "project.fake.repo.test.stop_func",
+        "project.fake.repo.test.error_func",
+    }
+    processor, ingestor = _make_call_processor(registry_entries)
+
+    processor.process_func_ptr_assignments(
+        file_path=Path("/fake/repo/test.c"),
+        root_node=root_node,
+        language=cs.SupportedLanguage.C,
+        queries=queries,
+    )
+
+    assert ingestor.ensure_relationship_batch.call_count == 3
+    via_fields = set()
+    for call_args in ingestor.ensure_relationship_batch.call_args_list:
+        props = call_args[1].get("properties") if call_args[1] else call_args[0][3]
+        via_fields.add(props["via_field"])
+        assert props["indirect"] is True
+    assert via_fields == {"on_start", "on_stop", "on_error"}
