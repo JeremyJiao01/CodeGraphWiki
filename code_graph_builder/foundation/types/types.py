@@ -112,6 +112,7 @@ class LanguageQueries(TypedDict, total=False):
     locals: Query | None
     typedefs: Query | None
     macros: Query | None
+    func_ptr_assign: Query | None
     config: LanguageSpec
     language: Language
     parser: Parser

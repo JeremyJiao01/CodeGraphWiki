@@ -449,6 +449,12 @@ LANGUAGE_SPECS: dict[cs.SupportedLanguage, LanguageSpec] = {
     (preproc_def) @macro
     (preproc_function_def) @macro
     """,
+        func_ptr_assign_query="""
+(assignment_expression
+  left: (field_expression
+    field: (field_identifier) @field)
+  right: (identifier) @rhs) @assign
+""",
     ),
     cs.SupportedLanguage.CPP: LanguageSpec(
         language=cs.SupportedLanguage.CPP,
@@ -487,6 +493,12 @@ LANGUAGE_SPECS: dict[cs.SupportedLanguage, LanguageSpec] = {
     (new_expression) @call
     (delete_expression) @call
     """,
+        func_ptr_assign_query="""
+(assignment_expression
+  left: (field_expression
+    field: (field_identifier) @field)
+  right: (identifier) @rhs) @assign
+""",
     ),
     cs.SupportedLanguage.CSHARP: LanguageSpec(
         language=cs.SupportedLanguage.CSHARP,

@@ -277,6 +277,7 @@ def _create_language_queries(
     # Build optional typedef/macro queries (currently C-specific)
     typedef_query = _create_optional_query(language, lang_config.typedef_query)
     macro_query = _create_optional_query(language, lang_config.macro_query)
+    func_ptr_assign_query = _create_optional_query(language, lang_config.func_ptr_assign_query)
 
     return LanguageQueries(
         functions=_create_optional_query(language, function_patterns),
@@ -286,6 +287,7 @@ def _create_language_queries(
         locals=_create_locals_query(language, lang_name),
         typedefs=typedef_query,
         macros=macro_query,
+        func_ptr_assign=func_ptr_assign_query,
         config=lang_config,
         language=language,
         parser=parser,

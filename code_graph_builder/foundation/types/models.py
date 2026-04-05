@@ -32,6 +32,7 @@ class LanguageSpec:
     call_query: str | None = None
     typedef_query: str | None = None
     macro_query: str | None = None
+    func_ptr_assign_query: str | None = None
 
 
 class FQNSpec(NamedTuple):
