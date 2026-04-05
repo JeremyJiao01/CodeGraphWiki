@@ -23,6 +23,7 @@ class CallResolver:
     ) -> None:
         self.function_registry = function_registry
         self.import_processor = import_processor
+        self._func_ptr_map: dict[str, str] = {}
 
     def resolve_call(
         self,
@@ -50,7 +51,8 @@ class CallResolver:
 
         # Try direct resolution (fully qualified name)
         if cs.SEPARATOR_DOT in call_name:
-            return self._resolve_qualified_call(call_name, module_qn)
+            if resolved := self._resolve_qualified_call(call_name, module_qn):
+                return resolved
 
         # Try import resolution
         if resolved := self._resolve_via_imports(call_name, module_qn):
@@ -60,8 +62,22 @@ class CallResolver:
         if resolved := self._resolve_same_module(call_name, module_qn):
             return resolved
 
+        # Try function pointer resolution for obj.field patterns
+        if cs.SEPARATOR_DOT in call_name:
+            field = call_name.rsplit(cs.SEPARATOR_DOT, 1)[-1]
+            if resolved := self.resolve_func_ptr_call(field):
+                return resolved
+
         # Try function registry lookup
         return self._resolve_via_registry(call_name, module_qn)
+
+    def register_func_ptr(self, field_name: str, target_qn: str) -> None:
+        """Register a struct field -> function mapping from pointer assignment."""
+        self._func_ptr_map[field_name] = target_qn
+
+    def resolve_func_ptr_call(self, field_name: str) -> str | None:
+        """Resolve an indirect call through a registered function pointer field."""
+        return self._func_ptr_map.get(field_name)
 
     def _is_self_call(self, call_name: str) -> bool:
         """Check if this is a self/this call."""
