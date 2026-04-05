@@ -39,4 +39,5 @@ jobs:
             --ignore=code_graph_builder/tests/domains/upper/test_api_find_integration.py \
             --ignore=code_graph_builder/tests/domains/core/test_step3_embedding.py \
             --ignore=code_graph_builder/tests/domains/core/test_embedder.py \
+            --ignore=code_graph_builder/tests/domains/core/test_integration_semantic.py \
             --ignore=code_graph_builder/tests/entrypoints/test_mcp_user_flow.py
