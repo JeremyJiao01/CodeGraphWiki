@@ -1,6 +1,8 @@
-Generate a structured implementation plan for a feature described in the design document below, by researching the indexed codebase through MCP tools.
+Generate a structured implementation plan for a feature described in the design document below, by researching the indexed codebase through MCP tools provided by the `code-graph-builder` MCP server.
 
 **Input:** $ARGUMENTS (path to design document, or inline design text)
+
+If $ARGUMENTS is empty, ask the user to provide a design document path or inline text, then stop.
 
 ---
 
