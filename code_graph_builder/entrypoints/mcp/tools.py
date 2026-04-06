@@ -1403,9 +1403,41 @@ class MCPToolsRegistry:
                 "hint": "Use list_api_docs to browse modules first.",
             })
 
+        content = target.read_text(encoding="utf-8", errors="ignore")
+
+        # Live caller query — overrides potentially stale caller section in the MD
+        live_callers: list[dict] = []
+        try:
+            cypher = """
+                MATCH (caller)-[:CALLS]->(callee)
+                WHERE callee.qualified_name = $qn OR callee.name = $name
+                RETURN DISTINCT
+                       caller.qualified_name AS caller_qn,
+                       caller.name           AS caller_name,
+                       caller.path           AS caller_path,
+                       caller.start_line     AS caller_start
+            """
+            simple_name = qualified_name.split(".")[-1]
+            with self._temporary_ingestor() as ingestor:
+                rows = ingestor.query(cypher, {"qn": qualified_name, "name": simple_name})
+            seen: set[str] = set()
+            for r in rows:
+                key = r.get("caller_qn") or r.get("caller_name", "")
+                if key and key not in seen:
+                    seen.add(key)
+                    live_callers.append({
+                        "qualified_name": r.get("caller_qn", ""),
+                        "name": r.get("caller_name", ""),
+                        "path": r.get("caller_path", ""),
+                        "start_line": r.get("caller_start"),
+                    })
+        except Exception:
+            pass  # live callers are supplemental; don't fail the whole call
+
         return {
             "qualified_name": qualified_name,
-            "content": target.read_text(encoding="utf-8", errors="ignore"),
+            "content": content,
+            "live_callers": live_callers,
         }
 
     # -------------------------------------------------------------------------
@@ -1419,11 +1451,48 @@ class MCPToolsRegistry:
     ) -> dict[str, Any]:
         self._require_active()
 
+        api_dir = self._api_docs_dir()
+        funcs_dir = api_dir / "funcs" if api_dir else None
+        has_api_docs = funcs_dir is not None and funcs_dir.exists()
+
         if self._semantic_service is None:
-            raise ToolError(
-                "Semantic search not available. "
-                "Re-run initialize_repository to build embeddings."
-            )
+            # Fallback: keyword search over API doc filenames + content headers
+            if not has_api_docs:
+                raise ToolError(
+                    "Semantic search unavailable and no API docs found. "
+                    "Run initialize_repository first."
+                )
+            keywords = [w.lower() for w in query.split() if len(w) > 2]
+            scored: list[tuple[float, Path]] = []
+            for md_file in funcs_dir.glob("*.md"):
+                name_lower = md_file.stem.lower()
+                score = sum(1.0 for kw in keywords if kw in name_lower)
+                if score == 0:
+                    try:
+                        head = md_file.read_text(encoding="utf-8", errors="ignore")[:400]
+                        head_lower = head.lower()
+                        score = sum(0.5 for kw in keywords if kw in head_lower)
+                    except Exception:
+                        pass
+                if score > 0:
+                    scored.append((score, md_file))
+            scored.sort(key=lambda x: -x[0])
+            combined = []
+            for _, md_file in scored[:top_k]:
+                qn = md_file.stem
+                combined.append({
+                    "qualified_name": qn,
+                    "name": qn.split(".")[-1],
+                    "score": None,
+                    "api_doc": md_file.read_text(encoding="utf-8", errors="ignore"),
+                })
+            return {
+                "query": query,
+                "result_count": len(combined),
+                "search_mode": "keyword_fallback",
+                "api_docs_available": True,
+                "results": combined,
+            }
 
         try:
             results = self._semantic_service.search(query, top_k=top_k)
@@ -1431,10 +1500,6 @@ class MCPToolsRegistry:
             raise ToolError(
                 {"error": f"Semantic search failed: {exc}", "query": query}
             ) from exc
-
-        api_dir = self._api_docs_dir()
-        funcs_dir = api_dir / "funcs" if api_dir else None
-        has_api_docs = funcs_dir is not None and funcs_dir.exists()
 
         combined = []
         for r in results:
@@ -2094,20 +2159,19 @@ class MCPToolsRegistry:
         from code_graph_builder.domains.upper.calltrace.tracer import trace_call_chain
         from code_graph_builder.domains.upper.calltrace.formatter import format_trace_result
 
-        if self._ingestor is None:
-            raise ToolError("No repository loaded. Run initialize_repository first.")
+        self._require_active()
 
-        query_service = GraphQueryService(self._ingestor, backend="kuzu")
-
-        result = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: trace_call_chain(
-                query_service=query_service,
-                target_function=target_function,
-                max_depth=max_depth,
-                paths_per_entry_point=paths_per_entry_point,
-            ),
-        )
+        with self._temporary_ingestor() as ingestor:
+            query_service = GraphQueryService(ingestor, backend="kuzu")
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: trace_call_chain(
+                    query_service=query_service,
+                    target_function=target_function,
+                    max_depth=max_depth,
+                    paths_per_entry_point=paths_per_entry_point,
+                ),
+            )
 
         wiki_pages: list[str] = []
         if save_wiki and self._active_artifact_dir is not None:

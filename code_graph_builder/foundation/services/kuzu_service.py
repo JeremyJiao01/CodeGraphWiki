@@ -876,13 +876,12 @@ class KuzuIngestor:
             if result.has_next():
                 stats["relationship_count"] = result.get_next()[0]
 
-            # Get labels with counts
+            # Get labels with counts (show_tables columns: id, name, type, ...)
             result = self._execute_with_retry("CALL show_tables() RETURN *")
             while result.has_next():
                 row = result.get_next()
-                if row:
-                    label = row[0]
-                    # Count nodes for this label
+                if row and len(row) >= 3 and row[2] == "NODE":
+                    label = row[1]
                     try:
                         count_result = self._execute_with_retry(
                             f"MATCH (n:{label}) RETURN count(n) as count"
