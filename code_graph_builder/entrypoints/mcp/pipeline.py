@@ -105,7 +105,7 @@ _TYPE_DOC_QUERY_TYPE = """
 """
 
 _CALLS_QUERY = """
-    MATCH (caller:Function)-[]->(callee:Function)
+    MATCH (caller:Function)-[:CALLS]->(callee:Function)
     RETURN DISTINCT caller.qualified_name, callee.qualified_name,
            callee.path, callee.start_line,
            caller.path, caller.start_line, caller.end_line
