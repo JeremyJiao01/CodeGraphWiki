@@ -74,7 +74,8 @@ code_graph_builder/rag/tests/
 code_graph_builder/rag/review_report.md
 
 #claude
-.claude/
+.claude/*
+!.claude/commands/
 CLAUDE.md
 
 #entire
