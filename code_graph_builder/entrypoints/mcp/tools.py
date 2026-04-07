@@ -48,6 +48,7 @@ from code_graph_builder.entrypoints.mcp.pipeline import (
     generate_descriptions_step,
     run_wiki_generation,
     save_meta,
+    validate_api_docs,
 )
 
 
@@ -718,6 +719,34 @@ class MCPToolsRegistry:
                     progress_cb=lambda msg, pct: _step_progress(2, total_steps, msg, pct),
                     repo_path=repo_path,
                 )
+
+                # Validate API docs — retry with rebuild if incomplete
+                validation = validate_api_docs(artifact_dir)
+                if not validation["valid"]:
+                    logger.warning(
+                        f"API docs validation failed: {validation['issues']}. Retrying..."
+                    )
+                    _step_progress(
+                        2, total_steps,
+                        f"API docs incomplete ({', '.join(validation['issues'])}), retrying...",
+                        12.0,
+                    )
+                    generate_api_docs_step(
+                        ro_ingestor, artifact_dir, rebuild=True,
+                        progress_cb=lambda msg, pct: _step_progress(2, total_steps, msg, pct),
+                        repo_path=repo_path,
+                    )
+                    validation = validate_api_docs(artifact_dir)
+                    if validation["valid"]:
+                        logger.info(
+                            f"API docs retry succeeded: "
+                            f"{validation['modules']} modules, "
+                            f"{validation['funcs']} functions"
+                        )
+                    else:
+                        logger.warning(
+                            f"API docs retry still incomplete: {validation['issues']}"
+                        )
             # Kuzu no longer needed after this point
 
             # Step 2b: LLM description generation for undocumented functions
@@ -740,17 +769,24 @@ class MCPToolsRegistry:
                 _step_progress(total_steps, total_steps, "Embedding skipped.", 100.0)
 
             #
+            final_validation = validate_api_docs(artifact_dir)
             _head = _GCD().get_current_head(repo_path)
             save_meta(artifact_dir, repo_path, 0, last_indexed_commit=_head)
             self._set_active(artifact_dir)
             self._load_services(artifact_dir)
 
-            return {
+            result: dict[str, Any] = {
                 "status": "success",
                 "repo_path": str(repo_path),
                 "artifact_dir": str(artifact_dir),
                 "skipped": skipped,
+                "api_docs": final_validation,
             }
+            if not final_validation["valid"]:
+                result["warnings"] = [
+                    f"API docs incomplete: {', '.join(final_validation['issues'])}"
+                ]
+            return result
 
         except Exception as exc:
             logger.exception("Pipeline failed")
@@ -1841,6 +1877,20 @@ class MCPToolsRegistry:
                         ingestor, artifact_dir, True, progress_cb,
                         repo_path=repo_path,
                     )
+
+                    # Validate and retry if incomplete
+                    validation = validate_api_docs(artifact_dir)
+                    if not validation["valid"] and result.get("status") != "cached":
+                        logger.warning(
+                            f"API docs validation failed: {validation['issues']}. Retrying..."
+                        )
+                        result = generate_api_docs_step(
+                            ingestor, artifact_dir, rebuild=True, progress_cb=progress_cb,
+                            repo_path=repo_path,
+                        )
+                        validation = validate_api_docs(artifact_dir)
+
+                    result["validation"] = validation
 
                 # LLM description generation for undocumented functions
                 if repo_path is not None:
