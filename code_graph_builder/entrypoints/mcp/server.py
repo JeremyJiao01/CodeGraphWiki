@@ -40,22 +40,31 @@ from code_graph_builder.foundation.utils.settings import load_settings  # noqa: 
 
 load_settings()
 
+import sys
+
 from loguru import logger
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+# --- Disable loguru default stderr sink for MCP stdio mode ---
+# MCP uses stdin/stdout for JSON-RPC.  loguru's default stderr sink can
+# fill the OS pipe buffer on Windows (where the MCP client may not consume
+# stderr), blocking the entire Python process and hanging the agent.
+logger.remove()  # Remove default stderr sink
+
 # --- CGB_DEBUG file logging ---
-if os.environ.get("CGB_DEBUG", "").strip().lower() in ("1", "true", "yes"):
-    _debug_log = _ws.expanduser() / "debug.log"
-    _debug_log.parent.mkdir(parents=True, exist_ok=True)
-    logger.add(
-        str(_debug_log),
-        level="DEBUG",
-        rotation="10 MB",
-        retention="3 days",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-    )
+_debug_enabled = os.environ.get("CGB_DEBUG", "").strip().lower() in ("1", "true", "yes")
+_debug_log = _ws.expanduser() / "debug.log"
+_debug_log.parent.mkdir(parents=True, exist_ok=True)
+logger.add(
+    str(_debug_log),
+    level="DEBUG" if _debug_enabled else "WARNING",
+    rotation="10 MB",
+    retention="3 days",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+)
+if _debug_enabled:
     logger.debug("CGB_DEBUG enabled, logging to {}", _debug_log)
 
 from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry, ToolError
@@ -226,7 +235,12 @@ async def main() -> None:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         # Check for committed code changes and sync incrementally if needed
-        await _maybe_incremental_sync(registry)
+        try:
+            await asyncio.wait_for(_maybe_incremental_sync(registry), timeout=30)
+        except asyncio.TimeoutError:
+            logger.warning("Incremental sync timed out (30s), skipping")
+        except Exception as exc:
+            logger.warning("Incremental sync failed: {}", exc)
         handler = registry.get_handler(name)
         if handler is None:
             raise ValueError(f"Unknown tool: {name}")
