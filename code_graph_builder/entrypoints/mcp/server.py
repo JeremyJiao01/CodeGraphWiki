@@ -27,7 +27,17 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
+
+# Force unbuffered stdout/stderr on Windows to prevent MCP stdio deadlock.
+# When Python's stdout is connected to a pipe (MCP JSON-RPC transport),
+# it defaults to full buffering, which can hold back responses indefinitely.
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(write_through=True)
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(write_through=True)
 
 from dotenv import load_dotenv
 
@@ -39,8 +49,6 @@ load_dotenv(override=False)
 from code_graph_builder.foundation.utils.settings import load_settings  # noqa: E402
 
 load_settings()
-
-import sys
 
 from loguru import logger
 from mcp.server import Server

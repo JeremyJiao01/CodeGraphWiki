@@ -755,6 +755,11 @@ function runServer(cmd, args) {
     mergedEnv.CGB_WORKSPACE = WORKSPACE_DIR;
   }
 
+  // Force unbuffered stdout/stderr so MCP JSON-RPC responses are flushed
+  // immediately through the multi-layer pipe chain on Windows
+  // (MCP client -> cmd.exe -> npx -> node -> cmd.exe -> python).
+  mergedEnv.PYTHONUNBUFFERED = "1";
+
   const child = spawn(cmd, args, {
     stdio: "inherit",
     env: mergedEnv,
