@@ -96,6 +96,70 @@ Windows 平台使用：
 }
 ```
 
+## 命令行工具 (`cgb`)
+
+`cgb` 命令行工具提供工作区管理、索引和查询功能，可在 MCP 之外独立使用。
+
+### 工作区命令
+
+```bash
+cgb status              # 显示当前活跃仓库（路径、版本）
+cgb list                # 列出所有已索引仓库
+cgb repo                # 交互式切换活跃仓库
+```
+
+### 索引
+
+```bash
+cgb index               # 索引当前目录（图谱 → API 文档 → 嵌入向量）
+cgb index /path/to/repo # 索引指定路径
+cgb index -i            # 增量更新（基于 git-diff，速度快）
+cgb index --no-embed    # 跳过嵌入向量生成
+cgb index --no-wiki     # 仅跳过 wiki 生成
+```
+
+### 重建与清理
+
+```bash
+cgb rebuild             # 重建活跃仓库的所有步骤
+cgb rebuild --step graph   # 仅重建图谱
+cgb rebuild --step api     # 仅重建 API 文档
+cgb rebuild --step embed   # 仅重建嵌入向量
+cgb rebuild --step wiki    # 仅重建 wiki
+
+cgb clean               # 删除索引数据（交互式选择）
+cgb clean repo_name     # 删除指定仓库
+cgb clean --all         # 删除所有已索引仓库
+```
+
+### 底层命令
+
+```bash
+cgb scan /path          # 扫描仓库并构建知识图谱
+  --backend kuzu|memgraph|memory
+  --db-path ./graph.db
+  --exclude "vendor,build"
+  --language "c,python"
+  --clean               # 扫描前清空数据库
+  -o graph.json         # 导出图谱为 JSON
+
+cgb query "MATCH (f:Function) RETURN f.name LIMIT 10"
+  --format table|json
+
+cgb export /path -o graph.json
+  --build               # 导出前先构建图谱
+
+cgb stats               # 显示图谱统计信息（节点数、关系数）
+```
+
+### 全局参数
+
+```bash
+cgb --version           # 显示版本
+cgb -v ...              # 详细/调试输出
+cgb --help              # 显示帮助
+```
+
 ## 架构
 
 项目采用 5 层 harness 架构：

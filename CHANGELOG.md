@@ -2,6 +2,38 @@
 
 ---
 
+## [0.34.0] — 2026-04-08
+
+### Added
+- MCP `call_tool` lifecycle tracing: debug logs for main init, incremental sync, and handler timing
+- `scripts/debug-mcp.sh` — MCP Inspector helper with `--tail` and `--raw-test` modes
+- Incremental sync: read-only Kuzu connection for API doc cascade to avoid Windows file lock deadlocks
+
+### Changed
+- Noisy parser logs (definition_processor, structure_processor, utils) downgraded from info to debug
+- Incremental updater explicitly releases Kuzu references and runs `gc.collect()` after graph update
+- Debug logging outputs to `.log` only (removed redundant `.txt` sink)
+
+### Fixed
+- Windows Kuzu lock contention: cascade API doc regeneration now opens a temporary read-only connection instead of reusing the builder's connection
+
+---
+
+### 新增
+- MCP `call_tool` 全生命周期追踪：main 初始化、增量同步、handler 计时的 debug 日志
+- `scripts/debug-mcp.sh` — MCP Inspector 辅助脚本，支持 `--tail` 和 `--raw-test` 模式
+- 增量同步：API 文档级联再生使用只读 Kuzu 连接，避免 Windows 文件锁死锁
+
+### 变更
+- 解析器噪音日志（definition_processor、structure_processor、utils）从 info 降级为 debug
+- 增量更新器在图更新后显式释放 Kuzu 引用并执行 `gc.collect()`
+- Debug 日志仅输出到 `.log` 文件（移除了冗余的 `.txt` 输出）
+
+### 修复
+- Windows Kuzu 锁竞争：级联 API 文档再生改为打开临时只读连接，不再复用 builder 的连接
+
+---
+
 ## [0.30.0] — 2026-04-06
 
 ### Added

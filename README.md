@@ -96,6 +96,70 @@ On Windows, use:
 }
 ```
 
+## CLI Tool (`cgb`)
+
+The `cgb` command-line tool provides workspace management, indexing, and querying outside of MCP.
+
+### Workspace Commands
+
+```bash
+cgb status              # Show active repository (path, version)
+cgb list                # List all indexed repositories
+cgb repo                # Interactively switch active repository
+```
+
+### Indexing
+
+```bash
+cgb index               # Index current directory (graph → api-docs → embeddings)
+cgb index /path/to/repo # Index a specific path
+cgb index -i            # Incremental update (git-diff based, fast)
+cgb index --no-embed    # Skip embedding generation
+cgb index --no-wiki     # Skip wiki generation only
+```
+
+### Rebuild & Clean
+
+```bash
+cgb rebuild             # Rebuild all steps for active repository
+cgb rebuild --step graph   # Rebuild only the graph
+cgb rebuild --step api     # Rebuild only API docs
+cgb rebuild --step embed   # Rebuild only embeddings
+cgb rebuild --step wiki    # Rebuild only wiki
+
+cgb clean               # Remove indexed data (interactive)
+cgb clean repo_name     # Remove specific repository
+cgb clean --all         # Remove all indexed repositories
+```
+
+### Low-Level Commands
+
+```bash
+cgb scan /path          # Scan repo and build knowledge graph
+  --backend kuzu|memgraph|memory
+  --db-path ./graph.db
+  --exclude "vendor,build"
+  --language "c,python"
+  --clean               # Clean DB before scanning
+  -o graph.json         # Export graph to JSON
+
+cgb query "MATCH (f:Function) RETURN f.name LIMIT 10"
+  --format table|json
+
+cgb export /path -o graph.json
+  --build               # Build graph before exporting
+
+cgb stats               # Show graph statistics (nodes, relationships)
+```
+
+### Global Flags
+
+```bash
+cgb --version           # Show version
+cgb -v ...              # Verbose/debug output
+cgb --help              # Show help
+```
+
 ## Architecture
 
 The project follows a 5-layer harness architecture:
