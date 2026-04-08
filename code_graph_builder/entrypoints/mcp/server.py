@@ -65,15 +65,27 @@ logger.remove()  # Remove default stderr sink
 _debug_enabled = os.environ.get("CGB_DEBUG", "").strip().lower() in ("1", "true", "yes")
 _debug_log = _ws.expanduser() / "debug.log"
 _debug_log.parent.mkdir(parents=True, exist_ok=True)
+_log_format = "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
 logger.add(
     str(_debug_log),
     level="DEBUG" if _debug_enabled else "WARNING",
     rotation="10 MB",
     retention="3 days",
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+    format=_log_format,
 )
+
+# Also write to a plain .txt file for easy inspection
+_debug_txt = _ws.expanduser() / "debug.txt"
+logger.add(
+    str(_debug_txt),
+    level="DEBUG" if _debug_enabled else "WARNING",
+    rotation="10 MB",
+    retention="3 days",
+    format=_log_format,
+)
+
 if _debug_enabled:
-    logger.debug("CGB_DEBUG enabled, logging to {}", _debug_log)
+    logger.debug("CGB_DEBUG enabled, logging to {} and {}", _debug_log, _debug_txt)
 
 from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry, ToolError
 
