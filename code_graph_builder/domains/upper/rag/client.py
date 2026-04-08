@@ -241,6 +241,12 @@ class LLMClient:
                 err = data["error"]
                 msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
                 raise RuntimeError(f"API error: {msg}")
+            # MiniMax-style errors: base_resp.status_code != 0
+            base_resp = data.get("base_resp")
+            if isinstance(base_resp, dict) and base_resp.get("status_code", 0) != 0:
+                status_msg = base_resp.get("status_msg", "unknown error")
+                status_code = base_resp.get("status_code")
+                raise RuntimeError(f"API error (code={status_code}): {status_msg}")
             choices = data.get("choices")
             if not choices:
                 raise RuntimeError(f"API returned no choices. Response: {data!r}")

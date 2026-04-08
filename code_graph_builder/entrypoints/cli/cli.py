@@ -1434,7 +1434,7 @@ def cmd_index(args: argparse.Namespace) -> int:
     custom_name = user_input if user_input else default_name
 
     skip_embed = args.no_embed
-    skip_wiki = args.no_wiki or skip_embed
+    skip_wiki = not getattr(args, "wiki", False) or skip_embed
     rebuild = True  # Default: always rebuild
     backend = args.backend
     comprehensive = args.mode != "concise"
@@ -1629,8 +1629,10 @@ def cmd_rebuild(args: argparse.Namespace) -> int:
     run_all = step is None
     backend = args.backend
 
+    include_wiki = getattr(args, "wiki", False) or step == "wiki"
     steps_to_run = (
-        ["graph", "api", "embed", "wiki"] if run_all else
+        ["graph", "api", "embed", "wiki"] if run_all and include_wiki else
+        ["graph", "api", "embed"] if run_all else
         ["graph", "api"] if step == "graph" else [step]
     )
     bar = _ProgressBar(repo_path.name, len(steps_to_run))
@@ -1681,7 +1683,7 @@ def cmd_rebuild(args: argparse.Namespace) -> int:
             )
             bar.done(steps_to_run.index("embed") + 1, last_msg[0] or "Embeddings built")
 
-        if run_all or step == "wiki":
+        if include_wiki:
             if vector_store is None:
                 vector_store = _load_vector_store_simple(vectors_path)
                 if vector_store is None:
@@ -1874,9 +1876,10 @@ Workspace commands:
   cgb repo                      interactively switch repository (↑/↓)
 
 Indexing commands:
-  cgb index [path]              full pipeline: graph → api-docs → embeddings → wiki
-  cgb index . --no-wiki         index without wiki generation
-  cgb rebuild                   rebuild all steps for active repo
+  cgb index [path]              full pipeline: graph → api-docs → embeddings
+  cgb index . --wiki            index with wiki generation
+  cgb rebuild                   rebuild graph → api-docs → embeddings
+  cgb rebuild --wiki            rebuild all steps including wiki
   cgb rebuild --step embed      rebuild only embeddings
   cgb clean                     interactively remove an indexed repo
   cgb clean myrepo              remove specific repo by name
@@ -2134,9 +2137,9 @@ Windows:
         help="Skip embedding generation (also skips wiki)",
     )
     index_parser.add_argument(
-        "--no-wiki",
+        "--wiki",
         action="store_true",
-        help="Skip wiki generation",
+        help="Generate wiki (disabled by default)",
     )
     index_parser.add_argument(
         "--mode",
@@ -2205,6 +2208,11 @@ Windows:
         choices=["graph", "api", "embed", "wiki"],
         default=None,
         help="Specific step to rebuild (default: all steps)",
+    )
+    rebuild_parser.add_argument(
+        "--wiki",
+        action="store_true",
+        help="Include wiki generation (disabled by default)",
     )
     rebuild_parser.add_argument(
         "--backend",
