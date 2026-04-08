@@ -1028,6 +1028,17 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 def main() -> int:
     """Main entry point for CLI."""
+    # Load .env configuration (same as MCP server entry point)
+    from dotenv import load_dotenv
+    _ws = Path(
+        os.environ.get("CGB_WORKSPACE", Path.home() / ".code-graph-builder")
+    )
+    load_dotenv(_ws.expanduser() / ".env", override=False)
+    load_dotenv(override=False)
+
+    from code_graph_builder.foundation.utils.settings import load_settings
+    load_settings()
+
     prog = "cgb"
     parser = argparse.ArgumentParser(
         prog=prog,
