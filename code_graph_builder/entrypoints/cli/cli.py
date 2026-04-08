@@ -24,7 +24,7 @@ import json
 import os
 import platform
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 
@@ -1044,15 +1044,46 @@ def cmd_repo(_args: argparse.Namespace) -> int:
 # link — associate a local repo path with an existing artifact database
 # ---------------------------------------------------------------------------
 
+def _parse_repo_path(raw: str) -> tuple[Path, bool]:
+    """Parse a repo path string, handling Windows paths on non-Windows systems.
+
+    Handles paths copied from Windows File Explorer address bar, e.g.:
+        ``C:\\Users\\john\\project``  ``D:\\work\\myrepo``
+
+    Returns:
+        (path, is_remote) — *is_remote* is True when the path belongs to a
+        different OS (e.g. a Windows path on Linux) and cannot be validated
+        locally.
+    """
+    import re
+    from pathlib import PureWindowsPath
+
+    cleaned = raw.strip().strip('"').strip("'")
+
+    # Detect Windows absolute path:  X:\... or X:/...
+    is_win_path = bool(re.match(r'^[A-Za-z]:[/\\]', cleaned))
+
+    if is_win_path and platform.system() != "Windows":
+        # Running on Linux/macOS but got a Windows path — use PureWindowsPath
+        # so .as_posix() / .name / .anchor work correctly.
+        return PureWindowsPath(cleaned), True  # type: ignore[return-value]
+
+    # Native path — resolve normally
+    return Path(cleaned).resolve(), False
+
+
 def cmd_link(args: argparse.Namespace) -> int:
     """Link a local repository to an existing artifact database."""
     import shutil
 
     ws = _get_workspace_root()
-    repo_path = Path(args.repo_path).resolve()
-    if not repo_path.exists():
+    repo_path, is_remote = _parse_repo_path(args.repo_path)
+
+    if not is_remote and not repo_path.exists():
         print(f"  {_c('31', 'ERROR')} Path does not exist: {repo_path}")
         return 1
+    if is_remote:
+        print(f"  {_c('2', 'note')}  Remote path (Windows) — skipping local existence check.")
 
     # ── Discover candidate artifact dirs in workspace ────────────────
     # A candidate is any dir with meta.json (and ideally graph.db)
@@ -1189,7 +1220,7 @@ def cmd_link(args: argparse.Namespace) -> int:
     return 0
 
 
-def _link_update_meta(artifact_dir: Path, repo_path: Path,
+def _link_update_meta(artifact_dir: Path, repo_path: "Path | PurePath",
                       source_dir: Path | None = None) -> None:
     """Create or update meta.json to point to the given repo_path."""
     from datetime import datetime

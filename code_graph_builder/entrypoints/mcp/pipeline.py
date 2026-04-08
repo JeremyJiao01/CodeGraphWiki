@@ -11,7 +11,7 @@ import os
 import pickle
 from collections.abc import Callable
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from loguru import logger
@@ -1420,7 +1420,7 @@ def save_meta(
     meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2))
 
 
-def artifact_dir_for(workspace: Path, repo_path: Path) -> Path:
+def artifact_dir_for(workspace: Path, repo_path: "Path | PurePath") -> Path:
     import hashlib
 
     # Use POSIX path for hashing so the same repo gets the same hash
