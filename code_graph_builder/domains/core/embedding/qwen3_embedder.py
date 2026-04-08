@@ -387,9 +387,9 @@ class OpenAIEmbedder(BaseEmbedder):
     ``/v1/embeddings`` endpoint (e.g. local ollama, vLLM, LiteLLM).
 
     Env vars (fallback order):
-        EMBEDDING_API_KEY / OPENAI_API_KEY / LLM_API_KEY
-        EMBEDDING_BASE_URL / OPENAI_BASE_URL / LLM_BASE_URL  (default: https://api.openai.com/v1)
-        EMBEDDING_MODEL  (default: text-embedding-3-small)
+        EMBEDDING_API_KEY / EMBED_API_KEY / OPENAI_API_KEY / LLM_API_KEY
+        EMBEDDING_BASE_URL / EMBED_BASE_URL / OPENAI_BASE_URL / LLM_BASE_URL  (default: https://api.openai.com/v1)
+        EMBEDDING_MODEL / EMBED_MODEL  (default: text-embedding-3-small)
     """
 
     DEFAULT_MODEL = "text-embedding-3-small"
@@ -410,17 +410,18 @@ class OpenAIEmbedder(BaseEmbedder):
         max_retries: int = 3,
         dimension: int | None = None,
     ):
-        self.api_key = api_key or os.getenv("EMBEDDING_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
+        self.api_key = api_key or os.getenv("EMBEDDING_API_KEY") or os.getenv("EMBED_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "OpenAI API key required. Set EMBEDDING_API_KEY, OPENAI_API_KEY, "
-                "or LLM_API_KEY environment variable."
+                "OpenAI API key required. Set EMBED_API_KEY, EMBEDDING_API_KEY, "
+                "OPENAI_API_KEY, or LLM_API_KEY environment variable."
             )
 
-        self.model = model or os.getenv("EMBEDDING_MODEL", self.DEFAULT_MODEL)
+        self.model = model or os.getenv("EMBEDDING_MODEL") or os.getenv("EMBED_MODEL") or self.DEFAULT_MODEL
         self.base_url = (
             base_url
             or os.getenv("EMBEDDING_BASE_URL")
+            or os.getenv("EMBED_BASE_URL")
             or os.getenv("OPENAI_BASE_URL")
             or os.getenv("LLM_BASE_URL")
             or self.DEFAULT_BASE_URL
@@ -557,10 +558,15 @@ def create_embedder(
     chosen = (provider or os.getenv("EMBEDDING_PROVIDER", "")).lower()
 
     if not chosen:
-        # Auto-detect
-        if os.getenv("DASHSCOPE_API_KEY"):
+        # Auto-detect — explicit embedding keys take priority over DASHSCOPE_API_KEY
+        # so that users who configure EMBED_API_KEY / EMBEDDING_API_KEY get the
+        # OpenAI-compatible path even when DASHSCOPE_API_KEY is set elsewhere
+        # (e.g. injected from ~/.claude/settings.json as a fallback).
+        if os.getenv("EMBEDDING_API_KEY") or os.getenv("EMBED_API_KEY"):
+            chosen = "openai"
+        elif os.getenv("DASHSCOPE_API_KEY"):
             chosen = "qwen3"
-        elif os.getenv("EMBEDDING_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY"):
+        elif os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY"):
             chosen = "openai"
         else:
             logger.warning("No embedding API key found. Using DummyEmbedder (zero vectors).")

@@ -39,16 +39,10 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(write_through=True)
 
-from dotenv import load_dotenv
+from code_graph_builder.foundation.utils.settings import reload_env  # noqa: E402
 
-# Load .env from workspace first (written by setup wizard), then local .env
-_ws = Path(os.environ.get("CGB_WORKSPACE", Path.home() / ".code-graph-builder"))
-load_dotenv(_ws.expanduser() / ".env", override=False)
-load_dotenv(override=False)
-
-from code_graph_builder.foundation.utils.settings import load_settings  # noqa: E402
-
-load_settings()
+# Load exclusively from workspace .env — single source of truth.
+reload_env()
 
 from loguru import logger
 from mcp.server import Server
@@ -63,6 +57,7 @@ logger.remove()  # Remove default stderr sink
 
 # --- CGB_DEBUG file logging ---
 _debug_enabled = os.environ.get("CGB_DEBUG", "").strip().lower() in ("1", "true", "yes")
+_ws = Path(os.environ.get("CGB_WORKSPACE", Path.home() / ".code-graph-builder"))
 _debug_log = _ws.expanduser() / "debug.log"
 _debug_log.parent.mkdir(parents=True, exist_ok=True)
 _log_format = "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"

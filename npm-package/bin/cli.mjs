@@ -587,27 +587,16 @@ async function runSetup() {
 
   // 2. Package — auto-install or upgrade
   const pip = findPip();
-  if (!pythonPackageInstalled()) {
-    log(`  ${T.SIDE}  ${T.WORK} Installing ${PYTHON_PACKAGE}...`);
-    if (pip) {
-      try {
-        execSync(
-          [...pip, "install", "--upgrade", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
-          { stdio: "pipe", shell: true }
-        );
-      } catch { /* handled below */ }
-    }
-  } else {
-    // Already installed — upgrade to latest
-    log(`  ${T.SIDE}  ${T.WORK} Upgrading ${PYTHON_PACKAGE} to latest...`);
-    if (pip) {
-      try {
-        execSync(
-          [...pip, "install", "--upgrade", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
-          { stdio: "pipe", shell: true }
-        );
-      } catch { /* upgrade is best-effort */ }
-    }
+  // Always force-reinstall so the latest published version is used even
+  // when the same version number is already present locally.
+  log(`  ${T.SIDE}  ${T.WORK} Installing ${PYTHON_PACKAGE} (force-reinstall)...`);
+  if (pip) {
+    try {
+      execSync(
+        [...pip, "install", "--force-reinstall", "--upgrade", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
+        { stdio: "pipe", shell: true }
+      );
+    } catch { /* handled below */ }
   }
 
   if (pythonPackageInstalled()) {
@@ -846,7 +835,7 @@ function autoInstallAndStart(extraArgs) {
 
   try {
     execSync(
-      [...pip, "install", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
+      [...pip, "install", "--force-reinstall", "--upgrade", PYTHON_PACKAGE].map(s => `"${s}"`).join(" "),
       { stdio: "inherit", shell: true }
     );
   } catch (err) {

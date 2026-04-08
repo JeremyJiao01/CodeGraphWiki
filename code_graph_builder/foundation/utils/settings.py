@@ -1,96 +1,48 @@
-"""Load global configuration from ``~/.claude/settings.json``.
+"""Configuration loader for code-graph-builder.
 
-This module reads LLM and embedding API credentials stored in the Claude
-Code settings file and injects them into ``os.environ`` via
-:func:`os.environ.setdefault`.  Because ``setdefault`` is used, any values
-already present in the environment (from ``.env``, MCP ``env`` block, or
-shell exports) take precedence — this file acts as a *fallback* layer.
-
-Expected JSON structure::
-
-    {
-      "env": {
-        "LLM_API_KEY": "sk-...",
-        "LLM_BASE_URL": "https://api.openai.com/v1",
-        "LLM_MODEL": "gpt-4o",
-        "DASHSCOPE_API_KEY": "sk-...",
-        "DASHSCOPE_BASE_URL": "https://dashscope.aliyuncs.com/api/v1"
-      }
-    }
-
-All keys inside the ``"env"`` object are injected into the process
-environment.  Unknown keys are silently accepted so the file can hold
-additional settings for other tools.
-
-The function is intentionally side-effect-free when the file does not
-exist or is malformed — it logs a warning and returns without error.
+All configuration is read exclusively from the workspace ``.env`` file
+(``~/.code-graph-builder/.env`` by default, overridable via
+``CGB_WORKSPACE``).  No other files (local ``.env``, ``settings.json``,
+etc.) are consulted so that the workspace ``.env`` is the single source
+of truth.
 """
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
 from loguru import logger
 
-# Well-known settings file location
+# Kept for backward-compatibility imports only — not used internally.
 SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
 
 
 def load_settings(path: Path | None = None) -> dict:
-    """Read ``~/.claude/settings.json`` and inject ``env`` entries.
+    """No-op stub retained for backward compatibility.
 
-    Args:
-        path: Override the default settings file location (useful for tests).
-
-    Returns:
-        The parsed JSON dict (or ``{}`` if the file does not exist).
+    Configuration is now loaded exclusively from the workspace ``.env``
+    file via :func:`reload_env`.  This function returns an empty dict
+    without touching ``os.environ`` or reading any file.
     """
-    settings_file = path or SETTINGS_PATH
-
-    if not settings_file.exists():
-        return {}
-
-    try:
-        data = json.loads(settings_file.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        logger.warning(f"Failed to parse {settings_file}: {exc}")
-        return {}
-
-    if not isinstance(data, dict):
-        logger.warning(f"Expected JSON object in {settings_file}, got {type(data).__name__}")
-        return {}
-
-    env_block = data.get("env")
-    if isinstance(env_block, dict):
-        injected = []
-        for key, value in env_block.items():
-            if isinstance(value, str) and key not in os.environ:
-                os.environ.setdefault(key, value)
-                injected.append(key)
-        if injected:
-            logger.info(f"Loaded from {settings_file}: {', '.join(injected)}")
-
-    return data
+    return {}
 
 
 def refresh_env() -> None:
-    """Lightweight re-read of ``.env`` files and ``settings.json``.
+    """Lightweight re-read of the workspace ``.env`` file.
 
-    This is designed to be called *before* each LLM / embedding factory
-    invocation so that any config changes made via ``cgb config`` or by
-    editing the ``.env`` file take effect immediately without restarting
-    the process.
+    Called before each LLM / embedding factory invocation so that edits
+    to the workspace ``.env`` take effect immediately in long-running
+    processes (MCP server) without a restart.
 
-    The function is intentionally cheap: it only touches the filesystem
-    when the ``.env`` file's mtime has changed since the last refresh.
+    Uses mtime-based fast path: filesystem is only touched when the file
+    has changed since the last call.
     """
     ws_env = Path(
         os.environ.get("CGB_WORKSPACE", Path.home() / ".code-graph-builder")
     ).expanduser() / ".env"
 
-    # Fast path: skip if the .env file hasn't been modified since last check
+    # Fast path: skip if workspace .env hasn't changed since last check
     try:
         mtime = ws_env.stat().st_mtime if ws_env.exists() else 0.0
     except OSError:
@@ -98,37 +50,30 @@ def refresh_env() -> None:
 
     last = getattr(refresh_env, "_last_mtime", -1.0)
     if mtime == last:
-        return  # No change — nothing to do
+        return
     refresh_env._last_mtime = mtime  # type: ignore[attr-defined]
 
-    # Re-read .env with override so changed values take effect
+    # Reload — stale keys absent from .env are also removed so shell
+    # leftovers don't silently override the current configuration.
     try:
-        from dotenv import load_dotenv
-        if ws_env.exists():
-            load_dotenv(ws_env, override=True)
-        # Also pick up local .env (CWD) if present
-        load_dotenv(override=True)
+        reload_env()
     except Exception:
-        pass  # dotenv not installed or read error — ignore silently
-
-    # Re-read settings.json as fallback (setdefault — won't overwrite .env)
-    load_settings()
+        pass  # graceful degradation if reload fails
 
 
 def reload_env(workspace: Path | None = None) -> dict[str, list[str]]:
-    """Hot-reload configuration from ``.env`` files and ``settings.json``.
+    """Hot-reload configuration from the workspace ``.env`` file.
 
-    Unlike :func:`load_settings` (which uses ``setdefault``), this function
-    **overwrites** existing environment variables so that changed values in
-    ``.env`` or ``settings.json`` take effect immediately.
+    Overwrites existing environment variables with values from the
+    workspace ``.env``, and **removes** any config-managed keys that are
+    no longer present in the file — preventing stale shell exports or
+    values injected by other tools from silently overriding config.
 
     Args:
         workspace: Workspace directory (default: ``~/.code-graph-builder``).
 
     Returns:
-        A dict summarising what changed::
-
-            {"updated": ["KEY1", ...], "removed": ["KEY2", ...]}
+        ``{"updated": [...], "removed": [...]}``
     """
     from dotenv import dotenv_values
 
@@ -137,9 +82,8 @@ def reload_env(workspace: Path | None = None) -> dict[str, list[str]]:
     )
     ws = ws.expanduser()
 
-    # ── Collect all config-managed keys ──────────────────────────────
-    # CGB_WORKSPACE is intentionally excluded — it is a runtime path
-    # parameter that should not be altered by config reload.
+    # All config-managed keys.  CGB_WORKSPACE is intentionally excluded —
+    # it is a bootstrap parameter set before this function runs.
     _CONFIG_KEYS = frozenset({
         "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL",
         "LITELLM_API_KEY", "LITELLM_BASE_URL", "LITELLM_MODEL",
@@ -150,38 +94,18 @@ def reload_env(workspace: Path | None = None) -> dict[str, list[str]]:
         "EMBEDDING_PROVIDER", "EMBED_API_KEY", "EMBED_BASE_URL", "EMBED_MODEL",
     })
 
-    # Snapshot old values
+    # Snapshot current values
     old_vals: dict[str, str | None] = {k: os.environ.get(k) for k in _CONFIG_KEYS}
 
-    # ── Read fresh values (same priority as startup) ─────────────────
-    # workspace .env  →  local .env  →  settings.json (lowest priority)
+    # Read only from workspace .env — single source of truth
     new_vals: dict[str, str] = {}
-
     ws_env = ws / ".env"
     if ws_env.exists():
         for k, v in dotenv_values(ws_env).items():
             if v is not None:
-                new_vals.setdefault(k, v)
+                new_vals[k] = v
 
-    local_env = Path(".env")
-    if local_env.exists():
-        for k, v in dotenv_values(local_env).items():
-            if v is not None:
-                new_vals.setdefault(k, v)
-
-    settings_file = SETTINGS_PATH
-    if settings_file.exists():
-        try:
-            data = json.loads(settings_file.read_text(encoding="utf-8"))
-            env_block = data.get("env") if isinstance(data, dict) else None
-            if isinstance(env_block, dict):
-                for k, v in env_block.items():
-                    if isinstance(v, str):
-                        new_vals.setdefault(k, v)
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    # ── Apply changes to os.environ ──────────────────────────────────
+    # Apply: update present keys, remove absent ones
     updated: list[str] = []
     removed: list[str] = []
 
@@ -194,16 +118,8 @@ def reload_env(workspace: Path | None = None) -> dict[str, list[str]]:
                 os.environ[key] = new_val
                 updated.append(key)
         else:
-            # Key no longer in any config source → remove from env
             if key in os.environ:
                 del os.environ[key]
                 removed.append(key)
-
-    # if updated:
-    #     logger.info(f"Config reloaded — updated: {', '.join(updated)}")
-    # if removed:
-    #     logger.info(f"Config reloaded — removed: {', '.join(removed)}")
-    # if not updated and not removed:
-    #     logger.info("Config reloaded — no changes detected")
 
     return {"updated": updated, "removed": removed}

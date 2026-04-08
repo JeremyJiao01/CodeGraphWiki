@@ -1449,6 +1449,14 @@ def cmd_index(args: argparse.Namespace) -> int:
         )
         bar.done(2, last_msg[0] or "API docs generated")
 
+        # Save meta after graph+api-docs so the repo is discoverable even if
+        # embedding is skipped or fails later.
+        from code_graph_builder.foundation.services.git_service import GitChangeDetector
+        _head = GitChangeDetector().get_current_head(repo_path)
+        save_meta(artifact_dir, repo_path, 0, last_indexed_commit=_head)
+        ws_root = _get_workspace_root()
+        (ws_root / "active.txt").write_text(artifact_dir.name, encoding="utf-8")
+
         page_count = 0
         if not skip_embed:
             vector_store, embedder, func_map = build_vector_index(
@@ -1477,11 +1485,9 @@ def cmd_index(args: argparse.Namespace) -> int:
             bar.done(2, "Embeddings skipped (--no-embed)")
 
         bar.finish()
-        from code_graph_builder.foundation.services.git_service import GitChangeDetector
+        # Update meta with final page_count (active.txt already written above).
         _head = GitChangeDetector().get_current_head(repo_path)
         save_meta(artifact_dir, repo_path, page_count, last_indexed_commit=_head)
-        ws_root = _get_workspace_root()
-        (ws_root / "active.txt").write_text(artifact_dir.name, encoding="utf-8")
 
         print(f"{_c('32', '✓')} Done   {repo_path.name}   active repo set")
         if not skip_wiki:
@@ -1817,16 +1823,11 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 def main() -> int:
     """Main entry point for CLI."""
-    # Load .env configuration (same as MCP server entry point)
-    from dotenv import load_dotenv
-    _ws = Path(
-        os.environ.get("CGB_WORKSPACE", Path.home() / ".code-graph-builder")
-    )
-    load_dotenv(_ws.expanduser() / ".env", override=False)
-    load_dotenv(override=False)
-
-    from code_graph_builder.foundation.utils.settings import load_settings
-    load_settings()
+    # Load exclusively from workspace .env — single source of truth.
+    # reload_env() also removes config keys absent from .env so stale shell
+    # exports don't silently override the current configuration.
+    from code_graph_builder.foundation.utils.settings import reload_env
+    reload_env()
 
     prog = "cgb"
     parser = argparse.ArgumentParser(

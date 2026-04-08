@@ -383,8 +383,11 @@ class TestCreateEmbedder:
         assert isinstance(embedder, DummyEmbedder)
 
     def test_create_embedder_with_api_key(self, monkeypatch):
-        """Test factory creates Qwen3Embedder with API key."""
+        """Test factory creates Qwen3Embedder when only DASHSCOPE_API_KEY is set
+        (no explicit EMBED_API_KEY / EMBEDDING_API_KEY present)."""
         monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-factory")
+        monkeypatch.delenv("EMBED_API_KEY", raising=False)
+        monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
 
         from code_graph_builder.domains.core.embedding.qwen3_embedder import (
             Qwen3Embedder,
@@ -398,6 +401,8 @@ class TestCreateEmbedder:
     def test_create_embedder_passes_kwargs(self, monkeypatch):
         """Test factory passes kwargs to embedder."""
         monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-test")
+        monkeypatch.delenv("EMBED_API_KEY", raising=False)
+        monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
 
         from code_graph_builder.domains.core.embedding.qwen3_embedder import (
             Qwen3Embedder,
