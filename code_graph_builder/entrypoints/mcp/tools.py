@@ -76,13 +76,45 @@ class ToolError(Exception):
         super().__init__(json.dumps(error_data, ensure_ascii=False, default=str))
 
 
+class _CompatUnpickler(pickle.Unpickler):
+    """Unpickler that redirects old module paths to new ones after the
+    harness refactor.  Without this, ``vectors.pkl`` files created by
+    pre-0.30 versions fail with ``ModuleNotFoundError`` because pickle
+    stores the fully-qualified class path at serialization time.
+    """
+
+    _RENAMES: dict[tuple[str, str], tuple[str, str]] = {
+        # Old embeddings paths (flat layout)
+        ("code_graph_builder.embeddings.vector_store", "MemoryVectorStore"):
+            ("code_graph_builder.domains.core.embedding.vector_store", "MemoryVectorStore"),
+        ("code_graph_builder.embeddings.vector_store", "VectorRecord"):
+            ("code_graph_builder.domains.core.embedding.vector_store", "VectorRecord"),
+        ("code_graph_builder.embeddings.vector_store", "SearchResult"):
+            ("code_graph_builder.domains.core.embedding.vector_store", "SearchResult"),
+        # Even older: without 's'
+        ("code_graph_builder.embedding.vector_store", "MemoryVectorStore"):
+            ("code_graph_builder.domains.core.embedding.vector_store", "MemoryVectorStore"),
+        ("code_graph_builder.embedding.vector_store", "VectorRecord"):
+            ("code_graph_builder.domains.core.embedding.vector_store", "VectorRecord"),
+        # Old tools path
+        ("code_graph_builder.tools.semantic_search", "SemanticSearchService"):
+            ("code_graph_builder.domains.core.search.semantic_search", "SemanticSearchService"),
+    }
+
+    def find_class(self, module: str, name: str):
+        key = (module, name)
+        if key in self._RENAMES:
+            module, name = self._RENAMES[key]
+        return super().find_class(module, name)
+
+
 def _load_vector_store(vectors_path: Path) -> MemoryVectorStore:
     """Load MemoryVectorStore from a pickle cache file."""
     if not vectors_path.exists():
         raise FileNotFoundError(f"Vectors file not found: {vectors_path}")
 
     with open(vectors_path, "rb") as fh:
-        data = pickle.load(fh)
+        data = _CompatUnpickler(fh).load()
 
     if isinstance(data, dict) and "vector_store" in data:
         store = data["vector_store"]

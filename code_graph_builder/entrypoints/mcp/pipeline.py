@@ -1099,8 +1099,9 @@ def build_vector_index(
     embedder = create_embedder(batch_size=_EMBED_BATCH_SIZE)
 
     if not rebuild and vectors_path.exists():
+        from code_graph_builder.entrypoints.mcp.tools import _CompatUnpickler
         with open(vectors_path, "rb") as fh:
-            cache = pickle.load(fh)
+            cache = _CompatUnpickler(fh).load()
         vector_store: MemoryVectorStore = cache["vector_store"]
         func_map: dict[int, dict] = cache["func_map"]
         if progress_cb:
