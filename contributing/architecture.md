@@ -6,19 +6,21 @@
 L0  foundation/types/                          Pure data: constants, types, config, models
 L1  foundation/{parsers,services,utils}/       Shared infra: AST parsing, DB drivers, utilities
 L2  domains/core/{graph,embedding,search}/     Core domains: graph build, embeddings, search
-L3  domains/upper/{apidoc,rag,guidance}/       Upper domains: API docs, RAG, guidance agents
+L3  domains/upper/{apidoc,calltrace,rag,guidance}/  Upper domains: API docs, call trace, RAG, guidance
 L4  entrypoints/{mcp,cli}/                     Entry points: MCP server, CLI commands
 ```
 
 ### Mapping to Source Tree
 
+All paths below are relative to `code_graph_builder/`.
+
 | Layer | Source path(s) |
 |-------|---------------|
-| L0 | `code_graph_builder/constants.py`, `code_graph_builder/types.py`, `code_graph_builder/config.py`, `code_graph_builder/models.py`, `code_graph_builder/settings.py` |
-| L1 | `code_graph_builder/parsers/`, `code_graph_builder/services/`, `code_graph_builder/utils/`, `code_graph_builder/language_spec.py`, `code_graph_builder/parser_loader.py` |
-| L2 | `code_graph_builder/builder.py`, `code_graph_builder/graph_updater.py`, `code_graph_builder/embeddings/` |
-| L3 | `code_graph_builder/mcp/api_doc_generator.py`, `code_graph_builder/rag/`, `code_graph_builder/guidance/` |
-| L4 | `code_graph_builder/mcp/server.py`, `code_graph_builder/mcp/tools.py`, `code_graph_builder/mcp/pipeline.py`, `code_graph_builder/cli.py`, `code_graph_builder/cgb_cli.py`, `code_graph_builder/commands_cli.py` |
+| L0 | `foundation/types/constants.py`, `foundation/types/types.py`, `foundation/types/config.py`, `foundation/types/models.py` |
+| L1 | `foundation/parsers/` (language_spec, parser_loader, factory, call_processor, call_resolver, definition_processor, import_processor, structure_processor, type_inference, utils), `foundation/services/` (kuzu_service, graph_service, git_service, memory_service), `foundation/utils/` (encoding, path_utils, settings) |
+| L2 | `domains/core/graph/` (builder, graph_updater, incremental_updater), `domains/core/embedding/` (qwen3_embedder, vector_store), `domains/core/search/` (graph_query, semantic_search) |
+| L3 | `domains/upper/apidoc/api_doc_generator.py`, `domains/upper/calltrace/` (tracer, formatter, wiki_writer), `domains/upper/rag/` (rag_engine, client, cypher_generator, llm_backend, markdown_generator, prompt_templates, camel_agent, config), `domains/upper/guidance/` (agent, prompts, toolset) |
+| L4 | `entrypoints/mcp/` (server, tools, pipeline, file_editor), `entrypoints/cli/` (cli, cgb_cli, commands_cli) |
 
 ## Dependency Rules
 

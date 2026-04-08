@@ -397,13 +397,13 @@ cd CodeGraphWiki
 pip install -e ".[treesitter-full]"
 
 # Run tests
-python3 -m pytest code_graph_builder/tests/ -v
+python3 -m pytest tests/ -v
 
 # Integration tests (requires tinycc repo at ../tinycc)
-python3 -m pytest code_graph_builder/tests/domains/core/test_graph_build.py -v      # ~3 min
-python3 -m pytest code_graph_builder/tests/domains/upper/test_api_docs.py -v        # ~3 min
-python3 -m pytest code_graph_builder/tests/domains/core/test_step3_embedding.py -v  # ~27 min (API calls)
-python3 -m pytest code_graph_builder/tests/domains/upper/test_api_find_integration.py -v  # ~47 min (full pipeline)
+python3 -m pytest tests/domains/core/test_graph_build.py -v      # ~3 min
+python3 -m pytest tests/domains/upper/test_api_docs.py -v        # ~3 min
+python3 -m pytest tests/domains/core/test_step3_embedding.py -v  # ~27 min (API calls)
+python3 -m pytest tests/domains/upper/test_api_find_integration.py -v  # ~47 min (full pipeline)
 ```
 
 ## License

@@ -6,12 +6,14 @@ Code knowledge graph builder with MCP server for AI-assisted code navigation.
 
 This project uses a 5-layer harness architecture (L0-L4).
 
+All paths relative to `code_graph_builder/`.
+
 ```
-L0  foundation/types/           Pure data definitions
-L1  foundation/{parsers,services,utils}/  Shared infrastructure
-L2  domains/core/               Core domains (graph, embedding, search)
-L3  domains/upper/              Upper domains (apidoc, rag, guidance)
-L4  entrypoints/                Entry points (mcp, cli)
+L0  foundation/types/                          Pure data: constants, types, config, models
+L1  foundation/{parsers,services,utils}/       Shared infra: AST parsing, DB drivers, utilities
+L2  domains/core/{graph,embedding,search}/     Core domains: graph build, embeddings, search
+L3  domains/upper/{apidoc,calltrace,rag,guidance}/  Upper domains: API docs, call trace, RAG, guidance
+L4  entrypoints/{mcp,cli}/                     Entry points: MCP server, CLI commands
 ```
 
 Rule: upper imports lower. Never reverse. Never cross-domain at same layer.
@@ -22,7 +24,7 @@ See `contributing/architecture.md` for full rules.
 
 1. Read `contributing/add-feature.md` to find which files to touch.
 2. Run `python tools/dep_check.py` before committing.
-3. Run `python -m pytest code_graph_builder/tests/ -v` to verify.
+3. Run `python -m pytest tests/ -v` to verify.
 4. Check `contributing/testing.md` Impact-Based Testing table — if your change touches listed files, run the mapped tests locally before pushing.
 
 ## Key Entry Points
@@ -41,6 +43,6 @@ See `contributing/architecture.md` for full rules.
 
 ```bash
 pip install -e ".[treesitter-full]"
-python -m pytest code_graph_builder/tests/ -v
+python -m pytest tests/ -v
 python tools/dep_check.py
 ```

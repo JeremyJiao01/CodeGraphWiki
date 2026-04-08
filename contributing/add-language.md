@@ -2,11 +2,13 @@
 
 Step-by-step guide to add Tree-sitter support for a new programming language.
 
+All paths below are relative to `code_graph_builder/`.
+
 ## Steps
 
 ### 1. Add to SupportedLanguage Enum
 
-File: `code_graph_builder/constants.py`
+File: `foundation/types/constants.py`
 
 Add the language to `SupportedLanguage(StrEnum)`:
 
@@ -18,7 +20,7 @@ class SupportedLanguage(StrEnum):
 
 ### 2. Create Language Spec
 
-File: `code_graph_builder/language_spec.py`
+File: `foundation/parsers/language_spec.py`
 
 Add three items:
 
@@ -28,7 +30,7 @@ Add three items:
 
 ### 3. Register in Parser Factory
 
-File: `code_graph_builder/parsers/factory.py`
+File: `foundation/parsers/factory.py`
 
 Ensure `ProcessorFactory` handles the new `SupportedLanguage` value. If the language needs custom processing logic, add it here.
 
@@ -42,7 +44,7 @@ Add `tree-sitter-<lang>` to either:
 
 ### 5. Write Tests
 
-File: `code_graph_builder/tests/test_<lang>.py`
+File: `tests/foundation/test_<lang>.py`
 
 Required test cases:
 - Parse a minimal source file and verify nodes are created.
@@ -60,8 +62,8 @@ pip install -e ".[treesitter-full]"
 python tools/dep_check.py
 
 # Run tests
-python -m pytest code_graph_builder/tests/test_<lang>.py -v
+python -m pytest tests/foundation/test_<lang>.py -v
 
 # Run full suite to catch regressions
-python -m pytest code_graph_builder/tests/ -v
+python -m pytest tests/ -v
 ```

@@ -347,14 +347,14 @@ method()
 ```bash
 # 1. 运行所有单元测试
 cd /Users/jiaojeremy/CodeFile/code-graph-rag
-uv run pytest code_graph_builder/tests/ -v
+uv run pytest tests/ -v
 
 # 2. 运行特定测试场景
-uv run pytest code_graph_builder/tests/test_call_processor.py -v
-uv run pytest code_graph_builder/tests/test_call_resolver.py -v
+uv run pytest tests/test_call_processor.py -v
+uv run pytest tests/test_call_resolver.py -v
 
 # 3. 运行覆盖率测试
-uv run pytest code_graph_builder/tests/ --cov=code_graph_builder --cov-report=html
+uv run pytest tests/ --cov=code_graph_builder --cov-report=html
 
 # 4. 代码质量检查
 uv run ruff check code_graph_builder/

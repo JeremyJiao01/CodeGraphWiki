@@ -397,13 +397,13 @@ cd CodeGraphWiki
 pip install -e ".[treesitter-full]"
 
 # 运行测试
-python3 -m pytest code_graph_builder/tests/ -v
+python3 -m pytest tests/ -v
 
 # 集成测试（需要 tinycc 仓库在 ../tinycc）
-python3 -m pytest code_graph_builder/tests/domains/core/test_graph_build.py -v      # ~3 分钟
-python3 -m pytest code_graph_builder/tests/domains/upper/test_api_docs.py -v        # ~3 分钟
-python3 -m pytest code_graph_builder/tests/domains/core/test_step3_embedding.py -v  # ~27 分钟（API 调用）
-python3 -m pytest code_graph_builder/tests/domains/upper/test_api_find_integration.py -v  # ~47 分钟（完整流水线）
+python3 -m pytest tests/domains/core/test_graph_build.py -v      # ~3 分钟
+python3 -m pytest tests/domains/upper/test_api_docs.py -v        # ~3 分钟
+python3 -m pytest tests/domains/core/test_step3_embedding.py -v  # ~27 分钟（API 调用）
+python3 -m pytest tests/domains/upper/test_api_find_integration.py -v  # ~47 分钟（完整流水线）
 ```
 
 ## 许可证
