@@ -593,6 +593,101 @@ def cmd_repo(_args: argparse.Namespace) -> int:
 # index
 # ---------------------------------------------------------------------------
 
+def _run_incremental_index(args: argparse.Namespace, repo_path: Path, ws: Path) -> int:
+    """Run incremental (git-diff-based) index update."""
+    from code_graph_builder.domains.core.graph.incremental_updater import (
+        IncrementalUpdater, INCREMENTAL_FILE_LIMIT,
+    )
+    from code_graph_builder.entrypoints.mcp.pipeline import (
+        artifact_dir_for,
+        build_vector_index,
+        generate_api_docs_step,
+        save_meta,
+    )
+    from code_graph_builder.foundation.services.git_service import GitChangeDetector
+    from code_graph_builder.foundation.services.kuzu_service import KuzuIngestor
+
+    artifact_dir = artifact_dir_for(ws, repo_path)
+    db_path = artifact_dir / "graph.db"
+    vectors_path = artifact_dir / "vectors.pkl"
+    meta_file = artifact_dir / "meta.json"
+
+    if not db_path.exists():
+        print(f"{_c('33', 'WARN')} No existing index found. Running full rebuild instead.")
+        args.incremental = False
+        return cmd_index(args)
+
+    # Detect changed files
+    detector = GitChangeDetector()
+    last_commit = None
+    if meta_file.exists():
+        import json as _json
+        try:
+            last_commit = _json.loads(
+                meta_file.read_text(encoding="utf-8", errors="replace")
+            ).get("last_indexed_commit")
+        except Exception:
+            pass
+
+    changed_files, current_head = detector.get_changed_files(repo_path, last_commit)
+
+    if changed_files is None:
+        print(f"{_c('33', 'WARN')} Cannot determine changes (git history mismatch). Running full rebuild.")
+        args.incremental = False
+        return cmd_index(args)
+
+    if not changed_files:
+        print(f"{_c('32', '✓')} No changes since last index. Already up to date.")
+        return 0
+
+    if len(changed_files) > INCREMENTAL_FILE_LIMIT:
+        print(
+            f"{_c('33', 'WARN')} Too many changed files ({len(changed_files)} > {INCREMENTAL_FILE_LIMIT}). "
+            f"Running full rebuild."
+        )
+        args.incremental = False
+        return cmd_index(args)
+
+    print(f"  {_c('36', 'incremental')} {len(changed_files)} changed file(s)")
+
+    try:
+        result = IncrementalUpdater().run(changed_files, repo_path, db_path)
+        print(
+            f"  {_c('32', '✓')} Graph updated: {result.files_reindexed} files, "
+            f"{result.callers_reindexed} callers in {result.duration_ms:.0f}ms"
+        )
+
+        # Cascade: regenerate API docs
+        ro_ingestor = KuzuIngestor(db_path, read_only=True)
+        with ro_ingestor:
+            generate_api_docs_step(
+                ro_ingestor, artifact_dir, rebuild=True, repo_path=repo_path,
+            )
+        print(f"  {_c('32', '✓')} API docs regenerated")
+
+        # Cascade: rebuild embeddings
+        if not args.no_embed and vectors_path.exists():
+            build_vector_index(
+                None, repo_path, vectors_path, rebuild=True,
+            )
+            print(f"  {_c('32', '✓')} Embeddings rebuilt")
+
+        save_meta(artifact_dir, repo_path, 0, last_indexed_commit=current_head)
+        ws_root = _get_workspace_root()
+        (ws_root / "active.txt").write_text(artifact_dir.name, encoding="utf-8")
+
+        print(f"{_c('32', '✓')} Incremental update complete")
+        return 0
+
+    except Exception as exc:
+        sys.stdout.write("\n")
+        print(f"{_c('31', 'ERROR')} Incremental update failed: {exc}")
+        if getattr(args, "verbose", False):
+            import traceback
+            traceback.print_exc()
+        return 1
+
+
 def cmd_index(args: argparse.Namespace) -> int:
     """Run the full indexing pipeline on a repository."""
     from code_graph_builder.examples.generate_wiki import MAX_PAGES_COMPREHENSIVE, MAX_PAGES_CONCISE
@@ -613,9 +708,13 @@ def cmd_index(args: argparse.Namespace) -> int:
     ws = _get_workspace_root()
     ws.mkdir(parents=True, exist_ok=True)
 
+    # Dispatch to incremental update if requested
+    if getattr(args, "incremental", False):
+        return _run_incremental_index(args, repo_path, ws)
+
     skip_embed = args.no_embed
     skip_wiki = args.no_wiki or skip_embed
-    rebuild = args.rebuild
+    rebuild = True  # Default: always rebuild
     backend = args.backend
     comprehensive = args.mode != "concise"
     max_pages = MAX_PAGES_COMPREHENSIVE if comprehensive else MAX_PAGES_CONCISE
@@ -626,11 +725,11 @@ def cmd_index(args: argparse.Namespace) -> int:
     elif skip_wiki:
         total_steps = 3
 
-    step_label = "graph → api-docs"
+    step_label = "graph -> api-docs"
     if not skip_embed:
-        step_label += " → embeddings"
+        step_label += " -> embeddings"
     if not skip_wiki:
-        step_label += " → wiki"
+        step_label += " -> wiki"
 
     artifact_dir = artifact_dir_for(ws, repo_path)
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -690,7 +789,9 @@ def cmd_index(args: argparse.Namespace) -> int:
             bar.done(2, "Embeddings skipped (--no-embed)")
 
         bar.finish()
-        save_meta(artifact_dir, repo_path, page_count)
+        from code_graph_builder.foundation.services.git_service import GitChangeDetector
+        _head = GitChangeDetector().get_current_head(repo_path)
+        save_meta(artifact_dir, repo_path, page_count, last_indexed_commit=_head)
         ws_root = _get_workspace_root()
         (ws_root / "active.txt").write_text(artifact_dir.name, encoding="utf-8")
 
@@ -702,7 +803,7 @@ def cmd_index(args: argparse.Namespace) -> int:
     except Exception as exc:
         sys.stdout.write("\n")
         print(f"{_c('31', 'ERROR')} Indexing failed: {exc}")
-        if args.verbose:
+        if getattr(args, "verbose", False):
             import traceback
             traceback.print_exc()
         return 1
@@ -1287,9 +1388,9 @@ Windows:
         help="Path to repository (default: current directory)",
     )
     index_parser.add_argument(
-        "--rebuild",
+        "--incremental", "-i",
         action="store_true",
-        help="Force rebuild even if artifacts exist",
+        help="Incremental update: only reindex git-changed files (falls back to full rebuild if needed)",
     )
     index_parser.add_argument(
         "--no-embed",
