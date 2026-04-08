@@ -1041,6 +1041,212 @@ def cmd_repo(_args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# link — associate a local repo path with an existing artifact database
+# ---------------------------------------------------------------------------
+
+def cmd_link(args: argparse.Namespace) -> int:
+    """Link a local repository to an existing artifact database."""
+    import shutil
+
+    ws = _get_workspace_root()
+    repo_path = Path(args.repo_path).resolve()
+    if not repo_path.exists():
+        print(f"  {_c('31', 'ERROR')} Path does not exist: {repo_path}")
+        return 1
+
+    # ── Discover candidate artifact dirs in workspace ────────────────
+    # A candidate is any dir with meta.json (and ideally graph.db)
+    candidates: list[dict] = []
+    if ws.exists():
+        for child in sorted(ws.iterdir()):
+            if not child.is_dir():
+                continue
+            meta_file = child / "meta.json"
+            # Also accept dirs with graph.db but no meta.json (raw copy from others)
+            has_db = (child / "graph.db").exists()
+            has_meta = meta_file.exists()
+            if not has_db and not has_meta:
+                continue
+
+            meta: dict = {}
+            if has_meta:
+                try:
+                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            candidates.append({
+                "artifact_dir": child,
+                "dir_name": child.name,
+                "repo_name": meta.get("repo_name", child.name),
+                "repo_path": meta.get("repo_path", "(unset)"),
+                "has_graph": has_db,
+                "has_vectors": (child / "vectors.pkl").exists(),
+                "has_api_docs": (child / "api_docs" / "index.md").exists(),
+                "has_wiki": (child / "wiki" / "index.md").exists(),
+                "meta": meta,
+            })
+
+    if not candidates:
+        print(f"  {_c('31', 'ERROR')} No artifact directories found in workspace: {ws}")
+        print(f"  Copy an artifact directory (with graph.db) into {ws} first.")
+        return 1
+
+    # ── Select which artifact to link ─────────────────────────────────
+    db_name = getattr(args, "db", None)
+    selected: dict | None = None
+
+    if db_name:
+        # Match by dir name or repo_name
+        for c in candidates:
+            if c["dir_name"] == db_name or c["repo_name"] == db_name:
+                selected = c
+                break
+        if selected is None:
+            print(f"  {_c('31', 'ERROR')} Artifact '{db_name}' not found in workspace.")
+            print(f"  Available: {', '.join(c['dir_name'] for c in candidates)}")
+            return 1
+    elif len(candidates) == 1:
+        selected = candidates[0]
+    else:
+        # Interactive selection
+        print()
+        print(f"  {_T_DOT} {_c('1', 'Select artifact database to link')}")
+        print(f"  {_T_SIDE}")
+        print(f"  {_T_SIDE}  Link target: {_c('36', str(repo_path))}")
+        print(f"  {_T_SIDE}")
+
+        options: list[str] = []
+        for c in candidates:
+            parts = [c["dir_name"]]
+            if c["repo_path"] != "(unset)":
+                parts.append(f"← {c['repo_path']}")
+            artifacts = []
+            if c["has_graph"]:
+                artifacts.append("graph")
+            if c["has_vectors"]:
+                artifacts.append("vectors")
+            if c["has_api_docs"]:
+                artifacts.append("api-docs")
+            if c["has_wiki"]:
+                artifacts.append("wiki")
+            if artifacts:
+                parts.append(f"[{', '.join(artifacts)}]")
+            options.append("  ".join(parts))
+
+        idx = _select_menu(options, prefix=f"  {_T_SIDE}  ")
+        if idx is None:
+            print(f"  {_T_LAST} Cancelled.")
+            print()
+            return 0
+        selected = candidates[idx]
+
+    artifact_dir = selected["artifact_dir"]
+
+    # ── Decide: update-in-place vs. create-new ───────────────────────
+    # If the user's repo path differs from the current artifact dir's
+    # hash-based name, we create a new dir and symlink/copy from the old.
+    from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+
+    target_dir = artifact_dir_for(ws, repo_path)
+
+    if target_dir == artifact_dir:
+        # Same hash — just update meta.json in place
+        _link_update_meta(artifact_dir, repo_path)
+    elif target_dir.exists() and (target_dir / "graph.db").exists():
+        # Target already has data — just update its meta
+        _link_update_meta(target_dir, repo_path)
+        artifact_dir = target_dir
+    else:
+        # Create new dir with symlinks (or copies on Windows) pointing to source
+        target_dir.mkdir(parents=True, exist_ok=True)
+        _link_artifacts(artifact_dir, target_dir)
+        _link_update_meta(target_dir, repo_path, source_dir=artifact_dir)
+        artifact_dir = target_dir
+
+    # ── Set as active ─────────────────────────────────────────────────
+    (ws / "active.txt").write_text(artifact_dir.name, encoding="utf-8")
+
+    # ── Summary ───────────────────────────────────────────────────────
+    print()
+    print(f"  {_T_DOT} {_c('32', 'Repository linked successfully')}")
+    print(f"  {_T_SIDE}")
+    print(f"  {_T_BRANCH} repo       {repo_path}")
+    print(f"  {_T_BRANCH} artifact   {artifact_dir}")
+    parts = []
+    if (artifact_dir / "graph.db").exists():
+        parts.append("graph")
+    if (artifact_dir / "vectors.pkl").exists():
+        parts.append("vectors")
+    if (artifact_dir / "api_docs" / "index.md").exists():
+        parts.append("api-docs")
+    if (artifact_dir / "wiki" / "index.md").exists():
+        parts.append("wiki")
+    print(f"  {_T_BRANCH} data       {', '.join(parts) if parts else '(none)'}")
+    print(f"  {_T_LAST} active     {_c('32', 'yes')}")
+    print()
+
+    return 0
+
+
+def _link_update_meta(artifact_dir: Path, repo_path: Path,
+                      source_dir: Path | None = None) -> None:
+    """Create or update meta.json to point to the given repo_path."""
+    from datetime import datetime
+
+    meta_file = artifact_dir / "meta.json"
+    existing: dict = {}
+    if meta_file.exists():
+        try:
+            existing = json.loads(meta_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    meta = {
+        **existing,
+        "repo_path": repo_path.as_posix(),
+        "repo_name": repo_path.name or "root",
+        "linked_at": datetime.now().isoformat(),
+        "steps": {
+            "graph": (artifact_dir / "graph.db").exists(),
+            "api_docs": (artifact_dir / "api_docs" / "index.md").exists(),
+            "embeddings": (artifact_dir / "vectors.pkl").exists(),
+            "wiki": (artifact_dir / "wiki" / "index.md").exists(),
+        },
+    }
+    if source_dir is not None:
+        meta["linked_from"] = str(source_dir)
+    # Preserve indexed_at if it already exists; otherwise set it
+    if "indexed_at" not in meta:
+        meta["indexed_at"] = meta["linked_at"]
+
+    meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _link_artifacts(source_dir: Path, target_dir: Path) -> None:
+    """Create symlinks (or copies on Windows) from source artifacts into target."""
+    import shutil
+
+    artifact_names = ["graph.db", "api_docs", "vectors.pkl", "wiki"]
+    for name in artifact_names:
+        src = source_dir / name
+        dst = target_dir / name
+        if not src.exists():
+            continue
+        if dst.exists() or dst.is_symlink():
+            continue  # Don't overwrite existing data
+        try:
+            # Prefer symlinks for efficiency
+            dst.symlink_to(src)
+        except OSError:
+            # Fallback: copy (Windows without developer mode, etc.)
+            if src.is_dir():
+                shutil.copytree(str(src), str(dst))
+            else:
+                shutil.copy2(str(src), str(dst))
+
+
+# ---------------------------------------------------------------------------
 # index
 # ---------------------------------------------------------------------------
 
@@ -1880,6 +2086,28 @@ Windows:
         help="Storage backend (default: kuzu)",
     )
     index_parser.set_defaults(func=cmd_index)
+
+    # link command
+    link_parser = subparsers.add_parser(
+        "link",
+        help="Link a local repo to an existing artifact database",
+        description=(
+            "Associate a local repository path with a pre-built artifact database "
+            "in the workspace. Useful when sharing indexed data between team members."
+        ),
+    )
+    link_parser.add_argument(
+        "repo_path",
+        type=str,
+        help="Absolute path to the local repository",
+    )
+    link_parser.add_argument(
+        "--db",
+        type=str,
+        default=None,
+        help="Artifact directory name to link (interactive if omitted)",
+    )
+    link_parser.set_defaults(func=cmd_link)
 
     # clean command
     clean_parser = subparsers.add_parser(
