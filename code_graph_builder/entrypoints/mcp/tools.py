@@ -276,11 +276,11 @@ class MCPToolsRegistry:
             # Connection automatically closed here
         """
         if self._active_artifact_dir is None:
-            raise ToolError("No active repository. Call initialize_repository first.")
+            raise ToolError("No active repository. Run `cgb index <path>` first.")
 
         db_path = self._active_artifact_dir / "graph.db"
         if not db_path.exists():
-            raise ToolError("Graph database not found. Run initialize_repository first.")
+            raise ToolError("Graph database not found. Run `cgb index <path>` first.")
 
         ingestor = KuzuIngestor(db_path, read_only=True)
         try:
@@ -292,12 +292,12 @@ class MCPToolsRegistry:
     def _require_active(self) -> None:
         """Raise :class:`ToolError` when no repository has been indexed."""
         if self._active_artifact_dir is None:
-            raise ToolError("No repository indexed yet. Call initialize_repository first.")
+            raise ToolError("No repository indexed yet. Run `cgb index <path>` first.")
 
     def _require_repo_path(self) -> None:
         """Raise :class:`ToolError` when no repository path is set."""
         if self._active_repo_path is None:
-            raise ToolError("No repository path set. Call initialize_repository first.")
+            raise ToolError("No repository path set. Run `cgb index <path>` first.")
 
     @property
     def active_state(self) -> tuple[Path, Path] | None:
@@ -308,40 +308,9 @@ class MCPToolsRegistry:
 
     def tools(self) -> list[ToolDefinition]:
         defs: list[ToolDefinition] = [
-            ToolDefinition(
-                name="initialize_repository",
-                description=(
-                    "Index a code repository: builds the knowledge graph, generates "
-                    "API documentation, and creates vector embeddings for semantic search. "
-                    "Must be called before using any query tools. "
-                    "Always performs a fresh build (cached data is ignored). "
-                    "Takes 2-10 minutes depending on repo size."
-                ),
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "repo_path": {
-                            "type": "string",
-                            "description": "Absolute path to the repository to index.",
-                        },
-                        "rebuild": {
-                            "type": "boolean",
-                            "description": (
-                                "Always forces a fresh rebuild. This parameter is kept for "
-                                "compatibility but rebuild is always enabled. Default: true."
-                            ),
-                        },
-                        "skip_embed": {
-                            "type": "boolean",
-                            "description": (
-                                "Skip embedding generation (graph + API docs only, fastest). "
-                                "Semantic search (find_api) will be unavailable. Default: false."
-                            ),
-                        },
-                    },
-                    "required": ["repo_path"],
-                },
-            ),
+            # NOTE: initialize_repository is intentionally hidden from the tool
+            # list — users should index via `cgb index`.  The handler is kept so
+            # internal callers and the incremental-sync mechanism still work.
             ToolDefinition(
                 name="get_repository_info",
                 description=(
@@ -938,7 +907,7 @@ class MCPToolsRegistry:
 
     async def _handle_get_repository_info(self) -> dict[str, Any]:
         if self._active_artifact_dir is None:
-            raise ToolError("No active repository. Call initialize_repository first.")
+            raise ToolError("No active repository. Run `cgb index <path>` first.")
 
         meta_file = self._active_artifact_dir / "meta.json"
         meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace")) if meta_file.exists() else {}
@@ -1049,7 +1018,7 @@ class MCPToolsRegistry:
             "repositories": repos,
             "hint": (
                 "Use switch_repository with repo_name to change the active repo. "
-                "Use initialize_repository or build_graph to index a new repo."
+                "Use `cgb index <path>` or build_graph to index a new repo."
             ),
         }
 
@@ -1307,7 +1276,7 @@ class MCPToolsRegistry:
         self._require_active()
 
         if self._semantic_service is None:
-            raise ToolError("Semantic search not available. Re-run initialize_repository to build embeddings.")
+            raise ToolError("Semantic search not available. Run `cgb index <path>` to build embeddings.")
 
         try:
             results = self._semantic_service.search(query, top_k=top_k, entity_types=entity_types)
@@ -1359,7 +1328,7 @@ class MCPToolsRegistry:
 
         wiki_dir = self._wiki_dir()
         if wiki_dir is None or not wiki_dir.exists():
-            raise ToolError("Wiki not generated yet. Run initialize_repository first.")
+            raise ToolError("Wiki not generated yet. Run `cgb index <path>` first.")
 
         pages = []
         wiki_subdir = wiki_dir / "wiki"
@@ -1380,7 +1349,7 @@ class MCPToolsRegistry:
 
         wiki_dir = self._wiki_dir()
         if wiki_dir is None or not wiki_dir.exists():
-            raise ToolError("Wiki not generated yet. Run initialize_repository first.")
+            raise ToolError("Wiki not generated yet. Run `cgb index <path>` first.")
 
         if page_id == "index":
             target = wiki_dir / "index.md"
@@ -1531,7 +1500,7 @@ class MCPToolsRegistry:
         if api_dir is None or not (api_dir / "index.md").exists():
             raise ToolError(
                 "API docs not generated yet. "
-                "Re-run initialize_repository to generate them."
+                "Run `cgb index <path>` to generate them."
             )
 
         if module:
@@ -1567,7 +1536,7 @@ class MCPToolsRegistry:
         if api_dir is None or not (api_dir / "index.md").exists():
             raise ToolError(
                 "API docs not generated yet. "
-                "Re-run initialize_repository to generate them."
+                "Run `cgb index <path>` to generate them."
             )
 
         safe = qualified_name.replace("/", "_").replace("\\", "_")
@@ -1636,7 +1605,7 @@ class MCPToolsRegistry:
             if not has_api_docs:
                 raise ToolError(
                     "Semantic search unavailable and no API docs found. "
-                    "Run initialize_repository first."
+                    "Run `cgb index <path>` first."
                 )
             keywords = [w.lower() for w in query.split() if len(w) > 2]
             scored: list[tuple[float, Path]] = []
@@ -1721,7 +1690,7 @@ class MCPToolsRegistry:
         self._require_active()
 
         if self._active_artifact_dir is None or self._active_repo_path is None:
-            raise ToolError("No active repository. Call initialize_repository first.")
+            raise ToolError("No active repository. Run `cgb index <path>` first.")
 
         artifact_dir = self._active_artifact_dir
         repo_path = self._active_repo_path
@@ -1729,7 +1698,7 @@ class MCPToolsRegistry:
 
         if not vectors_path.exists():
             raise ToolError(
-                "Embeddings not found. Run initialize_repository first "
+                "Embeddings not found. Run `cgb index <path>` first"
                 "to build the graph and embeddings."
             )
 
@@ -1818,7 +1787,7 @@ class MCPToolsRegistry:
         self._require_active()
 
         if self._active_artifact_dir is None or self._active_repo_path is None:
-            raise ToolError("No active repository. Call initialize_repository first.")
+            raise ToolError("No active repository. Run `cgb index <path>` first.")
 
         artifact_dir = self._active_artifact_dir
         repo_path = self._active_repo_path
@@ -1826,7 +1795,7 @@ class MCPToolsRegistry:
 
         if not db_path.exists():
             raise ToolError(
-                "Graph database not found. Run initialize_repository first "
+                "Graph database not found. Run `cgb index <path>` first"
                 "to build the knowledge graph."
             )
 
@@ -1977,7 +1946,7 @@ class MCPToolsRegistry:
         self._require_active()
 
         if self._active_artifact_dir is None or self._active_repo_path is None:
-            raise ToolError("No active repository. Call build_graph or initialize_repository first.")
+            raise ToolError("No active repository. Run `cgb index <path>` first.")
 
         if mode not in ("full", "resume", "enhance"):
             raise ToolError(f"Invalid mode '{mode}'. Must be 'full', 'resume', or 'enhance'.")
