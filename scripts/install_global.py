@@ -149,7 +149,10 @@ def main():
         _configure_settings()
 
     print("\n=== Installation complete ===")
-    print("You can now use /repo-init, /code-search, etc. from any project in Claude Code.")
+    print("You can now use the following commands from any project in Claude Code:")
+    print("  /ask <question>     — Ask anything about an indexed codebase")
+    print("  /trace <function>   — Trace complete call chain for a function")
+    print("  /code-gen <design>  — Generate implementation plan from design document")
     if skip_config:
         print("\nTo configure API keys later, run:")
         print(f"  python3 {Path(__file__).resolve()}")

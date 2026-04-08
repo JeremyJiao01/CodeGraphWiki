@@ -295,6 +295,14 @@ async def main() -> None:
             "It combines semantic search with API docs.\n"
             "3. `get_api_doc` -- deep-dive into a specific function.\n"
             "4. `find_callers` / `trace_call_chain` -- understand who calls what.\n\n"
+            "## CRITICAL: Handling status='pending_fill' responses\n"
+            "When any tool returns `status: 'pending_fill'`, you MUST continue "
+            "working — DO NOT present raw results to the user. Follow the "
+            "'action_required' instructions in the response to complete the "
+            "analysis. For `trace_call_chain`, this means filling in all "
+            "<!-- FILL --> placeholders in the wiki worksheets using "
+            "`get_code_snippet` / `get_api_doc`, then writing the completed "
+            "files back and summarizing your findings.\n\n"
             "Proactively tell the user what you found and suggest next steps. "
             "Be an enthusiastic guide to their codebase."
         ),
@@ -320,7 +328,7 @@ async def main() -> None:
         # Check for committed code changes and sync incrementally if needed.
         # Skip for initialize_repository (full rebuild) and other write-heavy
         # tools to avoid Kuzu lock contention on Windows.
-        _SKIP_SYNC_TOOLS = {"initialize_repository", "build_graph", "rebuild_embeddings"}
+        _SKIP_SYNC_TOOLS = {"initialize_repository", "build_graph", "rebuild_embeddings", "reload_config"}
         if name not in _SKIP_SYNC_TOOLS:
             logger.debug("│  incremental_sync BEGIN")
             _ts = _time.monotonic()

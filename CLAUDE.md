@@ -33,6 +33,8 @@ See `contributing/architecture.md` for full rules.
 
 ## Custom Commands
 
+- `/ask <question>`: Ask anything about an indexed codebase — works from any directory, answers using code graph + semantic search
+- `/trace <function>`: Trace complete call chain for a function — reveals entry points, callers, and blast radius
 - `/code-gen <design-doc>`: Generate implementation plan from design document using MCP tools
 
 ## Build & Test

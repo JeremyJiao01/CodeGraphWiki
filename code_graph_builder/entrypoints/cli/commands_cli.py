@@ -16,6 +16,7 @@ Commands:
     list-repos   List all indexed repositories in the workspace
     switch-repo  Switch active repository to a previously indexed one
     info         Show active repository info and graph statistics
+    reload       Hot-reload .env configuration without restarting
     query        Translate natural-language question to Cypher and execute
     snippet      Retrieve source code by qualified name
     search       Semantic vector search
@@ -535,6 +536,58 @@ def cmd_info(_args: argparse.Namespace, ws: Workspace) -> None:
         warnings.append("Embeddings not built — semantic search unavailable.")
     if warnings:
         result["warnings"] = warnings
+
+    _result_json(result)
+
+
+# ---------------------------------------------------------------------------
+# reload — hot-reload .env configuration
+# ---------------------------------------------------------------------------
+
+def cmd_reload(_args: argparse.Namespace, ws: Workspace) -> None:
+    from code_graph_builder.foundation.utils.settings import reload_env
+
+    changes = reload_env(workspace=ws.root)
+    updated = changes.get("updated", [])
+    removed = changes.get("removed", [])
+
+    result: dict = {
+        "status": "ok",
+        "env_changes": {
+            "updated": updated,
+            "removed": removed,
+        },
+    }
+
+    # Re-check service availability with the new config
+    from code_graph_builder.domains.upper.rag.llm_backend import create_llm_backend
+
+    llm = create_llm_backend()
+    result["services"] = {
+        "llm": llm.available,
+    }
+
+    # Check embedding service
+    try:
+        from code_graph_builder.domains.core.embedding.qwen3_embedder import create_embedder
+        embedder = create_embedder()
+        result["services"]["embedding"] = True
+    except Exception:
+        result["services"]["embedding"] = False
+
+    # Check active repo
+    active_dir = ws.active_artifact_dir()
+    if active_dir:
+        result["active_repo"] = str(active_dir)
+        vectors_path = active_dir / "vectors.pkl"
+        result["services"]["semantic_search"] = vectors_path.exists() and result["services"]["embedding"]
+
+    if updated:
+        result["hint"] = f"{len(updated)} key(s) updated: {', '.join(updated)}"
+    elif removed:
+        result["hint"] = f"{len(removed)} key(s) removed: {', '.join(removed)}"
+    else:
+        result["hint"] = "No changes detected — .env matches current environment."
 
     _result_json(result)
 
@@ -1257,6 +1310,9 @@ def main() -> None:
     p = subparsers.add_parser("embed-gen", help="Rebuild embeddings only (reuses existing graph)")
     p.add_argument("--rebuild", action="store_true", help="Force rebuild embeddings even if cached")
 
+    # reload
+    subparsers.add_parser("reload", help="Hot-reload .env configuration without restarting")
+
     args = parser.parse_args()
 
     ws = Workspace()
@@ -1280,6 +1336,7 @@ def main() -> None:
         "api-find": cmd_api_find,
         "wiki-gen": cmd_wiki_gen,
         "embed-gen": cmd_embed_gen,
+        "reload": cmd_reload,
     }
 
     handler = dispatch.get(args.command)

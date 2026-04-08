@@ -527,6 +527,16 @@ class MCPToolsRegistry:
                 ),
                 input_schema={"type": "object", "properties": {}, "required": []},
             ),
+            ToolDefinition(
+                name="reload_config",
+                description=(
+                    "Hot-reload configuration from .env files and settings.json "
+                    "without restarting the MCP server. Re-reads API keys, model "
+                    "names, and base URLs, then rebuilds LLM and embedding services. "
+                    "Use after editing ~/.code-graph-builder/.env or running setup."
+                ),
+                input_schema={"type": "object", "properties": {}, "required": []},
+            ),
             # -----------------------------------------------------------------
             # Call graph queries
             # -----------------------------------------------------------------
@@ -561,8 +571,17 @@ class MCPToolsRegistry:
                 description=(
                     "Trace the upward call chain of a target function using BFS. "
                     "Finds all entry points that can reach the target, reconstructs "
-                    "every call path, and optionally generates a Wiki investigation "
-                    "worksheet. Useful for log-source tracing and impact analysis."
+                    "every call path, and generates Wiki investigation worksheets.\n\n"
+                    "IMPORTANT — THIS TOOL RETURNS status='pending_fill'. "
+                    "The response includes 'wiki_content' with raw markdown containing "
+                    "<!-- FILL --> placeholders. You MUST:\n"
+                    "1. Read the 'wiki_content' in the response (already included).\n"
+                    "2. Call get_code_snippet / get_api_doc for each function in the paths.\n"
+                    "3. Replace every <!-- FILL --> with real analysis.\n"
+                    "4. Write the completed markdown back to the 'wiki_page' file paths.\n"
+                    "5. Summarize your findings to the user.\n"
+                    "DO NOT just return the raw results to the user — "
+                    "the analysis is incomplete until all placeholders are filled."
                 ),
                 input_schema={
                     "type": "object",
@@ -659,6 +678,7 @@ class MCPToolsRegistry:
             "prepare_guidance": self._handle_prepare_guidance,
             "find_callers": self._handle_find_callers,
             "get_config": self._handle_get_config,
+            "reload_config": self._handle_reload_config,
             "trace_call_chain": self._handle_trace_call_chain,
         }
         return handlers.get(name)
@@ -2314,6 +2334,64 @@ class MCPToolsRegistry:
         }
 
     # -------------------------------------------------------------------------
+    # reload_config — hot-reload .env and rebuild services
+    # -------------------------------------------------------------------------
+
+    async def _handle_reload_config(self) -> dict[str, Any]:
+        """Hot-reload configuration and rebuild LLM/embedding services."""
+        from code_graph_builder.foundation.utils.settings import reload_env
+
+        # 1. Reload environment variables from .env / settings.json
+        changes = reload_env(workspace=self._workspace)
+        updated = changes.get("updated", [])
+        removed = changes.get("removed", [])
+
+        # 2. Rebuild LLM and embedding services with new config
+        services_before: dict[str, bool] = {
+            "llm": self._cypher_gen is not None,
+            "semantic_search": self._semantic_service is not None,
+        }
+
+        if self._active_artifact_dir and self._active_artifact_dir.exists():
+            try:
+                self._load_services(self._active_artifact_dir)
+            except Exception as exc:
+                return {
+                    "status": "partial",
+                    "env_changes": {"updated": updated, "removed": removed},
+                    "error": f"Environment reloaded but service rebuild failed: {exc}",
+                }
+
+        services_after: dict[str, bool] = {
+            "llm": self._cypher_gen is not None,
+            "semantic_search": self._semantic_service is not None,
+        }
+
+        # 3. Build result summary
+        service_changes: list[str] = []
+        for svc, was_on in services_before.items():
+            is_on = services_after[svc]
+            if not was_on and is_on:
+                service_changes.append(f"{svc}: ✗ → ✓")
+            elif was_on and not is_on:
+                service_changes.append(f"{svc}: ✓ → ✗")
+
+        return {
+            "status": "ok",
+            "env_changes": {
+                "updated": updated,
+                "removed": removed,
+            },
+            "service_changes": service_changes if service_changes else ["no changes"],
+            "services": services_after,
+            "hint": (
+                "Configuration reloaded. "
+                + (f"{len(updated)} key(s) updated. " if updated else "No env changes. ")
+                + ("Services rebuilt successfully." if self._active_artifact_dir else "No active repo — services not rebuilt.")
+            ),
+        }
+
+    # -------------------------------------------------------------------------
     # trace_call_chain — upward call chain tracing
     # -------------------------------------------------------------------------
 
@@ -2344,6 +2422,7 @@ class MCPToolsRegistry:
             )
 
         wiki_pages: list[str] = []
+        wiki_contents: list[str] = []
         if save_wiki and self._active_artifact_dir is not None:
             from code_graph_builder.domains.upper.calltrace.wiki_writer import write_wiki_pages
 
@@ -2359,8 +2438,17 @@ class MCPToolsRegistry:
                 ),
             )
             wiki_pages = [str(p) for p in written]
+            # Read back wiki content so the agent sees <!-- FILL --> placeholders
+            # directly in the response — this is the key to ensuring the agent
+            # continues to fill them in rather than stopping here.
+            for wp in written:
+                try:
+                    wiki_contents.append(wp.read_text(encoding="utf-8"))
+                except Exception:
+                    wiki_contents.append("")
 
         output: dict[str, Any] = {
+            "status": "pending_fill" if wiki_pages else "complete",
             "query": result.query_name,
             "matches": len(result.results),
             "results": [],
@@ -2382,5 +2470,36 @@ class MCPToolsRegistry:
             for i, wp in enumerate(wiki_pages):
                 if i < len(output["results"]):
                     output["results"][i]["wiki_page"] = wp
+                    if i < len(wiki_contents):
+                        output["results"][i]["wiki_content"] = wiki_contents[i]
+
+            # Count unfilled placeholders so the agent knows exactly how many
+            total_fills = sum(c.count("<!-- FILL") for c in wiki_contents)
+
+            output["action_required"] = {
+                "what": (
+                    f"The wiki worksheets contain {total_fills} unfilled "
+                    "<!-- FILL --> placeholders that you MUST complete NOW."
+                ),
+                "how": [
+                    "Look at the 'wiki_content' field above — every <!-- FILL --> "
+                    "or <!-- FILL: ... --> marker is a field you need to populate.",
+                    "Use get_code_snippet or get_api_doc to read the source code "
+                    "of each function listed in the call chain paths.",
+                    "Replace each <!-- FILL --> with your analysis based on the "
+                    "source code (trigger scenarios, conditions, call frequency, "
+                    "key parameters, log output, path summaries, exception branches).",
+                    "Write the completed markdown back to the wiki files "
+                    "listed in 'wiki_page' fields.",
+                    "Summarize your findings to the user in the chat.",
+                ],
+                "wiki_files": wiki_pages,
+                "unfilled_count": total_fills,
+            }
+            output["user_hint"] = (
+                f"已生成 {len(wiki_pages)} 个调用链分析工作表，"
+                f"包含 {total_fills} 个待填充字段。"
+                "正在自动分析源码并补全..."
+            )
 
         return output

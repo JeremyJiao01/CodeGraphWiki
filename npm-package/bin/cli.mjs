@@ -12,9 +12,10 @@
 
 import { spawn, execFileSync, execSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, copyFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PYTHON_PACKAGE = "code-graph-builder";
 const MODULE_PATH = "code_graph_builder.entrypoints.mcp.server";
@@ -738,9 +739,60 @@ async function runSetup() {
     log(`       }`);
   }
 
+  // 5. Install skill commands to ~/.claude/commands/
+  installSkills(log);
+
   log();
   log(`  ${T.DOT} Setup complete`);
   log();
+}
+
+// ---------------------------------------------------------------------------
+// Install skill commands to ~/.claude/commands/
+// ---------------------------------------------------------------------------
+
+function installSkills(log) {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const srcDir = join(__dirname, "..", "commands");
+  const targetDir = join(homedir(), ".claude", "commands");
+
+  if (!existsSync(srcDir)) {
+    // Running from development or commands dir not bundled
+    if (log) log(`  ${T.BRANCH} ${T.WARN} Skill files not found in package`);
+    return;
+  }
+
+  const skills = readdirSync(srcDir).filter(f => f.endsWith(".md"));
+  if (skills.length === 0) return;
+
+  try {
+    mkdirSync(targetDir, { recursive: true });
+
+    let installed = 0;
+    for (const file of skills) {
+      const src = join(srcDir, file);
+      const dest = join(targetDir, file);
+      copyFileSync(src, dest);
+      installed++;
+    }
+
+    if (log) {
+      log();
+      log(`  ${T.DOT} Skills installed`);
+      log(`  ${T.SIDE}`);
+      for (let i = 0; i < skills.length; i++) {
+        const name = skills[i].replace(".md", "");
+        const prefix = i < skills.length - 1 ? T.BRANCH : T.LAST;
+        log(`  ${prefix} /${name}`);
+      }
+    }
+  } catch (err) {
+    if (log) {
+      log();
+      log(`  ${T.DOT} ${T.WARN} Skill installation failed: ${err.message}`);
+      log(`       Copy manually from: ${srcDir}`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -841,6 +893,11 @@ async function runUninstall() {
     hasClaudeConfig = mcpList.includes("code-graph-builder");
   } catch { /* claude CLI not available */ }
 
+  // Detect installed skill files
+  const SKILL_NAMES = ["ask.md", "code-gen.md", "trace.md"];
+  const skillDir = join(homedir(), ".claude", "commands");
+  const installedSkills = SKILL_NAMES.filter(f => existsSync(join(skillDir, f)));
+
   log(`  ${T.DOT} Components detected`);
   log(`  ${T.SIDE}`);
   if (hasPythonPkg)    log(`  ${T.BRANCH} Python package:  code-graph-builder`);
@@ -849,6 +906,7 @@ async function runUninstall() {
   else                 log(`  ${T.BRANCH} Workspace data:  (not found)`);
   if (hasEnv)          log(`  ${T.BRANCH} Config file:     ${ENV_FILE}`);
   if (hasClaudeConfig) log(`  ${T.BRANCH} Claude Code MCP: registered`);
+  if (installedSkills.length > 0) log(`  ${T.BRANCH} Skill commands:  ${installedSkills.map(f => "/" + f.replace(".md", "")).join(", ")}`);
   log(`  ${T.LAST}`);
   log();
 
@@ -897,6 +955,20 @@ async function runUninstall() {
     }
   }
 
+  // Skill command files
+  if (installedSkills.length > 0) {
+    let removed = 0;
+    for (const file of installedSkills) {
+      try {
+        rmSync(join(skillDir, file), { force: true });
+        removed++;
+      } catch { /* best effort */ }
+    }
+    if (removed > 0) {
+      log(`  ${T.BRANCH} ${T.OK} Skill commands (${removed} files)`);
+    }
+  }
+
   // npx cache
   log(`  ${T.SIDE}  ${T.WORK} Clearing npx cache...`);
   await clearNpxCache();
@@ -908,6 +980,9 @@ async function runUninstall() {
 }
 
 function startServer(extraArgs = []) {
+  // Ensure skills are installed (silent, no output on stdio — MCP uses it)
+  installSkills(null);
+
   if (pythonPackageInstalled()) {
     runServer(PYTHON_CMD, ["-m", MODULE_PATH]);
   } else if (commandExists("uvx")) {

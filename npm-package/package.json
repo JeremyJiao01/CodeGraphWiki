@@ -8,6 +8,7 @@
   },
   "files": [
     "bin/",
+    "commands/",
     "README.md"
   ],
   "keywords": [
