@@ -164,3 +164,42 @@ class TestCLILoadReposWithLocalCgb:
         repos = _load_repos(ws)
         assert len(repos) == 1
         assert repos[0]["artifact_dir"] == ws_artifact
+
+
+class TestIndexOutputDestination:
+    """cgb index should support --output local/workspace flags."""
+
+    def test_output_local_sets_artifact_dir_to_cgb(self, tmp_path: Path):
+        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
+
+        repo = tmp_path / "myrepo"
+        repo.mkdir()
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+
+        result = _resolve_index_artifact_dir(repo, ws, output="local")
+        assert result == repo / ".cgb"
+
+    def test_output_workspace_sets_artifact_dir_to_workspace(self, tmp_path: Path):
+        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
+        from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+
+        repo = tmp_path / "myrepo"
+        repo.mkdir()
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+
+        result = _resolve_index_artifact_dir(repo, ws, output="workspace")
+        expected = artifact_dir_for(ws, repo)
+        assert result == expected
+
+    def test_output_none_defaults_to_local_non_interactive(self, tmp_path: Path):
+        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
+
+        repo = tmp_path / "myrepo"
+        repo.mkdir()
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+
+        result = _resolve_index_artifact_dir(repo, ws, output=None, interactive=False)
+        assert result == repo / ".cgb"

@@ -1441,6 +1441,46 @@ def _run_incremental_index(args: argparse.Namespace, repo_path: Path, ws: Path) 
         return 1
 
 
+def _resolve_index_artifact_dir(
+    repo_path: Path, ws: Path, output: str | None = None, interactive: bool = True,
+) -> Path:
+    """Resolve the artifact directory for ``cgb index`` output.
+
+    Args:
+        repo_path: The repository being indexed.
+        ws: Workspace root directory.
+        output: "local" for .cgb/, "workspace" for workspace, None for interactive.
+        interactive: If True and output is None, show menu. Otherwise default to local.
+
+    Returns:
+        The artifact directory path.
+    """
+    from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+
+    if output == "local":
+        return repo_path / ".cgb"
+    if output == "workspace":
+        return artifact_dir_for(ws, repo_path)
+
+    # output is None — interactive or default
+    if not interactive:
+        return repo_path / ".cgb"
+
+    ws_dir = artifact_dir_for(ws, repo_path)
+    options = [
+        f".cgb/  (repo-local, shareable via git)",
+        f"{ws_dir}  (workspace)",
+    ]
+    print()
+    print(f"  {_T_DOT} {_c('1', 'Output destination')}")
+    print(f"  {_T_SIDE}  Use ↑↓ to navigate, Enter to confirm")
+    print(f"  {_T_SIDE}")
+    choice = _select_menu(options, prefix=f"  {_T_SIDE}  ")
+    if choice is None or choice == 0:
+        return repo_path / ".cgb"
+    return ws_dir
+
+
 def cmd_index(args: argparse.Namespace) -> int:
     """Run the full indexing pipeline on a repository."""
     from code_graph_builder.examples.generate_wiki import MAX_PAGES_COMPREHENSIVE, MAX_PAGES_CONCISE
@@ -1493,7 +1533,10 @@ def cmd_index(args: argparse.Namespace) -> int:
     if not skip_wiki:
         step_label += " -> wiki"
 
-    artifact_dir = artifact_dir_for(ws, repo_path)
+    output_flag = getattr(args, "output", None)
+    artifact_dir = _resolve_index_artifact_dir(
+        repo_path, ws, output=output_flag, interactive=sys.stdin.isatty(),
+    )
     artifact_dir.mkdir(parents=True, exist_ok=True)
     db_path = artifact_dir / "graph.db"
     vectors_path = artifact_dir / "vectors.pkl"
@@ -1529,7 +1572,14 @@ def cmd_index(args: argparse.Namespace) -> int:
         _head = GitChangeDetector().get_current_head(repo_path)
         save_meta(artifact_dir, repo_path, 0, last_indexed_commit=_head, repo_name=custom_name)
         ws_root = _get_workspace_root()
-        (ws_root / "active.txt").write_text(artifact_dir.name, encoding="utf-8")
+        if artifact_dir == repo_path / ".cgb":
+            from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+            ws_stub = artifact_dir_for(ws_root, repo_path)
+            ws_stub.mkdir(parents=True, exist_ok=True)
+            save_meta(ws_stub, repo_path, 0, last_indexed_commit=_head, repo_name=custom_name)
+            (ws_root / "active.txt").write_text(ws_stub.name, encoding="utf-8")
+        else:
+            (ws_root / "active.txt").write_text(artifact_dir.name, encoding="utf-8")
 
         page_count = 0
         if not skip_embed:
@@ -1562,6 +1612,10 @@ def cmd_index(args: argparse.Namespace) -> int:
         # Update meta with final page_count (active.txt already written above).
         _head = GitChangeDetector().get_current_head(repo_path)
         save_meta(artifact_dir, repo_path, page_count, last_indexed_commit=_head, repo_name=custom_name)
+        if artifact_dir == repo_path / ".cgb":
+            from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+            ws_stub = artifact_dir_for(ws_root, repo_path)
+            save_meta(ws_stub, repo_path, page_count, last_indexed_commit=_head, repo_name=custom_name)
 
         print(f"{_c('32', '✓')} Done   {custom_name}   active repo set")
         if not skip_wiki:
