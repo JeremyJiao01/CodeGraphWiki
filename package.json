@@ -1,6 +1,6 @@
 {
   "name": "code-graph-builder-dev",
-  "version": "0.41.0",
+  "version": "0.43.0",
   "private": true,
   "description": "Local development wrapper for code-graph-builder",
   "bin": {
@@ -17,5 +17,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/JeremyJiao01/CodeGraphWiki"
+  },
+  "dependencies": {
+    "code-graph-builder": "^0.43.0"
   }
 }

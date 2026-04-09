@@ -2,13 +2,16 @@
 
 ---
 
-## [0.42.0] — 2026-04-09
+## [0.43.0] — 2026-04-09
 
 ### Changed
 - `cgb index --incremental/-i` renamed to `cgb index --update/-u` for brevity
 - Remove `code-graph-builder` entry point from Python package to avoid conflict with npm CLI; use `cgb` instead
 
 ### Added
+- `cgb index` now supports repo-local `.cgb/` output: interactive menu or `--output .cgb` flag lets you store index alongside the repo instead of the global workspace
+- CLI `_load_repos` prefers repo-local `.cgb/` over global workspace when both exist
+- MCP `_try_auto_load` prefers repo-local `.cgb/` over global workspace when both exist
 - `cgb reload` command — hot-reload `.env` configuration and display changes
 - `python -m code_graph_builder` entry point (`__main__.py`) as fallback when `cgb` is not on PATH
 - Windows: `npx code-graph-builder --setup` now auto-adds Python Scripts directory to user PATH
@@ -21,6 +24,9 @@
 - 移除 Python 包的 `code-graph-builder` 入口点，避免与 npm CLI 冲突；统一使用 `cgb`
 
 ### 新增
+- `cgb index` 支持 repo-local `.cgb/` 输出：交互菜单或 `--output .cgb` 标志可将索引存储在仓库旁而非全局 workspace
+- CLI `_load_repos` 优先加载 repo-local `.cgb/`，其次才是全局 workspace
+- MCP `_try_auto_load` 优先加载 repo-local `.cgb/`，其次才是全局 workspace
 - `cgb reload` 命令 — 热重载 `.env` 配置并显示变更
 - `python -m code_graph_builder` 入口点（`__main__.py`），在 `cgb` 不在 PATH 时可作为备选
 - Windows：`npx code-graph-builder --setup` 现在自动将 Python Scripts 目录添加到用户 PATH
