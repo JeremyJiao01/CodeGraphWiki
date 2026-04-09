@@ -1365,7 +1365,7 @@ def _run_incremental_index(args: argparse.Namespace, repo_path: Path, ws: Path) 
 
     if not db_path.exists():
         print(f"{_c('33', 'WARN')} No existing index found. Running full rebuild instead.")
-        args.incremental = False
+        args.update = False
         return cmd_index(args)
 
     # Detect changed files
@@ -1384,7 +1384,7 @@ def _run_incremental_index(args: argparse.Namespace, repo_path: Path, ws: Path) 
 
     if changed_files is None:
         print(f"{_c('33', 'WARN')} Cannot determine changes (git history mismatch). Running full rebuild.")
-        args.incremental = False
+        args.update = False
         return cmd_index(args)
 
     if not changed_files:
@@ -1396,7 +1396,7 @@ def _run_incremental_index(args: argparse.Namespace, repo_path: Path, ws: Path) 
             f"{_c('33', 'WARN')} Too many changed files ({len(changed_files)} > {INCREMENTAL_FILE_LIMIT}). "
             f"Running full rebuild."
         )
-        args.incremental = False
+        args.update = False
         return cmd_index(args)
 
     print(f"  {_c('36', 'incremental')} {len(changed_files)} changed file(s)")
@@ -1460,7 +1460,7 @@ def cmd_index(args: argparse.Namespace) -> int:
     ws.mkdir(parents=True, exist_ok=True)
 
     # Dispatch to incremental update if requested
-    if getattr(args, "incremental", False):
+    if getattr(args, "update", False):
         return _run_incremental_index(args, repo_path, ws)
 
     # Prompt for a display name (default: directory name)
@@ -2175,7 +2175,7 @@ Windows:
         help="Path to repository (default: current directory)",
     )
     index_parser.add_argument(
-        "--incremental", "-i",
+        "--update", "-u",
         action="store_true",
         help="Incremental update: only reindex git-changed files (falls back to full rebuild if needed)",
     )
