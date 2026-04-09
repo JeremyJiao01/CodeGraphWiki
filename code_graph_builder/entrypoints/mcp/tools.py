@@ -166,6 +166,36 @@ class _PipelineTimeout(Exception):
         super().__init__(f"Step '{step_name}' timed out after {elapsed:.0f}s")
 
 
+def _resolve_artifact_dir(ws_artifact_dir: Path) -> Path:
+    """Return the best artifact directory: prefer {repo_path}/.cgb/ over workspace.
+
+    Reads meta.json from *ws_artifact_dir* to discover ``repo_path``, then
+    checks whether ``{repo_path}/.cgb/graph.db`` exists.  If it does, return
+    the ``.cgb/`` path; otherwise return *ws_artifact_dir* unchanged.
+    """
+    meta_file = ws_artifact_dir / "meta.json"
+    if not meta_file.exists():
+        return ws_artifact_dir
+    try:
+        meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
+    except (json.JSONDecodeError, OSError):
+        return ws_artifact_dir
+
+    repo_path_str = meta.get("repo_path")
+    if not repo_path_str:
+        return ws_artifact_dir
+
+    repo_path = Path(repo_path_str)
+    if not repo_path.is_dir():
+        return ws_artifact_dir
+
+    local_cgb = repo_path / ".cgb"
+    if (local_cgb / "graph.db").exists():
+        return local_cgb
+
+    return ws_artifact_dir
+
+
 class MCPToolsRegistry:
     """Registry that manages workspace-based repo services and tool handlers."""
 
