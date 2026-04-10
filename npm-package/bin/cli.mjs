@@ -1159,14 +1159,24 @@ async function runSetup() {
   const installDesc = selectedLangPkgs.length > 0
     ? `${PYTHON_PACKAGE} + ${selectedLangPkgs.join(", ")}`
     : PYTHON_PACKAGE;
-  log(`  ${T.SIDE}  ${T.WORK} Installing ${installDesc} (force-reinstall)...`);
   if (pip) {
-    try {
-      execSync(
-        [...pip, "install", "--prefer-binary", "--force-reinstall", "--upgrade", ...installTargets].map(s => `"${s}"`).join(" "),
-        { stdio: "pipe", shell: true }
-      );
-    } catch { /* handled below */ }
+    const spinFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let spinIdx = 0;
+    const spinPrefix = `  ${T.SIDE}  `;
+    process.stderr.write(`${spinPrefix}${T.WORK} Installing ${installDesc}...\n`);
+    await new Promise((resolve) => {
+      const [pipExe, ...pipExtraArgs] = pip;
+      const child = spawn(pipExe, [...pipExtraArgs, "install", "--prefer-binary", "--force-reinstall", "--upgrade", ...installTargets], {
+        stdio: ["ignore", "pipe", "pipe"],
+        shell: IS_WIN,
+      });
+      const iv = setInterval(() => {
+        process.stderr.write(`\r${spinPrefix}${spinFrames[spinIdx++ % spinFrames.length]} Installing ${installDesc}...`);
+      }, 120);
+      const done = () => { clearInterval(iv); process.stderr.write("\r\x1b[2K"); resolve(); };
+      child.on("close", done);
+      child.on("error", done);
+    });
   }
 
   if (pythonPackageInstalled()) {
