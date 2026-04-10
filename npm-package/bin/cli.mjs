@@ -12,7 +12,7 @@
  *   terrain pip          # force python3 direct mode
  */
 
-import { spawn, execFileSync, execSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync, execSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, copyFileSync, renameSync, cpSync, unlinkSync, statSync } from "node:fs";
 import { homedir, platform, tmpdir } from "node:os";
@@ -2000,10 +2000,23 @@ if (cmd === "setup") {
   log("    Updates download silently and take effect on next startup.");
   log("    To disable: set DISABLE_AUTOUPDATER=1 in .env or environment.");
   log("");
-} else {
+} else if (!cmd) {
+  // No subcommand — first run triggers setup, otherwise start server
   if (!existsSync(ENV_FILE)) {
     runSetup();
   } else {
     startServer(args);
+  }
+} else {
+  // Unknown subcommand — proxy to Python CLI (terrain status, list, repo, index, etc.)
+  if (PYTHON_CMD && pythonPackageInstalled()) {
+    const result = spawnSync(PYTHON_CMD, ["-m", "terrain.entrypoints.cli.cli", ...args], {
+      stdio: "inherit",
+      shell: IS_WIN,
+    });
+    process.exit(result.status ?? 0);
+  } else {
+    process.stderr.write(`Unknown command: "${cmd}"\n\nRun: terrain help\n`);
+    process.exit(1);
   }
 }
