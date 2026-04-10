@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from code_graph_builder.foundation.utils.settings import reload_env
+from terrain.foundation.utils.settings import reload_env
 
 
 class TestReloadEnv:

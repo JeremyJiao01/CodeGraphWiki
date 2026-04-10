@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Code Graph Builder 技术原理</title>
+  <title>Terrain 技术原理</title>
 
   <!-- Google Fonts: Bricolage Grotesque · DM Sans · JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,7 +28,7 @@
   <nav class="nav" id="nav">
     <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
     <div class="nav-inner">
-      <span class="nav-title">Code Graph Builder 技术原理</span>
+      <span class="nav-title">Terrain 技术原理</span>
       <div class="nav-dots" id="nav-dots" role="tablist">
         <button class="nav-dot" data-target="module-1" data-tooltip="Tree-sitter 解析" role="tab" aria-label="Module 1: Tree-sitter 解析"></button>
         <button class="nav-dot" data-target="module-2" data-tooltip="图数据库构建" role="tab" aria-label="Module 2: 图数据库构建"></button>
@@ -48,7 +48,7 @@
     <header class="module-header animate-in">
       <span class="module-number">01</span>
       <h1 class="module-title">Tree-sitter 代码解析引擎</h1>
-      <p class="module-subtitle">从源码字节流到结构化 AST——CGB 如何"读懂"12种语言</p>
+      <p class="module-subtitle">从源码字节流到结构化 AST——Terrain 如何"读懂"12种语言</p>
     </header>
 
     <div class="module-body">
@@ -57,11 +57,11 @@
       <section class="screen animate-in">
         <h2 class="screen-heading">什么是 Tree-sitter，为什么选它</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          <span class="term" data-definition="Tree-sitter 是由 GitHub 开发的增量式、容错解析库。它将源代码解析为 CST（Concrete Syntax Tree），比正则表达式或简单字符串匹配精确数个量级。">Tree-sitter</span> 不是一个语言解析器，而是一个解析器生成框架。每种语言对应一个独立的 grammar 包（如 `tree-sitter-python`），CGB 在运行时动态加载。
+          <span class="term" data-definition="Tree-sitter 是由 GitHub 开发的增量式、容错解析库。它将源代码解析为 CST（Concrete Syntax Tree），比正则表达式或简单字符串匹配精确数个量级。">Tree-sitter</span> 不是一个语言解析器，而是一个解析器生成框架。每种语言对应一个独立的 grammar 包（如 `tree-sitter-python`），Terrain 在运行时动态加载。
           增量解析的核心价值在于：只有文件发生改动时才重新解析受影响的子树，对大型仓库的增量更新极为重要。
         </p>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          CGB 目前支持12种语言，每种语言对应一个 <span class="term" data-definition="LanguageSpec 是一个数据类，持有该语言的 tree-sitter grammar 对象、文件扩展名列表、以及所有 S 表达式查询字符串（function_query/class_query/call_query 等）。"><code>LanguageSpec</code></span> 实例，在 <code>ParserLoader</code> 初始化时统一注册。
+          Terrain 目前支持12种语言，每种语言对应一个 <span class="term" data-definition="LanguageSpec 是一个数据类，持有该语言的 tree-sitter grammar 对象、文件扩展名列表、以及所有 S 表达式查询字符串（function_query/class_query/call_query 等）。"><code>LanguageSpec</code></span> 实例，在 <code>ParserLoader</code> 初始化时统一注册。
         </p>
 
         <!-- 语言卡片 -->
@@ -234,7 +234,7 @@
         <!-- Callout -->
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">💡 关键洞察</div>
-          <p style="font-size:var(--text-sm)">调用解析的歧义是静态分析的核心难题。CGB 的策略是：优先用导入信息消歧，有唯一匹配则直接连边，有多匹配则按<strong>调用方与被调用方的模块距离</strong>打分取最近者，无法消歧时留存为 <code>UnresolvedCall</code> 节点（不丢数据）。这比全丢或随机猜都要好得多。</p>
+          <p style="font-size:var(--text-sm)">调用解析的歧义是静态分析的核心难题。Terrain 的策略是：优先用导入信息消歧，有唯一匹配则直接连边，有多匹配则按<strong>调用方与被调用方的模块距离</strong>打分取最近者，无法消歧时留存为 <code>UnresolvedCall</code> 节点（不丢数据）。这比全丢或随机猜都要好得多。</p>
         </div>
       </section>
 
@@ -255,7 +255,7 @@
       <section class="screen animate-in">
         <h2 class="screen-heading">图 Schema：节点与关系类型</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          CGB 支持三种图后端：<span class="term" data-definition="Kuzu 是一个嵌入式图数据库，类似 SQLite 对关系型数据库的定位。零运维，直接嵌入进程，适合单机开发场景。">Kuzu</span>（推荐，嵌入式）、<span class="term" data-definition="Memgraph 是生产级内存图数据库，兼容 Bolt 协议，适合多进程并发访问和大型团队共享部署。">Memgraph</span>（生产级）、Memory（单测用）。
+          Terrain 支持三种图后端：<span class="term" data-definition="Kuzu 是一个嵌入式图数据库，类似 SQLite 对关系型数据库的定位。零运维，直接嵌入进程，适合单机开发场景。">Kuzu</span>（推荐，嵌入式）、<span class="term" data-definition="Memgraph 是生产级内存图数据库，兼容 Bolt 协议，适合多进程并发访问和大型团队共享部署。">Memgraph</span>（生产级）、Memory（单测用）。
           三者共享同一套图 Schema，通过抽象接口 <code>GraphBackend</code> 隔离。
         </p>
 
@@ -315,7 +315,7 @@
             <div style="background:var(--color-actor-5);color:white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-sm);flex-shrink:0">3</div>
             <div>
               <div style="font-weight:600;margin-bottom:var(--space-1)">Pass 3 — Embedding 向量化（可选）</div>
-              <div style="font-size:var(--text-sm);color:var(--color-text-secondary)">为每个函数节点生成 embedding 向量并存入向量索引（Chroma / Qdrant）。向量由函数签名 + docstring + 调用上下文拼接后送入 embedding 模型。此 Pass 可独立运行（<code>cgb rebuild-embeddings</code>）。</div>
+              <div style="font-size:var(--text-sm);color:var(--color-text-secondary)">为每个函数节点生成 embedding 向量并存入向量索引（Chroma / Qdrant）。向量由函数签名 + docstring + 调用上下文拼接后送入 embedding 模型。此 Pass 可独立运行（<code>terrain rebuild-embeddings</code>）。</div>
             </div>
           </div>
         </div>
@@ -325,12 +325,12 @@
       <section class="screen animate-in">
         <h2 class="screen-heading">增量更新：基于 git diff 的智能重建</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          每次 <code>cgb index</code> 时，CGB 比较当前 HEAD commit hash 与上次索引时记录的 hash。如果相同则跳过；不同则通过 <code>git diff --name-only</code> 获取改动文件列表，<strong>仅重建这些文件</strong>。超过50个改动文件时触发全量重建。
+          每次 <code>terrain index</code> 时，Terrain 比较当前 HEAD commit hash 与上次索引时记录的 hash。如果相同则跳过；不同则通过 <code>git diff --name-only</code> 获取改动文件列表，<strong>仅重建这些文件</strong>。超过50个改动文件时触发全量重建。
         </p>
 
         <div class="flow-animation animate-in" id="flow-incremental"
           data-steps='[
-            {"label":"读取 .cgb/meta.json 中记录的上次 HEAD hash","highlight":"flow-meta","packet":false,"from":"","to":""},
+            {"label":"读取 .terrain/meta.json 中记录的上次 HEAD hash","highlight":"flow-meta","packet":false,"from":"","to":""},
             {"label":"git rev-parse HEAD 获取当前 hash，与记录值比较","highlight":"flow-git","packet":true,"from":"flow-meta","to":"flow-git"},
             {"label":"hash 一致 → 跳过，直接返回。hash 不一致 → git diff --name-only 获取改动文件","highlight":"flow-diff","packet":true,"from":"flow-git","to":"flow-diff"},
             {"label":"改动文件 ≤ 50 → 增量模式：删除这些文件的旧节点/边，重新 Pass 1+2 仅处理这些文件","highlight":"flow-partial","packet":true,"from":"flow-diff","to":"flow-partial"},
@@ -383,7 +383,7 @@
       <section class="screen animate-in">
         <h2 class="screen-heading">Kuzu 锁竞争与并发写入处理</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          Kuzu 是嵌入式数据库，同一时刻只允许一个进程持有写锁。当 MCP 服务器正在读图、同时用户触发 <code>cgb index</code> 写图时，就会发生锁竞争。CGB 的处理策略是<span class="term" data-definition="指数退避（Exponential Backoff）：每次重试的等待时间以指数增长（1s, 2s, 4s, 8s...），避免多个竞争者同时重试造成再次冲突。">指数退避重试</span>。
+          Kuzu 是嵌入式数据库，同一时刻只允许一个进程持有写锁。当 MCP 服务器正在读图、同时用户触发 <code>terrain index</code> 写图时，就会发生锁竞争。Terrain 的处理策略是<span class="term" data-definition="指数退避（Exponential Backoff）：每次重试的等待时间以指数增长（1s, 2s, 4s, 8s...），避免多个竞争者同时重试造成再次冲突。">指数退避重试</span>。
         </p>
 
         <!-- 代码翻译块 -->
@@ -392,7 +392,7 @@
         <!-- Callout -->
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">💡 关键洞察</div>
-          <p style="font-size:var(--text-sm)">图 Schema 中"14种节点 + 11种关系"的设计颗粒度，直接决定了查询能力的上限。颗粒度不够（如把 Function 和 Method 合并）会丢失"方法归属哪个类"的信息；颗粒度过细（如区分 AsyncFunction 和 Function）则会让 Cypher 查询复杂度爆炸。CGB 的当前 Schema 是在可查询性和写入复杂度之间权衡的结果。</p>
+          <p style="font-size:var(--text-sm)">图 Schema 中"14种节点 + 11种关系"的设计颗粒度，直接决定了查询能力的上限。颗粒度不够（如把 Function 和 Method 合并）会丢失"方法归属哪个类"的信息；颗粒度过细（如区分 AsyncFunction 和 Function）则会让 Cypher 查询复杂度爆炸。Terrain 的当前 Schema 是在可查询性和写入复杂度之间权衡的结果。</p>
         </div>
       </section>
 
@@ -417,21 +417,21 @@
             <div class="chat-message" data-sender="TypeInference" style="display:none;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)">
               <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-3);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">TI</div>
               <div style="background:var(--color-bg-warm);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);max-width:80%">
-                <p style="font-size:var(--text-sm)">我查了同函数体的赋值语句：<code>builder = CodeGraphBuilder(config)</code>。变量赋值右侧是构造调用，<code>builder</code> 的类型是 <code>CodeGraphBuilder</code>。</p>
+                <p style="font-size:var(--text-sm)">我查了同函数体的赋值语句：<code>builder = TerrainBuilder(config)</code>。变量赋值右侧是构造调用，<code>builder</code> 的类型是 <code>TerrainBuilder</code>。</p>
               </div>
             </div>
 
             <div class="chat-message" data-sender="CallResolver" style="display:none;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)">
               <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">CR</div>
               <div style="background:var(--color-bg-warm);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);max-width:80%">
-                <p style="font-size:var(--text-sm)">在 Trie 里精确匹配：<code>CodeGraphBuilder.build</code> → 找到 <code>domains.core.graph.builder.CodeGraphBuilder.build</code>，唯一命中，无歧义。</p>
+                <p style="font-size:var(--text-sm)">在 Trie 里精确匹配：<code>TerrainBuilder.build</code> → 找到 <code>domains.core.graph.builder.TerrainBuilder.build</code>，唯一命中，无歧义。</p>
               </div>
             </div>
 
             <div class="chat-message" data-sender="GraphWriter" style="display:none;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)">
               <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">GW</div>
               <div style="background:var(--color-bg-warm);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);max-width:80%">
-                <p style="font-size:var(--text-sm)">写入 CALLS 边完成。同时写入 DEFINES_METHOD 边：<code>CodeGraphBuilder -[:DEFINES_METHOD]-> build</code>，方便后续查询该类的所有方法。</p>
+                <p style="font-size:var(--text-sm)">写入 CALLS 边完成。同时写入 DEFINES_METHOD 边：<code>TerrainBuilder -[:DEFINES_METHOD]-> build</code>，方便后续查询该类的所有方法。</p>
               </div>
             </div>
 
@@ -498,7 +498,7 @@
       <section class="screen animate-in">
         <h2 class="screen-heading">文档生成流水线</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          文档生成从图数据库出发，通过 <span class="term" data-definition="Cypher 是图数据库的查询语言，类似 SQL 对关系型数据库的地位。Kuzu 和 Memgraph 都支持 Cypher，CGB 用它查询节点、关系和调用链。">Cypher 查询</span>提取数据，渲染为 Markdown 后写入文件系统。
+          文档生成从图数据库出发，通过 <span class="term" data-definition="Cypher 是图数据库的查询语言，类似 SQL 对关系型数据库的地位。Kuzu 和 Memgraph 都支持 Cypher，Terrain 用它查询节点、关系和调用链。">Cypher 查询</span>提取数据，渲染为 Markdown 后写入文件系统。
         </p>
 
         <div class="flow-animation animate-in" id="flow-apidoc"
@@ -700,7 +700,7 @@
       <section class="screen animate-in" style="margin-top:var(--space-12)">
         <h2 class="screen-heading">向量化建索引流程</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          <code>cgb index</code> 执行时，L3 函数文档被批量向量化并存入
+          <code>terrain index</code> 执行时，L3 函数文档被批量向量化并存入
           <span class="term" data-definition="MemoryVectorStore：基于 Python dict 的内存向量库。key 是 node_id，value 是 VectorRecord（含向量和元数据）。搜索时暴力遍历全部记录计算余弦相似度，对数千个函数的代码库性能完全够用。">MemoryVectorStore</span>，
           最终序列化为 <code>vectors.pkl</code>。下次启动直接加载，无需重新向量化。
         </p>
@@ -763,7 +763,7 @@
             <div style="background:var(--color-actor-5);color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-sm);flex-shrink:0">3</div>
             <div>
               <div style="font-weight:600;margin-bottom:var(--space-1)">Pickle 持久化</div>
-              <div style="font-size:var(--text-sm);color:var(--color-text-secondary)">向量化完成后序列化为 <code>vectors.pkl</code>（Pickle 格式）。下次 <code>cgb mcp</code> 启动时直接 <code>load()</code> 恢复内存状态，跳过全量向量化，启动时间从分钟级降为秒级。</div>
+              <div style="font-size:var(--text-sm);color:var(--color-text-secondary)">向量化完成后序列化为 <code>vectors.pkl</code>（Pickle 格式）。下次 <code>terrain mcp</code> 启动时直接 <code>load()</code> 恢复内存状态，跳过全量向量化，启动时间从分钟级降为秒级。</div>
             </div>
           </div>
         </div>
@@ -817,7 +817,7 @@
         <!-- 关键词提权 callout -->
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">💡 关键词提权（Keyword Boost）</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">纯向量搜索有时对词语变形敏感——"拉短"和"缩短"可能检索分数差距较大。CGB 在向量搜索结果上叠加了关键词匹配：query 分词后，每有一个 token 出现在函数名/签名/模块名中，相似度分数 +0.05。这个小奖励不会颠覆向量搜索的排序，但能把本该排第2的正确答案推到第1。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">纯向量搜索有时对词语变形敏感——"拉短"和"缩短"可能检索分数差距较大。Terrain 在向量搜索结果上叠加了关键词匹配：query 分词后，每有一个 token 出现在函数名/签名/模块名中，相似度分数 +0.05。这个小奖励不会颠覆向量搜索的排序，但能把本该排第2的正确答案推到第1。</p>
         </div>
       </section>
 
@@ -865,7 +865,7 @@
 
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">💡 为什么不用 Qdrant / Faiss</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">CGB 同时实现了 <code>MemoryVectorStore</code> 和 <code>QdrantVectorStore</code> 两个后端。对代码库（几百到几千个函数），暴力搜索延迟 &lt;10ms，完全没有引入 Qdrant 的必要——那会多一个外部依赖、一个网络跳跃、以及近似搜索的精度损失。规模达到十万函数以上再考虑切换。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">Terrain 同时实现了 <code>MemoryVectorStore</code> 和 <code>QdrantVectorStore</code> 两个后端。对代码库（几百到几千个函数），暴力搜索延迟 &lt;10ms，完全没有引入 Qdrant 的必要——那会多一个外部依赖、一个网络跳跃、以及近似搜索的精度损失。规模达到十万函数以上再考虑切换。</p>
         </div>
       </section>
 
@@ -884,12 +884,12 @@
 
       <!-- Screen 1: RAG 架构概述 -->
       <section class="screen animate-in" style="margin-top:var(--space-12)">
-        <h2 class="screen-heading">RAG = 检索 + 生成，CGB 的双通道设计</h2>
+        <h2 class="screen-heading">RAG = 检索 + 生成，Terrain 的双通道设计</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
           <span class="term" data-definition="RAG（Retrieval-Augmented Generation）：检索增强生成。核心思路是：LLM 不直接回答问题，而是先从知识库检索相关内容，把检索结果塞入 prompt，再让 LLM 基于真实上下文生成答案。解决了 LLM 无法实时了解私有代码库的问题。">RAG</span>
-          解决的核心问题是：LLM 不认识你的私有代码库。CGB 的 RAG 是
+          解决的核心问题是：LLM 不认识你的私有代码库。Terrain 的 RAG 是
           <strong>双通道检索</strong>——不只用向量相似度，还能把自然语言转成
-          <span class="term" data-definition="Cypher 是图数据库的查询语言，类似 SQL。例如 MATCH (f:Function)-[:CALLS]->(g:Function) WHERE f.name='parse_args' RETURN g.name 查询 parse_args 调用了哪些函数。CGB 的图里存了 CALLS/DEFINES/INHERITS 等关系，Cypher 能精确利用这些结构。">Cypher 图查询</span>，
+          <span class="term" data-definition="Cypher 是图数据库的查询语言，类似 SQL。例如 MATCH (f:Function)-[:CALLS]->(g:Function) WHERE f.name='parse_args' RETURN g.name 查询 parse_args 调用了哪些函数。Terrain 的图里存了 CALLS/DEFINES/INHERITS 等关系，Cypher 能精确利用这些结构。">Cypher 图查询</span>，
           两路结果融合后送给 LLM。这让回答既有语义广度，又有结构精度。
         </p>
 
@@ -1177,10 +1177,10 @@
 
       <!-- Screen 1: MCP 协议概述 -->
       <section class="screen animate-in" style="margin-top:var(--space-12)">
-        <h2 class="screen-heading">MCP：让 Claude 直接调用 CGB 的 13 个工具</h2>
+        <h2 class="screen-heading">MCP：让 Claude 直接调用 Terrain 的 13 个工具</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          <span class="term" data-definition="MCP（Model Context Protocol）是 Anthropic 定义的开放标准协议，规定 LLM 如何发现和调用外部工具。工具以 JSON Schema 描述参数类型，通信通过 JSON-RPC 2.0 格式收发消息。CGB 实现了 MCP server，这样 Claude Desktop/Claude Code 就能原生调用 CGB 的所有分析能力。">MCP（Model Context Protocol）</span>
-          是 Anthropic 定义的标准，让 LLM 能调用外部工具。CGB 的 MCP server 通过
+          <span class="term" data-definition="MCP（Model Context Protocol）是 Anthropic 定义的开放标准协议，规定 LLM 如何发现和调用外部工具。工具以 JSON Schema 描述参数类型，通信通过 JSON-RPC 2.0 格式收发消息。Terrain 实现了 MCP server，这样 Claude Desktop/Claude Code 就能原生调用 Terrain 的所有分析能力。">MCP（Model Context Protocol）</span>
+          是 Anthropic 定义的标准，让 LLM 能调用外部工具。Terrain 的 MCP server 通过
           <span class="term" data-definition="stdio（标准输入/输出）通信意味着 MCP server 以子进程方式启动，通过进程的 stdin/stdout 读写 JSON-RPC 消息。不需要开 HTTP 端口，不需要网络配置，进程级别的隔离更安全，也无需担心端口冲突。Claude Desktop 直接 spawn 子进程即可。">stdio 管道</span>
           通信——没有 HTTP 服务器，没有端口，Claude 直接 spawn 子进程，通过 stdin/stdout 交换
           <span class="term" data-definition="JSON-RPC 2.0 是一种轻量级远程调用协议，消息格式为 JSON。请求：{jsonrpc:'2.0', method:'tools/call', params:{name:'find_api', arguments:{query:'...'}}, id:1}。响应：{jsonrpc:'2.0', result:{...}, id:1}。MCP 在此基础上定义了 tools/list、tools/call、resources/read 等方法。">JSON-RPC</span>
@@ -1213,7 +1213,7 @@
 
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">为什么选 stdio 而不是 HTTP？</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">stdio 通信的好处：零网络配置、进程级别权限隔离、没有端口冲突、无需认证 token（调用方本身就是本机进程），非常适合开发者工具场景。CGB 的 MCP server 入口是 <code>cgb-mcp</code>，底层是 <code>entrypoints/mcp/__main__.py</code>，用 Python 的 <code>sys.stdin/stdout</code> 实现完整的 JSON-RPC 2.0 消息循环。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">stdio 通信的好处：零网络配置、进程级别权限隔离、没有端口冲突、无需认证 token（调用方本身就是本机进程），非常适合开发者工具场景。Terrain 的 MCP server 入口是 <code>terrain-mcp</code>，底层是 <code>entrypoints/mcp/__main__.py</code>，用 Python 的 <code>sys.stdin/stdout</code> 实现完整的 JSON-RPC 2.0 消息循环。</p>
         </div>
       </section>
 
@@ -1299,7 +1299,7 @@ found: middleware.require_auth (score: 0.83)
 
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">工具调用对用户完全透明</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">Claude 自动决定何时、调用哪个工具、传入什么参数——用户只需提问。整个 JSON-RPC 往返通常在 100-500ms 内完成。如果 Claude Desktop 配置了 CGB MCP，每次对话中 Claude 都能访问最新的代码图谱，回答基于真实代码，而不是训练记忆。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">Claude 自动决定何时、调用哪个工具、传入什么参数——用户只需提问。整个 JSON-RPC 往返通常在 100-500ms 内完成。如果 Claude Desktop 配置了 Terrain MCP，每次对话中 Claude 都能访问最新的代码图谱，回答基于真实代码，而不是训练记忆。</p>
         </div>
       </section>
 
@@ -1327,7 +1327,7 @@ found: middleware.require_auth (score: 0.83)
               </div>
               <div style="padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--color-border)">
                 <div style="font-family:var(--font-mono);font-size:var(--text-xs);color:var(--color-actor-5);margin-bottom:var(--space-1)">list_repositories</div>
-                <div style="font-size:var(--text-xs);color:var(--color-text-secondary);line-height:1.6">列出 ~/.code-graph-builder/ 下所有 artifact_dir，含 indexed_at 时间戳。</div>
+                <div style="font-size:var(--text-xs);color:var(--color-text-secondary);line-height:1.6">列出 ~/.terrain-ai/ 下所有 artifact_dir，含 indexed_at 时间戳。</div>
               </div>
               <div style="padding:var(--space-4) var(--space-5);border-right:1px solid var(--color-border)">
                 <div style="font-family:var(--font-mono);font-size:var(--text-xs);color:var(--color-actor-5);margin-bottom:var(--space-1)">switch_repository</div>
@@ -1399,9 +1399,9 @@ found: middleware.require_auth (score: 0.83)
         <h2 class="screen-heading">工作空间布局与增量同步机制</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
           所有索引产物都存在
-          <span class="term" data-definition="CGB 工作空间默认位于 ~/.code-graph-builder/。可通过 CGB_WORKSPACE 环境变量覆盖。工作空间内每个仓库有独立的 artifact_dir，名字格式是 repo_name + 8位路径 hash，保证不同路径的同名仓库不冲突。">~/.code-graph-builder/</span>
+          <span class="term" data-definition="Terrain 工作空间默认位于 ~/.terrain-ai/。可通过 TERRAIN_WORKSPACE 环境变量覆盖。工作空间内每个仓库有独立的 artifact_dir，名字格式是 repo_name + 8位路径 hash，保证不同路径的同名仓库不冲突。">~/.terrain-ai/</span>
           目录下。每个仓库有独立的
-          <span class="term" data-definition="artifact_dir 是 CGB 为一个仓库分配的存储目录，名字由仓库名+路径hash组成（如 myrepo_abc12345/）。内含 graph.db、vectors.pkl、meta.json、api_docs/ 等所有产物。换机器时只需复制这个目录，再用 link_repository 重新绑定路径即可。">artifact_dir</span>，
+          <span class="term" data-definition="artifact_dir 是 Terrain 为一个仓库分配的存储目录，名字由仓库名+路径hash组成（如 myrepo_abc12345/）。内含 graph.db、vectors.pkl、meta.json、api_docs/ 等所有产物。换机器时只需复制这个目录，再用 link_repository 重新绑定路径即可。">artifact_dir</span>，
           每次工具调用前会自动检查是否需要增量同步。
         </p>
 
@@ -1458,7 +1458,7 @@ found: middleware.require_auth (score: 0.83)
           <p style="font-size:var(--text-sm);line-height:1.7">
             当代码未改动时，检查开销极低（读一次文件 + 一次 git 命令）&lt;1ms，对工具调用几乎无感知。
             当有代码改动时，只重建涉及变更文件的节点，避免对整个代码库全量重建（可能需要数分钟）。
-            这套机制让 CGB MCP server 可以在日常开发中"持续在线"——代码改动后不需要手动触发重建，
+            这套机制让 Terrain MCP server 可以在日常开发中"持续在线"——代码改动后不需要手动触发重建，
             下次工具调用时自动同步。
           </p>
         </div>
@@ -1481,23 +1481,23 @@ found: middleware.require_auth (score: 0.83)
       <section class="screen animate-in" style="margin-top:var(--space-12)">
         <h2 class="screen-heading">三个等价入口 + 首次上手完整流程</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          CGB 提供三个命令入口，pip install 后全部自动注册到 PATH。
-          日常使用推荐 <code>cgb</code>（最短）；MCP 模式用
-          <span class="term" data-definition="cgb-mcp 是 MCP server 入口，执行 entrypoints/mcp/__main__.py 的消息循环。通常由 Claude Desktop 自动 spawn，不需要手动调用。如果需要调试 MCP server，可以手动运行 cgb-mcp 并向 stdin 写 JSON-RPC 消息观察响应。">cgb-mcp</span>。
+          Terrain 提供三个命令入口，pip install 后全部自动注册到 PATH。
+          日常使用推荐 <code>terrain</code>（最短）；MCP 模式用
+          <span class="term" data-definition="terrain-mcp 是 MCP server 入口，执行 entrypoints/mcp/__main__.py 的消息循环。通常由 Claude Desktop 自动 spawn，不需要手动调用。如果需要调试 MCP server，可以手动运行 terrain-mcp 并向 stdin 写 JSON-RPC 消息观察响应。">terrain-mcp</span>。
         </p>
 
         <!-- 入口点卡片 -->
         <div class="stagger-children" style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3);margin:var(--space-5) 0">
           <div class="animate-in" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4);text-align:center">
-            <div style="font-family:var(--font-mono);font-size:var(--text-base);color:var(--color-actor-5);font-weight:700;margin-bottom:var(--space-1)">code-graph-builder</div>
+            <div style="font-family:var(--font-mono);font-size:var(--text-base);color:var(--color-actor-5);font-weight:700;margin-bottom:var(--space-1)">terrain-ai</div>
             <div style="font-size:var(--text-xs);color:var(--color-text-muted)">完整名称，安装后可用</div>
           </div>
           <div class="animate-in" style="background:var(--color-surface);border:2px solid var(--color-actor-5);border-radius:var(--radius-md);padding:var(--space-4);text-align:center">
-            <div style="font-family:var(--font-mono);font-size:var(--text-base);color:var(--color-actor-5);font-weight:700;margin-bottom:var(--space-1)">cgb</div>
+            <div style="font-family:var(--font-mono);font-size:var(--text-base);color:var(--color-actor-5);font-weight:700;margin-bottom:var(--space-1)">terrain</div>
             <div style="font-size:var(--text-xs);color:var(--color-text-muted)">推荐缩写</div>
           </div>
           <div class="animate-in" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4);text-align:center">
-            <div style="font-family:var(--font-mono);font-size:var(--text-base);color:var(--color-actor-2);font-weight:700;margin-bottom:var(--space-1)">cgb-mcp</div>
+            <div style="font-family:var(--font-mono);font-size:var(--text-base);color:var(--color-actor-2);font-weight:700;margin-bottom:var(--space-1)">terrain-mcp</div>
             <div style="font-size:var(--text-xs);color:var(--color-text-muted)">MCP server 模式</div>
           </div>
         </div>
@@ -1507,7 +1507,7 @@ found: middleware.require_auth (score: 0.83)
 
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">环境变量 vs config.yaml</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">CGB 优先读取环境变量，再读 <code>~/.code-graph-builder/config.yaml</code>。生产/CI 环境推荐用环境变量（不落盘），本地开发推荐写 config.yaml（避免每次 export）。支持的变量名：<code>LLM_API_KEY</code>、<code>LLM_BASE_URL</code>、<code>LLM_MODEL</code>、<code>DASHSCOPE_API_KEY</code>、<code>EMBED_*</code> 系列、<code>CGB_WORKSPACE</code>、<code>CGB_DEBUG</code>。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">Terrain 优先读取环境变量，再读 <code>~/.terrain-ai/config.yaml</code>。生产/CI 环境推荐用环境变量（不落盘），本地开发推荐写 config.yaml（避免每次 export）。支持的变量名：<code>LLM_API_KEY</code>、<code>LLM_BASE_URL</code>、<code>LLM_MODEL</code>、<code>DASHSCOPE_API_KEY</code>、<code>EMBED_*</code> 系列、<code>TERRAIN_WORKSPACE</code>、<code>TERRAIN_DEBUG</code>。</p>
         </div>
       </section>
 
@@ -1515,8 +1515,8 @@ found: middleware.require_auth (score: 0.83)
       <section class="screen animate-in" style="margin-top:var(--space-12)">
         <h2 class="screen-heading">索引、库管理与搜索命令详解</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          <code>cgb index</code> 是最核心的命令，触发完整或增量的索引流程。
-          <span class="term" data-definition="cgb index 默认执行四步：1）tree-sitter 解析代码构建图，2）用 LLM 生成 L1/L2/L3 API 文档，3）向量化所有函数构建 Embedding 索引，4）（可选）生成 wiki 报告。每步都有进度条显示。--no-embed 和 --no-wiki 可以跳过相应步骤。">cgb index</span>
+          <code>terrain index</code> 是最核心的命令，触发完整或增量的索引流程。
+          <span class="term" data-definition="terrain index 默认执行四步：1）tree-sitter 解析代码构建图，2）用 LLM 生成 L1/L2/L3 API 文档，3）向量化所有函数构建 Embedding 索引，4）（可选）生成 wiki 报告。每步都有进度条显示。--no-embed 和 --no-wiki 可以跳过相应步骤。">terrain index</span>
           每次执行都可以用 flag 控制粒度：只重建图、只重建文档、或只重建 Embedding。
         </p>
 
@@ -1532,13 +1532,13 @@ found: middleware.require_auth (score: 0.83)
       <section class="screen animate-in" style="margin-top:var(--space-12)">
         <h2 class="screen-heading">CLI 完整工作流：从代码库到可查询知识图谱</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          <code>cgb index</code> 背后触发了一个四阶段流水线。每个阶段产出的
-          <span class="term" data-definition="artifact（产物）指 CGB 索引过程生成的持久化文件。主要产物包括：graph.db（Kuzu 图数据库）、vectors.pkl（向量缓存）、api_docs/（L1/L2/L3 markdown 文件）、meta.json（元数据和版本信息）。这些产物都存在 artifact_dir 里，可以在机器间迁移。">artifact</span>
+          <code>terrain index</code> 背后触发了一个四阶段流水线。每个阶段产出的
+          <span class="term" data-definition="artifact（产物）指 Terrain 索引过程生成的持久化文件。主要产物包括：graph.db（Kuzu 图数据库）、vectors.pkl（向量缓存）、api_docs/（L1/L2/L3 markdown 文件）、meta.json（元数据和版本信息）。这些产物都存在 artifact_dir 里，可以在机器间迁移。">artifact</span>
           会被下游阶段消费，形成完整的知识图谱。
         </p>
 
         <div class="flow-animation animate-in" id="flow-cli1"
-             data-steps='[{"label":"Step 1: cgb scan — tree-sitter 解析代码，构建 Kuzu 图数据库（节点+关系），产出 graph.db","highlight":"flow-cli-scan","packet":false},{"label":"Step 2: cgb 生成 API 文档 — LLM 读取图节点，按 L1/L2/L3 层次生成 markdown 文档","packet":true,"from":"flow-cli-scan","to":"flow-cli-apidoc","highlight":"flow-cli-apidoc"},{"label":"Step 3: 向量化 — 读取 L3 文档内容，调用 Embedding API，生成 vectors.pkl","packet":true,"from":"flow-cli-apidoc","to":"flow-cli-embed","highlight":"flow-cli-embed"},{"label":"Step 4（可选）: wiki 生成 — trace_call_chain 对关键路径生成叙事性分析报告","packet":true,"from":"flow-cli-embed","to":"flow-cli-wiki","highlight":"flow-cli-wiki"},{"label":"索引完成 — graph.db + vectors.pkl + api_docs/ 就位，MCP 和 CLI 均可查询","packet":true,"from":"flow-cli-wiki","to":"flow-cli-ready","highlight":"flow-cli-ready"}]'
+             data-steps='[{"label":"Step 1: terrain scan — tree-sitter 解析代码，构建 Kuzu 图数据库（节点+关系），产出 graph.db","highlight":"flow-cli-scan","packet":false},{"label":"Step 2: cgb 生成 API 文档 — LLM 读取图节点，按 L1/L2/L3 层次生成 markdown 文档","packet":true,"from":"flow-cli-scan","to":"flow-cli-apidoc","highlight":"flow-cli-apidoc"},{"label":"Step 3: 向量化 — 读取 L3 文档内容，调用 Embedding API，生成 vectors.pkl","packet":true,"from":"flow-cli-apidoc","to":"flow-cli-embed","highlight":"flow-cli-embed"},{"label":"Step 4（可选）: wiki 生成 — trace_call_chain 对关键路径生成叙事性分析报告","packet":true,"from":"flow-cli-embed","to":"flow-cli-wiki","highlight":"flow-cli-wiki"},{"label":"索引完成 — graph.db + vectors.pkl + api_docs/ 就位，MCP 和 CLI 均可查询","packet":true,"from":"flow-cli-wiki","to":"flow-cli-ready","highlight":"flow-cli-ready"}]'
              style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-6);margin:var(--space-6) 0;position:relative">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-6)">
             <div class="flow-actor" id="flow-cli-scan" style="background:var(--color-surface-warm);border:2px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);text-align:center;min-width:75px;transition:border-color 0.3s,background 0.3s">
@@ -1581,7 +1581,7 @@ found: middleware.require_auth (score: 0.83)
         </div>
 
         <!-- 底层 scan 命令详解 -->
-        <h3 style="font-size:var(--text-lg);font-weight:600;margin-top:var(--space-8);margin-bottom:var(--space-3)">底层命令：cgb scan（调试专用）</h3>
+        <h3 style="font-size:var(--text-lg);font-weight:600;margin-top:var(--space-8);margin-bottom:var(--space-3)">底层命令：terrain scan（调试专用）</h3>
         
       </section>
 
@@ -1598,12 +1598,12 @@ found: middleware.require_auth (score: 0.83)
             <div style="padding:var(--space-3) var(--space-4);background:var(--color-actor-5);color:white;font-size:var(--text-sm);font-weight:600">场景 A：初次索引大型 C++ 项目</div>
             <div style="padding:var(--space-4) var(--space-5);background:var(--color-bg-code);font-family:var(--font-mono);font-size:var(--text-xs);line-height:1.8">
               <div style="color:#6C7086"># 不含 Wiki，加速初次索引</div>
-              <div><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">cgb index /path/to/cpp-project --no-wiki</span></div>
+              <div><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">terrain index /path/to/cpp-project --no-wiki</span></div>
               <div style="color:#6C7086">→ [=========] 100% Done. ~3-5 min</div>
-              <div style="margin-top:4px"><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">cgb status</span></div>
+              <div style="margin-top:4px"><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">terrain status</span></div>
               <div style="color:#6C7086">→ Functions: 12,450 | Classes: 890</div>
               <div style="color:#6C7086">→ Files: 1,203 | Indexed: 3m ago</div>
-              <div style="margin-top:4px"><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">cgb search "GPU initialization"</span></div>
+              <div style="margin-top:4px"><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">terrain search "GPU initialization"</span></div>
               <div style="color:#6C7086">→ 1. cuda.init_device      (0.87)</div>
               <div style="color:#6C7086">→ 2. vulkan.create_context (0.82)</div>
             </div>
@@ -1613,7 +1613,7 @@ found: middleware.require_auth (score: 0.83)
             <div style="padding:var(--space-4) var(--space-5);background:var(--color-bg-code);font-family:var(--font-mono);font-size:var(--text-xs);line-height:1.8">
               <div style="color:#6C7086"># 改了几个文件，提交前快速同步</div>
               <div><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">git add -p &amp;&amp; git commit -m "fix: ..."</span></div>
-              <div><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">cgb index -i</span></div>
+              <div><span style="color:#A6E3A1">$</span> <span style="color:#CDD6F4">terrain index -i</span></div>
               <div style="color:#6C7086">→ Detected 3 changed files</div>
               <div style="color:#6C7086">→ Rebuilding affected nodes...</div>
               <div style="color:#6C7086">→ Done: 28s (vs full 5min)</div>
@@ -1638,9 +1638,9 @@ found: middleware.require_auth (score: 0.83)
 
             <!-- 2. cgb 增量更新 -->
             <div class="chat-message" data-sender="CLI" style="display:none;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)">
-              <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">CGB</div>
+              <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">T</div>
               <div style="background:var(--color-bg-warm);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);max-width:85%">
-                <p style="font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:var(--space-1)">$ cgb index -i</p>
+                <p style="font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:var(--space-1)">$ terrain index -i</p>
                 <p style="font-size:var(--text-sm)">检测到 2 个文件变更：<code>auth/tokens.py</code>、<code>auth/__init__.py</code>。正在重建受影响节点...</p>
               </div>
             </div>
@@ -1655,7 +1655,7 @@ found: middleware.require_auth (score: 0.83)
 
             <!-- 4. 增量完成 -->
             <div class="chat-message" data-sender="CLI" style="display:none;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)">
-              <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">CGB</div>
+              <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">T</div>
               <div style="background:var(--color-bg-warm);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);max-width:85%">
                 <p style="font-size:var(--text-sm)">增量更新完成。耗时 22s。新增 1 个函数节点，更新 3 条关系，重建 2 个向量记录。</p>
               </div>
@@ -1665,13 +1665,13 @@ found: middleware.require_auth (score: 0.83)
             <div class="chat-message" data-sender="Dev" style="display:none;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)">
               <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:#6B6560;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">DEV</div>
               <div style="background:var(--color-bg-warm);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);max-width:80%">
-                <pre style="font-size:var(--text-xs);background:var(--color-bg-code);color:#CDD6F4;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);margin:0;white-space:pre-wrap">$ cgb api-doc auth.refresh_token</pre>
+                <pre style="font-size:var(--text-xs);background:var(--color-bg-code);color:#CDD6F4;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);margin:0;white-space:pre-wrap">$ terrain api-doc auth.refresh_token</pre>
               </div>
             </div>
 
             <!-- 6. 返回新函数文档 -->
             <div class="chat-message" data-sender="CLI" style="display:none;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)">
-              <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">CGB</div>
+              <div class="chat-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">T</div>
               <div style="background:var(--color-bg-warm);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);max-width:85%">
                 <p style="font-size:var(--text-sm)"><strong>auth.refresh_token(refresh_token: str) → Tuple[str, str]</strong><br>接受 refresh token，验证后颁发新的 access_token + refresh_token 对。Callers: <code>auth.views.token_refresh</code>。Callees: <code>jwt.decode</code>、<code>jwt.encode</code>、<code>db.get_user</code>。</p>
               </div>
@@ -1679,7 +1679,7 @@ found: middleware.require_auth (score: 0.83)
 
             <!-- typing -->
             <div class="chat-typing" style="display:none;align-items:center;gap:var(--space-3)">
-              <div class="chat-avatar" id="chat-cli1-typing-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">CGB</div>
+              <div class="chat-avatar" id="chat-cli1-typing-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--color-actor-5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-xs);color:white;flex-shrink:0">T</div>
               <div style="background:var(--color-bg-warm);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4)"><span>● ● ●</span></div>
             </div>
           </div>
@@ -1705,10 +1705,10 @@ found: middleware.require_auth (score: 0.83)
         </div>
 
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
-          <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">cgb query：最强的调试工具</div>
+          <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">terrain query：最强的调试工具</div>
           <p style="font-size:var(--text-sm);line-height:1.7">
-            当你想验证图数据库里到底存了什么、某个关系是否正确建立，直接用 <code>cgb query</code> 跑
-            <span class="term" data-definition="Cypher 是图数据库查询语言，语法直观。例如：MATCH (f:Function)-[:CALLS]->(g:Function) WHERE f.name='login' RETURN g.name 返回 login 调用的所有函数。CGB 图里的关系类型有 CALLS、DEFINES、INHERITS、IMPLEMENTS、IMPORTS 等。">Cypher</span>
+            当你想验证图数据库里到底存了什么、某个关系是否正确建立，直接用 <code>terrain query</code> 跑
+            <span class="term" data-definition="Cypher 是图数据库查询语言，语法直观。例如：MATCH (f:Function)-[:CALLS]->(g:Function) WHERE f.name='login' RETURN g.name 返回 login 调用的所有函数。Terrain 图里的关系类型有 CALLS、DEFINES、INHERITS、IMPLEMENTS、IMPORTS 等。">Cypher</span>
             查询是最直接的方式。比如
             <code>MATCH (f:Function)-[:CALLS]->(g) WHERE f.qualified_name='auth.login' RETURN g.qualified_name</code>
             马上验证调用关系是否正确。加 <code>--format json</code> 可以把结果管道给 <code>jq</code> 做进一步处理。

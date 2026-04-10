@@ -1,13 +1,13 @@
 /**
  * CodeGraphWiki Demo Data
  * Pre-loaded data for the interactive product website.
- * No API calls required. Now reflecting the actual code_graph_builder repo!
+ * No API calls required. Now reflecting the actual terrain repo!
  */
 
 window.demoData = {
   // 4.3 Pipeline Animation Steps
   pipeline: [
-    { step: "graph-build", text: "Parsed 124 functions, 48 call relationships in code_graph_builder", progress: 100 },
+    { step: "graph-build", text: "Parsed 124 functions, 48 call relationships in terrain", progress: 100 },
     { step: "api-doc-gen", text: "Generated API docs for 124 functions", progress: 100 },
     { step: "embed-gen", text: "Embeddings via Qwen/BGE ready, semantic search enabled", progress: 100 }
   ],
@@ -18,7 +18,7 @@ window.demoData = {
     callChain: [
       { func: "main", file: "entrypoints/cli/commands_cli.py", line: 1157 },
       { func: "cmd_graph_build", file: "entrypoints/cli/commands_cli.py", line: 272 },
-      { func: "CodeGraphBuilder.build_graph", file: "domains/core/graph/builder.py", line: 213 },
+      { func: "TerrainBuilder.build_graph", file: "domains/core/graph/builder.py", line: 213 },
       { func: "GraphUpdater.run", file: "domains/core/graph/graph_updater.py", line: 89 }
     ],
     worksheet: {
@@ -27,13 +27,13 @@ window.demoData = {
         {
           id: "call-chain",
           title: "Call Chain",
-          content: "main (commands_cli.py:1157) → cmd_graph_build (commands_cli.py:272) → CodeGraphBuilder.build_graph (builder.py:213) → GraphUpdater.run (graph_updater.py:89)",
+          content: "main (commands_cli.py:1157) → cmd_graph_build (commands_cli.py:272) → TerrainBuilder.build_graph (builder.py:213) → GraphUpdater.run (graph_updater.py:89)",
           isOpen: true
         },
         {
           id: "trigger-conditions",
           title: "Trigger Conditions",
-          content: "Triggered when the user runs the `code-graph-builder graph-build` CLI command. Initiates the parsing and indexing of the target repository into KuzuDB.",
+          content: "Triggered when the user runs the `terrain-ai graph-build` CLI command. Initiates the parsing and indexing of the target repository into KuzuDB.",
           isOpen: false
         },
         {
@@ -45,15 +45,15 @@ window.demoData = {
         {
           id: "related-functions",
           title: "Related Functions",
-          content: "CodeGraphBuilder._get_ingestor(), CodeGraphBuilder._load_parsers(). Click these to navigate the call tree.",
+          content: "TerrainBuilder._get_ingestor(), TerrainBuilder._load_parsers(). Click these to navigate the call tree.",
           isOpen: false,
-          links: ["CodeGraphBuilder._get_ingestor", "CodeGraphBuilder._load_parsers"]
+          links: ["TerrainBuilder._get_ingestor", "TerrainBuilder._load_parsers"]
         }
       ]
     }
   },
 
-  // 4.5 Call Chain Browser Data (Actual Python Project: code_graph_builder)
+  // 4.5 Call Chain Browser Data (Actual Python Project: terrain)
   callTree: {
     name: "main",
     signature: "def main() -> None:",
@@ -76,13 +76,13 @@ window.demoData = {
         line: 272,
         children: [
           {
-            name: "CodeGraphBuilder.build_graph",
+            name: "TerrainBuilder.build_graph",
             signature: "def build_graph(self, clean: bool = False) -> BuildResult:",
             file: "domains/core/graph/builder.py",
             line: 213,
             children: [
-              { name: "CodeGraphBuilder._load_parsers", signature: "def _load_parsers(self) -> None:", file: "domains/core/graph/builder.py", line: 158 },
-              { name: "CodeGraphBuilder._get_ingestor", signature: "def _get_ingestor(self) -> MemgraphIngestor | KuzuIngestor | Any:", file: "domains/core/graph/builder.py", line: 164 },
+              { name: "TerrainBuilder._load_parsers", signature: "def _load_parsers(self) -> None:", file: "domains/core/graph/builder.py", line: 158 },
+              { name: "TerrainBuilder._get_ingestor", signature: "def _get_ingestor(self) -> MemgraphIngestor | KuzuIngestor | Any:", file: "domains/core/graph/builder.py", line: 164 },
               { 
                 name: "GraphUpdater.run", 
                 signature: "def run(self) -> None:", 

@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 import pytest
 
 if TYPE_CHECKING:
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
 
 # =============================================================================
@@ -69,9 +69,9 @@ def test_simple_project_function_detection(simple_project: Path) -> None:
     - Calculator.calculate (方法)
     - main (函数)
     """
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(str(simple_project))
+    builder = TerrainBuilder(str(simple_project))
     result = builder.build_graph(clean=True)
 
     # 验证函数数量
@@ -91,9 +91,9 @@ def test_simple_project_call_relationships(simple_project: Path) -> None:
     - main -> Calculator.calculate
     - Calculator.calculate -> Calculator.add
     """
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(str(simple_project))
+    builder = TerrainBuilder(str(simple_project))
     result = builder.build_graph(clean=True)
 
     # 验证关系创建
@@ -203,9 +203,9 @@ def test_cross_file_function_calls(cross_file_project: Path) -> None:
     - utils.math_ops.compute_complex -> utils.math_ops.calculate
     - utils.helpers.DataProcessor.process -> utils.helpers.format_data
     """
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(str(cross_file_project))
+    builder = TerrainBuilder(str(cross_file_project))
     result = builder.build_graph(clean=True)
 
     # 验证函数数量
@@ -300,9 +300,9 @@ def conditional_call_example(flag: bool) -> int:
 
 def test_chain_calls(complex_patterns_project: Path) -> None:
     """测试链式调用识别."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(str(complex_patterns_project))
+    builder = TerrainBuilder(str(complex_patterns_project))
     result = builder.build_graph(clean=True)
 
     # 链式调用应该被识别
@@ -313,9 +313,9 @@ def test_chain_calls(complex_patterns_project: Path) -> None:
 
 def test_nested_calls(complex_patterns_project: Path) -> None:
     """测试嵌套调用识别."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(str(complex_patterns_project))
+    builder = TerrainBuilder(str(complex_patterns_project))
     result = builder.build_graph(clean=True)
 
     # 嵌套调用应该被识别
@@ -392,9 +392,9 @@ def main():
 
 def test_short_function_names(edge_cases_project: Path) -> None:
     """测试短函数名识别."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(str(edge_cases_project))
+    builder = TerrainBuilder(str(edge_cases_project))
     result = builder.build_graph(clean=True)
 
     # 短函数名应该被识别
@@ -405,9 +405,9 @@ def test_short_function_names(edge_cases_project: Path) -> None:
 
 def test_recursive_calls(edge_cases_project: Path) -> None:
     """测试递归调用识别."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(str(edge_cases_project))
+    builder = TerrainBuilder(str(edge_cases_project))
     result = builder.build_graph(clean=True)
 
     # 递归调用应该被识别
@@ -416,9 +416,9 @@ def test_recursive_calls(edge_cases_project: Path) -> None:
 
 def test_same_name_methods(edge_cases_project: Path) -> None:
     """测试同名方法区分."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(str(edge_cases_project))
+    builder = TerrainBuilder(str(edge_cases_project))
     result = builder.build_graph(clean=True)
 
     # 同名方法应该被区分为不同函数
@@ -458,11 +458,11 @@ def test_tinycc_scale_performance() -> None:
     if not Path(tinycc_path).exists():
         pytest.skip(f"TinyCC project not found at {tinycc_path}")
 
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
     start_time = time.time()
 
-    builder = CodeGraphBuilder(tinycc_path)
+    builder = TerrainBuilder(tinycc_path)
     result = builder.build_graph(clean=True)
 
     elapsed_time = time.time() - start_time

@@ -43,7 +43,7 @@ def workspace(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def registry(workspace):
-    from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry
+    from terrain.entrypoints.mcp.tools import MCPToolsRegistry
 
     reg = MCPToolsRegistry(workspace=workspace)
     yield reg

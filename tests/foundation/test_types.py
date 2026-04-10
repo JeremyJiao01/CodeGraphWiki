@@ -1,15 +1,15 @@
-"""Basic tests for code_graph_builder."""
+"""Basic tests for terrain."""
 
 import pytest
 
 
 def test_import():
     """Test basic imports."""
-    from code_graph_builder import CodeGraphBuilder, BuildResult
-    from code_graph_builder.foundation.types.constants import SupportedLanguage, NodeLabel
-    from code_graph_builder.foundation.types.types import GraphData, GraphSummary
+    from terrain import TerrainBuilder, BuildResult
+    from terrain.foundation.types.constants import SupportedLanguage, NodeLabel
+    from terrain.foundation.types.types import GraphData, GraphSummary
 
-    assert CodeGraphBuilder is not None
+    assert TerrainBuilder is not None
     assert BuildResult is not None
     assert SupportedLanguage is not None
     assert NodeLabel is not None
@@ -19,7 +19,7 @@ def test_import():
 
 def test_constants():
     """Test constants are defined correctly."""
-    from code_graph_builder.foundation.types.constants import SupportedLanguage, NodeLabel, RelationshipType
+    from terrain.foundation.types.constants import SupportedLanguage, NodeLabel, RelationshipType
 
     # Test SupportedLanguage enum
     assert SupportedLanguage.PYTHON.value == "python"
@@ -36,7 +36,7 @@ def test_constants():
 
 def test_types():
     """Test type definitions."""
-    from code_graph_builder.foundation.types.types import BuildResult, NodeType
+    from terrain.foundation.types.types import BuildResult, NodeType
 
     # Test BuildResult
     result = BuildResult(
@@ -58,8 +58,8 @@ def test_types():
 
 def test_models():
     """Test data models."""
-    from code_graph_builder.foundation.types.models import LanguageSpec, Dependency
-    from code_graph_builder.foundation.types.constants import SupportedLanguage
+    from terrain.foundation.types.models import LanguageSpec, Dependency
+    from terrain.foundation.types.constants import SupportedLanguage
 
     # Test LanguageSpec
     spec = LanguageSpec(

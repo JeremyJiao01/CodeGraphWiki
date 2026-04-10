@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from code_graph_builder.domains.core.search.graph_query import GraphNode
-from code_graph_builder.domains.upper.calltrace.tracer import (
+from terrain.domains.core.search.graph_query import GraphNode
+from terrain.domains.upper.calltrace.tracer import (
     trace_call_chain,
 )
 

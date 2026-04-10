@@ -67,7 +67,7 @@
       <section class="screen animate-in" style="margin-top:var(--space-12)">
         <h2 class="screen-heading">向量化建索引流程</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          <code>cgb index</code> 执行时，L3 函数文档被批量向量化并存入
+          <code>terrain index</code> 执行时，L3 函数文档被批量向量化并存入
           <span class="term" data-definition="MemoryVectorStore：基于 Python dict 的内存向量库。key 是 node_id，value 是 VectorRecord（含向量和元数据）。搜索时暴力遍历全部记录计算余弦相似度，对数千个函数的代码库性能完全够用。">MemoryVectorStore</span>，
           最终序列化为 <code>vectors.pkl</code>。下次启动直接加载，无需重新向量化。
         </p>
@@ -130,7 +130,7 @@
             <div style="background:var(--color-actor-5);color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-sm);flex-shrink:0">3</div>
             <div>
               <div style="font-weight:600;margin-bottom:var(--space-1)">Pickle 持久化</div>
-              <div style="font-size:var(--text-sm);color:var(--color-text-secondary)">向量化完成后序列化为 <code>vectors.pkl</code>（Pickle 格式）。下次 <code>cgb mcp</code> 启动时直接 <code>load()</code> 恢复内存状态，跳过全量向量化，启动时间从分钟级降为秒级。</div>
+              <div style="font-size:var(--text-sm);color:var(--color-text-secondary)">向量化完成后序列化为 <code>vectors.pkl</code>（Pickle 格式）。下次 <code>terrain mcp</code> 启动时直接 <code>load()</code> 恢复内存状态，跳过全量向量化，启动时间从分钟级降为秒级。</div>
             </div>
           </div>
         </div>
@@ -184,7 +184,7 @@
         <!-- 关键词提权 callout -->
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">💡 关键词提权（Keyword Boost）</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">纯向量搜索有时对词语变形敏感——"拉短"和"缩短"可能检索分数差距较大。CGB 在向量搜索结果上叠加了关键词匹配：query 分词后，每有一个 token 出现在函数名/签名/模块名中，相似度分数 +0.05。这个小奖励不会颠覆向量搜索的排序，但能把本该排第2的正确答案推到第1。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">纯向量搜索有时对词语变形敏感——"拉短"和"缩短"可能检索分数差距较大。Terrain 在向量搜索结果上叠加了关键词匹配：query 分词后，每有一个 token 出现在函数名/签名/模块名中，相似度分数 +0.05。这个小奖励不会颠覆向量搜索的排序，但能把本该排第2的正确答案推到第1。</p>
         </div>
       </section>
 
@@ -232,7 +232,7 @@
 
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">💡 为什么不用 Qdrant / Faiss</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">CGB 同时实现了 <code>MemoryVectorStore</code> 和 <code>QdrantVectorStore</code> 两个后端。对代码库（几百到几千个函数），暴力搜索延迟 &lt;10ms，完全没有引入 Qdrant 的必要——那会多一个外部依赖、一个网络跳跃、以及近似搜索的精度损失。规模达到十万函数以上再考虑切换。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">Terrain 同时实现了 <code>MemoryVectorStore</code> 和 <code>QdrantVectorStore</code> 两个后端。对代码库（几百到几千个函数），暴力搜索延迟 &lt;10ms，完全没有引入 Qdrant 的必要——那会多一个外部依赖、一个网络跳跃、以及近似搜索的精度损失。规模达到十万函数以上再考虑切换。</p>
         </div>
       </section>
 

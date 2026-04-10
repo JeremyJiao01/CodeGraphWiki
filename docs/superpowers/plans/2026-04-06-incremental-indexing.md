@@ -14,29 +14,29 @@
 
 | 操作 | 文件路径 | 职责 |
 |------|---------|------|
-| 新建 | `code_graph_builder/foundation/services/git_service.py` | GitChangeDetector：git rev-parse + git diff |
-| 新建 | `code_graph_builder/tests/foundation/test_git_service.py` | GitChangeDetector 单元测试 |
-| 修改 | `code_graph_builder/domains/core/graph/graph_updater.py` | 新增 `process_files_subset`、`load_asts_for_calls` 两个公共方法 |
-| 修改 | `code_graph_builder/domains/core/graph/builder.py` | 新增 `_create_graph_updater(ingestor)` 工厂方法 |
-| 新建 | `code_graph_builder/domains/core/graph/incremental_updater.py` | IncrementalUpdater：删旧节点、重解析、级联更新 |
-| 新建 | `code_graph_builder/tests/domains/core/test_incremental_updater.py` | IncrementalUpdater 单元测试（Memory 后端） |
-| 修改 | `code_graph_builder/entrypoints/mcp/pipeline.py` | `save_meta` 新增 `last_indexed_commit` 参数 |
-| 修改 | `code_graph_builder/entrypoints/mcp/tools.py` | 新增 `active_state` property |
-| 修改 | `code_graph_builder/entrypoints/mcp/server.py` | `_maybe_incremental_sync` 钩子 + `call_tool` 前置调用 |
-| 新建 | `code_graph_builder/tests/entrypoints/test_incremental_sync.py` | 集成测试（真实 git repo + Memory 后端） |
+| 新建 | `terrain/foundation/services/git_service.py` | GitChangeDetector：git rev-parse + git diff |
+| 新建 | `terrain/tests/foundation/test_git_service.py` | GitChangeDetector 单元测试 |
+| 修改 | `terrain/domains/core/graph/graph_updater.py` | 新增 `process_files_subset`、`load_asts_for_calls` 两个公共方法 |
+| 修改 | `terrain/domains/core/graph/builder.py` | 新增 `_create_graph_updater(ingestor)` 工厂方法 |
+| 新建 | `terrain/domains/core/graph/incremental_updater.py` | IncrementalUpdater：删旧节点、重解析、级联更新 |
+| 新建 | `terrain/tests/domains/core/test_incremental_updater.py` | IncrementalUpdater 单元测试（Memory 后端） |
+| 修改 | `terrain/entrypoints/mcp/pipeline.py` | `save_meta` 新增 `last_indexed_commit` 参数 |
+| 修改 | `terrain/entrypoints/mcp/tools.py` | 新增 `active_state` property |
+| 修改 | `terrain/entrypoints/mcp/server.py` | `_maybe_incremental_sync` 钩子 + `call_tool` 前置调用 |
+| 新建 | `terrain/tests/entrypoints/test_incremental_sync.py` | 集成测试（真实 git repo + Memory 后端） |
 
 ---
 
 ## Task 1: GitChangeDetector
 
 **Files:**
-- Create: `code_graph_builder/foundation/services/git_service.py`
-- Test: `code_graph_builder/tests/foundation/test_git_service.py`
+- Create: `terrain/foundation/services/git_service.py`
+- Test: `terrain/tests/foundation/test_git_service.py`
 
 - [ ] **Step 1: 写失败测试**
 
 ```python
-# code_graph_builder/tests/foundation/test_git_service.py
+# terrain/tests/foundation/test_git_service.py
 from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -44,7 +44,7 @@ import subprocess
 
 import pytest
 
-from code_graph_builder.foundation.services.git_service import GitChangeDetector
+from terrain.foundation.services.git_service import GitChangeDetector
 
 
 @pytest.fixture
@@ -147,15 +147,15 @@ class TestGetChangedFiles:
 
 ```bash
 cd /Users/jiaojeremy/CodeFile/CodeGraphWiki-harness
-python -m pytest code_graph_builder/tests/foundation/test_git_service.py -v 2>&1 | head -30
+python -m pytest terrain/tests/foundation/test_git_service.py -v 2>&1 | head -30
 ```
 
-期望：`ModuleNotFoundError: No module named 'code_graph_builder.foundation.services.git_service'`
+期望：`ModuleNotFoundError: No module named 'terrain.foundation.services.git_service'`
 
 - [ ] **Step 3: 实现 GitChangeDetector**
 
 ```python
-# code_graph_builder/foundation/services/git_service.py
+# terrain/foundation/services/git_service.py
 """Git-based change detection for incremental graph updates."""
 from __future__ import annotations
 
@@ -240,7 +240,7 @@ class GitChangeDetector:
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-python -m pytest code_graph_builder/tests/foundation/test_git_service.py -v
+python -m pytest terrain/tests/foundation/test_git_service.py -v
 ```
 
 期望：所有测试 PASS
@@ -248,23 +248,23 @@ python -m pytest code_graph_builder/tests/foundation/test_git_service.py -v
 - [ ] **Step 5: Commit**
 
 ```bash
-git add code_graph_builder/foundation/services/git_service.py \
-        code_graph_builder/tests/foundation/test_git_service.py
+git add terrain/foundation/services/git_service.py \
+        terrain/tests/foundation/test_git_service.py
 git commit -m "feat(incremental): add GitChangeDetector (L1)"
 ```
 
 ---
 
-## Task 2: GraphUpdater 文件子集处理方法 + CodeGraphBuilder 工厂方法
+## Task 2: GraphUpdater 文件子集处理方法 + TerrainBuilder 工厂方法
 
 **Files:**
-- Modify: `code_graph_builder/domains/core/graph/graph_updater.py` (在 `run()` 方法之后添加)
-- Modify: `code_graph_builder/domains/core/graph/builder.py` (在 `build_graph()` 之后添加)
+- Modify: `terrain/domains/core/graph/graph_updater.py` (在 `run()` 方法之后添加)
+- Modify: `terrain/domains/core/graph/builder.py` (在 `build_graph()` 之后添加)
 
 - [ ] **Step 1: 写失败测试**
 
 ```python
-# code_graph_builder/tests/domains/core/test_graph_updater_subset.py
+# terrain/tests/domains/core/test_graph_updater_subset.py
 from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -272,9 +272,9 @@ import tempfile
 
 import pytest
 
-from code_graph_builder.domains.core.graph.graph_updater import GraphUpdater
-from code_graph_builder.foundation.services.memory_service import MemoryIngestor
-from code_graph_builder.foundation.types import constants as cs
+from terrain.domains.core.graph.graph_updater import GraphUpdater
+from terrain.foundation.services.memory_service import MemoryIngestor
+from terrain.foundation.types import constants as cs
 
 
 @pytest.fixture
@@ -285,7 +285,7 @@ def tmp_repo(tmp_path):
 
 
 def _make_updater(repo_path: Path) -> GraphUpdater:
-    from code_graph_builder.foundation.parsers.factory import load_parsers
+    from terrain.foundation.parsers.factory import load_parsers
     parsers, queries = load_parsers()
     ingestor = MemoryIngestor()
     return GraphUpdater(ingestor=ingestor, repo_path=repo_path, parsers=parsers, queries=queries)
@@ -329,7 +329,7 @@ class TestLoadAstsForCalls:
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-python -m pytest code_graph_builder/tests/domains/core/test_graph_updater_subset.py -v 2>&1 | head -20
+python -m pytest terrain/tests/domains/core/test_graph_updater_subset.py -v 2>&1 | head -20
 ```
 
 期望：`AttributeError: 'GraphUpdater' object has no attribute 'process_files_subset'`
@@ -347,12 +347,12 @@ python -m pytest code_graph_builder/tests/domains/core/test_graph_updater_subset
         instead of module→package for modified files (acceptable for incremental MVP).
         """
         try:
-            from code_graph_builder.foundation.utils.path_utils import should_skip_path
+            from terrain.foundation.utils.path_utils import should_skip_path
         except ImportError:
             def should_skip_path(filepath, repo_path, exclude_paths=None, unignore_paths=None):
                 return False
 
-        from code_graph_builder.foundation.parsers.language_spec import get_language_spec
+        from terrain.foundation.parsers.language_spec import get_language_spec
 
         sorted_files = sorted(
             files,
@@ -374,7 +374,7 @@ python -m pytest code_graph_builder/tests/domains/core/test_graph_updater_subset
                 and filepath.suffix == cs.EXT_H
                 and cs.SupportedLanguage.C in self.parsers
             ):
-                from code_graph_builder.foundation.parsers.language_spec import LANGUAGE_SPECS
+                from terrain.foundation.parsers.language_spec import LANGUAGE_SPECS
                 lang_config = LANGUAGE_SPECS.get(cs.SupportedLanguage.C)
             if (
                 lang_config
@@ -399,8 +399,8 @@ python -m pytest code_graph_builder/tests/domains/core/test_graph_updater_subset
         Used to load ASTs for affected_callers so their CALLS relations can be
         re-inserted in _process_function_calls(), without re-adding their definitions.
         """
-        from code_graph_builder.foundation.parsers.language_spec import get_language_spec
-        from code_graph_builder.foundation.utils.encoding import normalize_to_utf8_bytes
+        from terrain.foundation.parsers.language_spec import get_language_spec
+        from terrain.foundation.utils.encoding import normalize_to_utf8_bytes
 
         for filepath in files:
             if filepath in self.ast_cache or not filepath.is_file():
@@ -434,7 +434,7 @@ python -m pytest code_graph_builder/tests/domains/core/test_graph_updater_subset
         Used by IncrementalUpdater to run Pass 2/3 on a file subset
         without triggering a full rebuild.
         """
-        from code_graph_builder.domains.core.graph.graph_updater import GraphUpdater
+        from terrain.domains.core.graph.graph_updater import GraphUpdater
 
         self._load_parsers()
         return GraphUpdater(
@@ -450,7 +450,7 @@ python -m pytest code_graph_builder/tests/domains/core/test_graph_updater_subset
 - [ ] **Step 5: 运行测试确认通过**
 
 ```bash
-python -m pytest code_graph_builder/tests/domains/core/test_graph_updater_subset.py -v
+python -m pytest terrain/tests/domains/core/test_graph_updater_subset.py -v
 ```
 
 期望：所有测试 PASS
@@ -458,9 +458,9 @@ python -m pytest code_graph_builder/tests/domains/core/test_graph_updater_subset
 - [ ] **Step 6: Commit**
 
 ```bash
-git add code_graph_builder/domains/core/graph/graph_updater.py \
-        code_graph_builder/domains/core/graph/builder.py \
-        code_graph_builder/tests/domains/core/test_graph_updater_subset.py
+git add terrain/domains/core/graph/graph_updater.py \
+        terrain/domains/core/graph/builder.py \
+        terrain/tests/domains/core/test_graph_updater_subset.py
 git commit -m "feat(incremental): add process_files_subset + load_asts_for_calls to GraphUpdater"
 ```
 
@@ -469,13 +469,13 @@ git commit -m "feat(incremental): add process_files_subset + load_asts_for_calls
 ## Task 3: IncrementalUpdater
 
 **Files:**
-- Create: `code_graph_builder/domains/core/graph/incremental_updater.py`
-- Test: `code_graph_builder/tests/domains/core/test_incremental_updater.py`
+- Create: `terrain/domains/core/graph/incremental_updater.py`
+- Test: `terrain/tests/domains/core/test_incremental_updater.py`
 
 - [ ] **Step 1: 写失败测试**
 
 ```python
-# code_graph_builder/tests/domains/core/test_incremental_updater.py
+# terrain/tests/domains/core/test_incremental_updater.py
 from __future__ import annotations
 import subprocess
 import tempfile
@@ -484,7 +484,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from code_graph_builder.domains.core.graph.incremental_updater import (
+from terrain.domains.core.graph.incremental_updater import (
     IncrementalUpdater,
     IncrementalResult,
     INCREMENTAL_FILE_LIMIT,
@@ -508,7 +508,7 @@ class TestDeleteHelpers:
     """Test the internal deletion helpers using a mock ingestor."""
 
     def test_delete_nodes_for_files_calls_query_per_label(self):
-        from code_graph_builder.domains.core.graph.incremental_updater import _delete_nodes_for_files
+        from terrain.domains.core.graph.incremental_updater import _delete_nodes_for_files
         mock_ingestor = MagicMock()
         _delete_nodes_for_files(mock_ingestor, ["src/foo.py"])
         # Should call query once per node label
@@ -518,7 +518,7 @@ class TestDeleteHelpers:
             assert "DETACH DELETE" in call.args[0]
 
     def test_delete_calls_from_callers(self):
-        from code_graph_builder.domains.core.graph.incremental_updater import _delete_calls_from
+        from terrain.domains.core.graph.incremental_updater import _delete_calls_from
         mock_ingestor = MagicMock()
         _delete_calls_from(mock_ingestor, ["src/caller.py"])
         mock_ingestor.query.assert_called_once()
@@ -527,20 +527,20 @@ class TestDeleteHelpers:
         assert "DELETE" in query_str
 
     def test_delete_nodes_skips_empty_list(self):
-        from code_graph_builder.domains.core.graph.incremental_updater import _delete_nodes_for_files
+        from terrain.domains.core.graph.incremental_updater import _delete_nodes_for_files
         mock_ingestor = MagicMock()
         _delete_nodes_for_files(mock_ingestor, [])
         mock_ingestor.query.assert_not_called()
 
     def test_query_affected_callers_returns_paths(self):
-        from code_graph_builder.domains.core.graph.incremental_updater import _query_affected_callers
+        from terrain.domains.core.graph.incremental_updater import _query_affected_callers
         mock_ingestor = MagicMock()
         mock_ingestor.query.return_value = [{"caller_path": "src/caller.py"}]
         result = _query_affected_callers(mock_ingestor, ["src/changed.py"])
         assert "src/caller.py" in result
 
     def test_query_affected_callers_empty_input(self):
-        from code_graph_builder.domains.core.graph.incremental_updater import _query_affected_callers
+        from terrain.domains.core.graph.incremental_updater import _query_affected_callers
         mock_ingestor = MagicMock()
         result = _query_affected_callers(mock_ingestor, [])
         assert result == set()
@@ -550,7 +550,7 @@ class TestDeleteHelpers:
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-python -m pytest code_graph_builder/tests/domains/core/test_incremental_updater.py -v 2>&1 | head -20
+python -m pytest terrain/tests/domains/core/test_incremental_updater.py -v 2>&1 | head -20
 ```
 
 期望：`ModuleNotFoundError: No module named '...incremental_updater'`
@@ -558,7 +558,7 @@ python -m pytest code_graph_builder/tests/domains/core/test_incremental_updater.
 - [ ] **Step 3: 实现 incremental_updater.py**
 
 ```python
-# code_graph_builder/domains/core/graph/incremental_updater.py
+# terrain/domains/core/graph/incremental_updater.py
 """File-level incremental graph updates driven by git diff."""
 from __future__ import annotations
 
@@ -570,7 +570,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
-    from code_graph_builder.foundation.services.kuzu_service import KuzuIngestor
+    from terrain.foundation.services.kuzu_service import KuzuIngestor
 
 INCREMENTAL_FILE_LIMIT: int = 50
 """If more files changed than this, fall back to a full rebuild instead."""
@@ -667,9 +667,9 @@ class IncrementalUpdater:
         """Execute incremental update and return statistics."""
         t0 = time.monotonic()
 
-        from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
-        from code_graph_builder.foundation.services.kuzu_service import KuzuIngestor
-        from code_graph_builder.entrypoints.mcp.pipeline import (
+        from terrain.domains.core.graph.builder import TerrainBuilder
+        from terrain.foundation.services.kuzu_service import KuzuIngestor
+        from terrain.entrypoints.mcp.pipeline import (
             generate_api_docs_step,
             build_vector_index,
         )
@@ -686,7 +686,7 @@ class IncrementalUpdater:
         )
 
         # Create builder (lazy — no DB connection yet)
-        builder = CodeGraphBuilder(
+        builder = TerrainBuilder(
             repo_path=str(repo_path),
             backend="kuzu",
             backend_config={"db_path": str(db_path), "batch_size": 1000},
@@ -754,7 +754,7 @@ class IncrementalUpdater:
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-python -m pytest code_graph_builder/tests/domains/core/test_incremental_updater.py -v
+python -m pytest terrain/tests/domains/core/test_incremental_updater.py -v
 ```
 
 期望：所有测试 PASS
@@ -762,8 +762,8 @@ python -m pytest code_graph_builder/tests/domains/core/test_incremental_updater.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add code_graph_builder/domains/core/graph/incremental_updater.py \
-        code_graph_builder/tests/domains/core/test_incremental_updater.py
+git add terrain/domains/core/graph/incremental_updater.py \
+        terrain/tests/domains/core/test_incremental_updater.py
 git commit -m "feat(incremental): add IncrementalUpdater (L2)"
 ```
 
@@ -772,20 +772,20 @@ git commit -m "feat(incremental): add IncrementalUpdater (L2)"
 ## Task 4: pipeline.save_meta 保存 last_indexed_commit
 
 **Files:**
-- Modify: `code_graph_builder/entrypoints/mcp/pipeline.py`
+- Modify: `terrain/entrypoints/mcp/pipeline.py`
 
 `save_meta` 函数（line 1336）新增可选参数 `last_indexed_commit`，在写入 meta.json 时包含该字段。
 
 - [ ] **Step 1: 写失败测试**
 
 ```python
-# 追加到 code_graph_builder/tests/entrypoints/test_mcp_protocol.py 或新建文件
-# code_graph_builder/tests/entrypoints/test_save_meta.py
+# 追加到 terrain/tests/entrypoints/test_mcp_protocol.py 或新建文件
+# terrain/tests/entrypoints/test_save_meta.py
 import json
 import tempfile
 from pathlib import Path
 
-from code_graph_builder.entrypoints.mcp.pipeline import save_meta
+from terrain.entrypoints.mcp.pipeline import save_meta
 
 
 def test_save_meta_persists_last_indexed_commit(tmp_path):
@@ -806,7 +806,7 @@ def test_save_meta_without_commit_leaves_existing(tmp_path):
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-python -m pytest code_graph_builder/tests/entrypoints/test_save_meta.py -v 2>&1 | head -20
+python -m pytest terrain/tests/entrypoints/test_save_meta.py -v 2>&1 | head -20
 ```
 
 期望：`TypeError: save_meta() got an unexpected keyword argument 'last_indexed_commit'`
@@ -867,17 +867,17 @@ def _get_git_head(repo_path: Path) -> str | None:
 
 ```python
 # 在 pipeline.py 顶部 imports 区域添加（懒导入避免循环依赖）：
-# from code_graph_builder.foundation.services.git_service import GitChangeDetector
+# from terrain.foundation.services.git_service import GitChangeDetector
 
 # 在每处 save_meta(...) 调用改为：
-from code_graph_builder.foundation.services.git_service import GitChangeDetector as _GCD
+from terrain.foundation.services.git_service import GitChangeDetector as _GCD
 _head = _GCD().get_current_head(repo_path)
 save_meta(artifact_dir, repo_path, wiki_page_count, last_indexed_commit=_head)
 ```
 
 找到所有 `save_meta(` 调用位置：
 ```bash
-grep -n "save_meta(" code_graph_builder/entrypoints/mcp/pipeline.py
+grep -n "save_meta(" terrain/entrypoints/mcp/pipeline.py
 ```
 
 对每一处调用按上述方式修改。
@@ -885,7 +885,7 @@ grep -n "save_meta(" code_graph_builder/entrypoints/mcp/pipeline.py
 - [ ] **Step 5: 运行测试确认通过**
 
 ```bash
-python -m pytest code_graph_builder/tests/entrypoints/test_save_meta.py -v
+python -m pytest terrain/tests/entrypoints/test_save_meta.py -v
 ```
 
 期望：所有测试 PASS
@@ -893,8 +893,8 @@ python -m pytest code_graph_builder/tests/entrypoints/test_save_meta.py -v
 - [ ] **Step 6: Commit**
 
 ```bash
-git add code_graph_builder/entrypoints/mcp/pipeline.py \
-        code_graph_builder/tests/entrypoints/test_save_meta.py
+git add terrain/entrypoints/mcp/pipeline.py \
+        terrain/tests/entrypoints/test_save_meta.py
 git commit -m "feat(incremental): save last_indexed_commit in meta.json after full index"
 ```
 
@@ -903,13 +903,13 @@ git commit -m "feat(incremental): save last_indexed_commit in meta.json after fu
 ## Task 5: MCPToolsRegistry.active_state + server._maybe_incremental_sync
 
 **Files:**
-- Modify: `code_graph_builder/entrypoints/mcp/tools.py`
-- Modify: `code_graph_builder/entrypoints/mcp/server.py`
+- Modify: `terrain/entrypoints/mcp/tools.py`
+- Modify: `terrain/entrypoints/mcp/server.py`
 
 - [ ] **Step 1: 写失败测试（server sync hook）**
 
 ```python
-# code_graph_builder/tests/entrypoints/test_incremental_sync.py
+# terrain/tests/entrypoints/test_incremental_sync.py
 from __future__ import annotations
 import json
 from pathlib import Path
@@ -935,13 +935,13 @@ class TestMaybeIncrementalSync:
 
     @pytest.mark.asyncio
     async def test_no_op_when_head_unchanged(self, tmp_path):
-        from code_graph_builder.entrypoints.mcp import server as srv
+        from terrain.entrypoints.mcp import server as srv
 
         registry = self._make_registry(tmp_path, last_commit="abc1234")
         srv._cached_head = "abc1234"
 
         with patch(
-            "code_graph_builder.foundation.services.git_service.GitChangeDetector.get_current_head",
+            "terrain.foundation.services.git_service.GitChangeDetector.get_current_head",
             return_value="abc1234",
         ):
             await srv._maybe_incremental_sync(registry)
@@ -950,7 +950,7 @@ class TestMaybeIncrementalSync:
 
     @pytest.mark.asyncio
     async def test_calls_incremental_updater_when_head_changes(self, tmp_path):
-        from code_graph_builder.entrypoints.mcp import server as srv
+        from terrain.entrypoints.mcp import server as srv
 
         registry = self._make_registry(tmp_path, last_commit="old123")
         srv._cached_head = None
@@ -968,15 +968,15 @@ class TestMaybeIncrementalSync:
 
         with (
             patch(
-                "code_graph_builder.foundation.services.git_service.GitChangeDetector.get_current_head",
+                "terrain.foundation.services.git_service.GitChangeDetector.get_current_head",
                 fake_get_current_head,
             ),
             patch(
-                "code_graph_builder.foundation.services.git_service.GitChangeDetector.get_changed_files",
+                "terrain.foundation.services.git_service.GitChangeDetector.get_changed_files",
                 fake_get_changed_files,
             ),
             patch(
-                "code_graph_builder.domains.core.graph.incremental_updater.IncrementalUpdater.run",
+                "terrain.domains.core.graph.incremental_updater.IncrementalUpdater.run",
                 return_value=mock_result,
             ),
         ):
@@ -986,7 +986,7 @@ class TestMaybeIncrementalSync:
 
     @pytest.mark.asyncio
     async def test_no_op_when_no_active_repo(self, tmp_path):
-        from code_graph_builder.entrypoints.mcp import server as srv
+        from terrain.entrypoints.mcp import server as srv
 
         registry = MagicMock()
         registry.active_state = None
@@ -997,13 +997,13 @@ class TestMaybeIncrementalSync:
 
     @pytest.mark.asyncio
     async def test_no_op_when_not_git_repo(self, tmp_path):
-        from code_graph_builder.entrypoints.mcp import server as srv
+        from terrain.entrypoints.mcp import server as srv
 
         registry = self._make_registry(tmp_path)
         srv._cached_head = None
 
         with patch(
-            "code_graph_builder.foundation.services.git_service.GitChangeDetector.get_current_head",
+            "terrain.foundation.services.git_service.GitChangeDetector.get_current_head",
             return_value=None,
         ):
             await srv._maybe_incremental_sync(registry)
@@ -1014,7 +1014,7 @@ class TestMaybeIncrementalSync:
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-python -m pytest code_graph_builder/tests/entrypoints/test_incremental_sync.py -v 2>&1 | head -30
+python -m pytest terrain/tests/entrypoints/test_incremental_sync.py -v 2>&1 | head -30
 ```
 
 期望：`AttributeError: module '...server' has no attribute '_maybe_incremental_sync'` 或 `AttributeError: 'MagicMock' object has no attribute 'active_state'`
@@ -1034,7 +1034,7 @@ python -m pytest code_graph_builder/tests/entrypoints/test_incremental_sync.py -
 
 - [ ] **Step 4: 在 server.py 中添加 _cached_head 和 _maybe_incremental_sync**
 
-在 `SERVER_NAME = "code-graph-builder"` 行（line 63）之后添加：
+在 `SERVER_NAME = "terrain-ai"` 行（line 63）之后添加：
 
 ```python
 # ---------------------------------------------------------------------------
@@ -1066,7 +1066,7 @@ async def _maybe_incremental_sync(registry: "MCPToolsRegistry") -> None:
     if not db_path.exists():
         return  # Graph not built yet
 
-    from code_graph_builder.foundation.services.git_service import GitChangeDetector
+    from terrain.foundation.services.git_service import GitChangeDetector
 
     detector = GitChangeDetector()
     current_head = detector.get_current_head(repo_path)
@@ -1112,7 +1112,7 @@ async def _maybe_incremental_sync(registry: "MCPToolsRegistry") -> None:
         return
 
     # Run incremental update
-    from code_graph_builder.domains.core.graph.incremental_updater import IncrementalUpdater
+    from terrain.domains.core.graph.incremental_updater import IncrementalUpdater
 
     try:
         result = IncrementalUpdater().run(
@@ -1157,7 +1157,7 @@ async def _maybe_incremental_sync(registry: "MCPToolsRegistry") -> None:
 - [ ] **Step 6: 运行测试确认通过**
 
 ```bash
-python -m pytest code_graph_builder/tests/entrypoints/test_incremental_sync.py -v
+python -m pytest terrain/tests/entrypoints/test_incremental_sync.py -v
 ```
 
 期望：所有测试 PASS
@@ -1165,9 +1165,9 @@ python -m pytest code_graph_builder/tests/entrypoints/test_incremental_sync.py -
 - [ ] **Step 7: Commit**
 
 ```bash
-git add code_graph_builder/entrypoints/mcp/tools.py \
-        code_graph_builder/entrypoints/mcp/server.py \
-        code_graph_builder/tests/entrypoints/test_incremental_sync.py
+git add terrain/entrypoints/mcp/tools.py \
+        terrain/entrypoints/mcp/server.py \
+        terrain/tests/entrypoints/test_incremental_sync.py
 git commit -m "feat(incremental): wire _maybe_incremental_sync hook into MCP server (L4)"
 ```
 
@@ -1179,11 +1179,11 @@ git commit -m "feat(incremental): wire _maybe_incremental_sync hook into MCP ser
 
 ```bash
 cd /Users/jiaojeremy/CodeFile/CodeGraphWiki-harness
-python -m pytest code_graph_builder/tests/foundation/test_git_service.py \
-                 code_graph_builder/tests/domains/core/test_graph_updater_subset.py \
-                 code_graph_builder/tests/domains/core/test_incremental_updater.py \
-                 code_graph_builder/tests/entrypoints/test_save_meta.py \
-                 code_graph_builder/tests/entrypoints/test_incremental_sync.py \
+python -m pytest terrain/tests/foundation/test_git_service.py \
+                 terrain/tests/domains/core/test_graph_updater_subset.py \
+                 terrain/tests/domains/core/test_incremental_updater.py \
+                 terrain/tests/entrypoints/test_save_meta.py \
+                 terrain/tests/entrypoints/test_incremental_sync.py \
                  -v
 ```
 
@@ -1200,8 +1200,8 @@ python tools/dep_check.py
 - [ ] **Step 3: 运行现有核心测试确认无回归**
 
 ```bash
-python -m pytest code_graph_builder/tests/domains/core/test_graph_build.py \
-                 code_graph_builder/tests/foundation/test_encoding_parsing.py \
+python -m pytest terrain/tests/domains/core/test_graph_build.py \
+                 terrain/tests/foundation/test_encoding_parsing.py \
                  -v
 ```
 
@@ -1215,7 +1215,7 @@ git commit -m "feat(incremental): complete incremental indexing implementation
 
 - GitChangeDetector: git diff-based change detection (L1)
 - GraphUpdater: process_files_subset + load_asts_for_calls
-- CodeGraphBuilder: _create_graph_updater factory
+- TerrainBuilder: _create_graph_updater factory
 - IncrementalUpdater: file-level graph update + cascade to API docs + vectors
 - pipeline: save last_indexed_commit in meta.json
 - server: _maybe_incremental_sync hook on every MCP tool call

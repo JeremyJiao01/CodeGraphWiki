@@ -16,11 +16,11 @@ import pytest
 
 
 def _make_builder(project_path: Path):
-    """Create a CodeGraphBuilder with a project-specific DB path."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    """Create a TerrainBuilder with a project-specific DB path."""
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
     db_path = project_path / "test_graph.db"
-    return CodeGraphBuilder(
+    return TerrainBuilder(
         str(project_path),
         backend_config={"db_path": str(db_path)},
     )

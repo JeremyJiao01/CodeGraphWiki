@@ -88,10 +88,10 @@ def project_dir(tmp_path_factory) -> Path:
 @pytest.fixture(scope="module")
 def graph_data(project_dir: Path) -> dict:
     """Build graph and export data while the connection is still open."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
     db_path = project_dir / "_graph.db"
-    builder = CodeGraphBuilder(
+    builder = TerrainBuilder(
         repo_path=str(project_dir),
         backend="kuzu",
         backend_config={"db_path": str(db_path)},
@@ -112,18 +112,18 @@ def artifact_dir(tmp_path_factory) -> Path:
 @pytest.fixture(scope="module")
 def api_docs_result(graph_data, artifact_dir: Path, project_dir: Path) -> dict[str, Any]:
     """Generate API docs using the pipeline query + generator, with repo_path."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
-    from code_graph_builder.entrypoints.mcp.pipeline import (
+    from terrain.domains.core.graph.builder import TerrainBuilder
+    from terrain.entrypoints.mcp.pipeline import (
         _CALLS_QUERY,
         _FUNC_DOC_QUERY,
         _TYPE_DOC_QUERY_CLASS,
         _TYPE_DOC_QUERY_TYPE,
     )
-    from code_graph_builder.domains.upper.apidoc.api_doc_generator import generate_api_docs
+    from terrain.domains.upper.apidoc.api_doc_generator import generate_api_docs
 
     # Re-open connection to query for API doc data
     db_path = project_dir / "_graph.db"
-    builder = CodeGraphBuilder(
+    builder = TerrainBuilder(
         repo_path=str(project_dir),
         backend="kuzu",
         backend_config={"db_path": str(db_path)},
@@ -299,13 +299,13 @@ class TestValidateAPIDocs:
 
     def test_validation_detects_generated_modules(self, api_docs_result, artifact_dir: Path):
         """After generation, validate_api_docs must detect the module pages."""
-        from code_graph_builder.entrypoints.mcp.pipeline import validate_api_docs
+        from terrain.entrypoints.mcp.pipeline import validate_api_docs
         result = validate_api_docs(artifact_dir)
         assert result["modules"] > 0, "validate_api_docs failed to detect module pages"
 
     def test_validation_returns_structured_result(self, api_docs_result, artifact_dir: Path):
         """validate_api_docs must return a dict with valid, issues, modules, funcs."""
-        from code_graph_builder.entrypoints.mcp.pipeline import validate_api_docs
+        from terrain.entrypoints.mcp.pipeline import validate_api_docs
         result = validate_api_docs(artifact_dir)
         assert "valid" in result
         assert "issues" in result
@@ -316,7 +316,7 @@ class TestValidateAPIDocs:
 
     def test_empty_dir_fails_validation(self, tmp_path):
         """validate_api_docs must detect missing docs in an empty directory."""
-        from code_graph_builder.entrypoints.mcp.pipeline import validate_api_docs
+        from terrain.entrypoints.mcp.pipeline import validate_api_docs
         result = validate_api_docs(tmp_path)
         assert result["valid"] is False
         assert len(result["issues"]) > 0
@@ -325,7 +325,7 @@ class TestValidateAPIDocs:
 
     def test_missing_funcs_fails_validation(self, tmp_path):
         """validate_api_docs must detect missing funcs/ directory."""
-        from code_graph_builder.entrypoints.mcp.pipeline import validate_api_docs
+        from terrain.entrypoints.mcp.pipeline import validate_api_docs
         api_dir = tmp_path / "api_docs"
         api_dir.mkdir()
         (api_dir / "index.md").write_text("# Index\n")
@@ -339,7 +339,7 @@ class TestValidateAPIDocs:
 
     def test_empty_index_fails_validation(self, tmp_path):
         """validate_api_docs must detect an empty index.md."""
-        from code_graph_builder.entrypoints.mcp.pipeline import validate_api_docs
+        from terrain.entrypoints.mcp.pipeline import validate_api_docs
         api_dir = tmp_path / "api_docs"
         api_dir.mkdir()
         (api_dir / "index.md").write_text("")  # empty

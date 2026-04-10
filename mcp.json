@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "code-graph-builder": {
+    "terrain": {
       "command": "npx",
-      "args": ["-y", "code-graph-builder@latest", "--server"]
+      "args": ["-y", "terrain-ai@latest", "--server"]
     }
   }
 }

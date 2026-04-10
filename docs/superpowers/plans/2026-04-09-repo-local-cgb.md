@@ -1,10 +1,10 @@
-# Repo-Local `.cgb/` Artifact Directory Implementation Plan
+# Repo-Local `.terrain/` Artifact Directory Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Support a repo-local `.cgb/` directory as the preferred artifact source, so teams can share indexed databases via git without extra configuration.
+**Goal:** Support a repo-local `.terrain/` directory as the preferred artifact source, so teams can share indexed databases via git without extra configuration.
 
-**Architecture:** Add a priority-based artifact resolution layer: when `repo_path` is known, check `{repo_path}/.cgb/graph.db` first; if it exists, use `.cgb/` as the artifact directory, otherwise fall back to the workspace `{name}_{hash}/` directory. For `cgb index`, add a `_select_menu()` prompt letting users choose output destination.
+**Architecture:** Add a priority-based artifact resolution layer: when `repo_path` is known, check `{repo_path}/.terrain/graph.db` first; if it exists, use `.terrain/` as the artifact directory, otherwise fall back to the workspace `{name}_{hash}/` directory. For `terrain index`, add a `_select_menu()` prompt letting users choose output destination.
 
 **Tech Stack:** Python 3.11+, pathlib, existing CLI UI primitives (`_select_menu`, `_T_DOT`, `_T_SIDE`, etc.)
 
@@ -14,27 +14,27 @@
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `code_graph_builder/entrypoints/mcp/tools.py` | Modify | `_try_auto_load()` adds `.cgb/` priority check |
-| `code_graph_builder/entrypoints/cli/cli.py` | Modify | `_load_repos()` adds `.cgb/` resolution; `cmd_index()` adds output destination prompt |
-| `code_graph_builder/entrypoints/mcp/pipeline.py` | Modify | `save_meta()` unchanged, but `cmd_index` will pass `.cgb/` path as `artifact_dir` |
-| `tests/entrypoints/test_repo_local_cgb.py` | Create | All tests for `.cgb/` discovery, priority, and fallback |
+| `terrain/entrypoints/mcp/tools.py` | Modify | `_try_auto_load()` adds `.terrain/` priority check |
+| `terrain/entrypoints/cli/cli.py` | Modify | `_load_repos()` adds `.terrain/` resolution; `cmd_index()` adds output destination prompt |
+| `terrain/entrypoints/mcp/pipeline.py` | Modify | `save_meta()` unchanged, but `cmd_index` will pass `.terrain/` path as `artifact_dir` |
+| `tests/entrypoints/test_repo_local_cgb.py` | Create | All tests for `.terrain/` discovery, priority, and fallback |
 
 ---
 
-### Task 1: Add `.cgb/` priority resolution helper
+### Task 1: Add `.terrain/` priority resolution helper
 
 **Files:**
 - Create: `tests/entrypoints/test_repo_local_cgb.py`
-- Modify: `code_graph_builder/entrypoints/mcp/tools.py:185-197`
+- Modify: `terrain/entrypoints/mcp/tools.py:185-197`
 
 This task adds a shared helper function `_resolve_artifact_dir()` and the tests for it.
 
-- [ ] **Step 1: Write failing tests for `.cgb/` resolution logic**
+- [ ] **Step 1: Write failing tests for `.terrain/` resolution logic**
 
 Create `tests/entrypoints/test_repo_local_cgb.py`:
 
 ```python
-"""Tests for repo-local .cgb/ artifact directory resolution."""
+"""Tests for repo-local .terrain/ artifact directory resolution."""
 from __future__ import annotations
 
 import json
@@ -54,11 +54,11 @@ def _make_artifact_dir(path: Path, repo_path: str = "/fake/repo") -> None:
 
 
 class TestResolveArtifactDir:
-    """_resolve_artifact_dir prefers {repo_path}/.cgb/ over workspace artifact dir."""
+    """_resolve_artifact_dir prefers {repo_path}/.terrain/ over workspace artifact dir."""
 
     def test_prefers_local_cgb_when_exists(self, tmp_path: Path):
-        """When .cgb/graph.db exists under repo_path, return .cgb/ dir."""
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        """When .terrain/graph.db exists under repo_path, return .terrain/ dir."""
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -72,8 +72,8 @@ class TestResolveArtifactDir:
         assert result == local_cgb
 
     def test_falls_back_to_workspace_when_no_local_cgb(self, tmp_path: Path):
-        """When .cgb/ does not exist, return the original workspace artifact dir."""
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        """When .terrain/ does not exist, return the original workspace artifact dir."""
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -85,8 +85,8 @@ class TestResolveArtifactDir:
         assert result == ws_artifact
 
     def test_falls_back_when_local_cgb_has_no_graph_db(self, tmp_path: Path):
-        """When .cgb/ exists but has no graph.db, return workspace dir."""
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        """When .terrain/ exists but has no graph.db, return workspace dir."""
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         repo = tmp_path / "myrepo"
         local_cgb = repo / ".cgb"
@@ -102,7 +102,7 @@ class TestResolveArtifactDir:
 
     def test_falls_back_when_repo_path_missing_from_meta(self, tmp_path: Path):
         """When meta.json has no repo_path, return workspace dir as-is."""
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         ws_artifact = tmp_path / "workspace" / "myrepo_abc123"
         ws_artifact.mkdir(parents=True)
@@ -116,7 +116,7 @@ class TestResolveArtifactDir:
 
     def test_falls_back_when_repo_path_does_not_exist(self, tmp_path: Path):
         """When repo_path points to a non-existent directory, return workspace dir."""
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         ws_artifact = tmp_path / "workspace" / "myrepo_abc123"
         _make_artifact_dir(ws_artifact, repo_path="/nonexistent/path")
@@ -132,15 +132,15 @@ Expected: FAIL — `_resolve_artifact_dir` does not exist yet.
 
 - [ ] **Step 3: Implement `_resolve_artifact_dir()` in tools.py**
 
-Add the following function in `code_graph_builder/entrypoints/mcp/tools.py` right before `class MCPToolsRegistry` (around line 170):
+Add the following function in `terrain/entrypoints/mcp/tools.py` right before `class MCPToolsRegistry` (around line 170):
 
 ```python
 def _resolve_artifact_dir(ws_artifact_dir: Path) -> Path:
-    """Return the best artifact directory: prefer {repo_path}/.cgb/ over workspace.
+    """Return the best artifact directory: prefer {repo_path}/.terrain/ over workspace.
 
     Reads meta.json from *ws_artifact_dir* to discover ``repo_path``, then
-    checks whether ``{repo_path}/.cgb/graph.db`` exists.  If it does, return
-    the ``.cgb/`` path; otherwise return *ws_artifact_dir* unchanged.
+    checks whether ``{repo_path}/.terrain/graph.db`` exists.  If it does, return
+    the ``.terrain/`` path; otherwise return *ws_artifact_dir* unchanged.
     """
     meta_file = ws_artifact_dir / "meta.json"
     if not meta_file.exists():
@@ -173,19 +173,19 @@ Expected: All 5 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/entrypoints/test_repo_local_cgb.py code_graph_builder/entrypoints/mcp/tools.py
-git commit -m "feat: add _resolve_artifact_dir helper for .cgb/ priority resolution"
+git add tests/entrypoints/test_repo_local_cgb.py terrain/entrypoints/mcp/tools.py
+git commit -m "feat: add _resolve_artifact_dir helper for .terrain/ priority resolution"
 ```
 
 ---
 
-### Task 2: Wire `.cgb/` resolution into MCP `_try_auto_load()`
+### Task 2: Wire `.terrain/` resolution into MCP `_try_auto_load()`
 
 **Files:**
-- Modify: `code_graph_builder/entrypoints/mcp/tools.py:185-197`
+- Modify: `terrain/entrypoints/mcp/tools.py:185-197`
 - Modify: `tests/entrypoints/test_repo_local_cgb.py`
 
-- [ ] **Step 1: Write failing test for MCP auto-load with `.cgb/`**
+- [ ] **Step 1: Write failing test for MCP auto-load with `.terrain/`**
 
 Append to `tests/entrypoints/test_repo_local_cgb.py`:
 
@@ -194,11 +194,11 @@ from unittest.mock import patch, MagicMock
 
 
 class TestMCPAutoLoadWithLocalCgb:
-    """MCPToolsRegistry._try_auto_load() should prefer .cgb/ when available."""
+    """MCPToolsRegistry._try_auto_load() should prefer .terrain/ when available."""
 
     def test_auto_load_uses_local_cgb(self, tmp_path: Path):
-        """When active repo has .cgb/, _try_auto_load passes .cgb/ to _load_services."""
-        from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry
+        """When active repo has .terrain/, _try_auto_load passes .terrain/ to _load_services."""
+        from terrain.entrypoints.mcp.tools import MCPToolsRegistry
 
         ws = tmp_path / "workspace"
         ws.mkdir()
@@ -209,7 +209,7 @@ class TestMCPAutoLoadWithLocalCgb:
         ws_artifact = ws / "myrepo_abc123"
         _make_artifact_dir(ws_artifact, repo_path=repo.as_posix())
 
-        # Set up .cgb/ in repo
+        # Set up .terrain/ in repo
         local_cgb = repo / ".cgb"
         _make_artifact_dir(local_cgb, repo_path=repo.as_posix())
 
@@ -222,8 +222,8 @@ class TestMCPAutoLoadWithLocalCgb:
             mock_load.assert_called_once_with(local_cgb)
 
     def test_auto_load_falls_back_to_workspace(self, tmp_path: Path):
-        """When no .cgb/, _try_auto_load passes workspace artifact dir."""
-        from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry
+        """When no .terrain/, _try_auto_load passes workspace artifact dir."""
+        from terrain.entrypoints.mcp.tools import MCPToolsRegistry
 
         ws = tmp_path / "workspace"
         ws.mkdir()
@@ -247,7 +247,7 @@ Expected: `test_auto_load_uses_local_cgb` FAILS (still passes workspace dir).
 
 - [ ] **Step 3: Update `_try_auto_load()` to use `_resolve_artifact_dir()`**
 
-In `code_graph_builder/entrypoints/mcp/tools.py`, modify `_try_auto_load()` (lines 185-197):
+In `terrain/entrypoints/mcp/tools.py`, modify `_try_auto_load()` (lines 185-197):
 
 Replace:
 ```python
@@ -294,29 +294,29 @@ Expected: All 7 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add code_graph_builder/entrypoints/mcp/tools.py tests/entrypoints/test_repo_local_cgb.py
-git commit -m "feat: MCP _try_auto_load prefers repo-local .cgb/ over workspace"
+git add terrain/entrypoints/mcp/tools.py tests/entrypoints/test_repo_local_cgb.py
+git commit -m "feat: MCP _try_auto_load prefers repo-local .terrain/ over workspace"
 ```
 
 ---
 
-### Task 3: Wire `.cgb/` resolution into CLI path resolution
+### Task 3: Wire `.terrain/` resolution into CLI path resolution
 
 **Files:**
-- Modify: `code_graph_builder/entrypoints/cli/cli.py:385-410`
+- Modify: `terrain/entrypoints/cli/cli.py:385-410`
 - Modify: `tests/entrypoints/test_repo_local_cgb.py`
 
-- [ ] **Step 1: Write failing test for CLI `_load_repos()` with `.cgb/`**
+- [ ] **Step 1: Write failing test for CLI `_load_repos()` with `.terrain/`**
 
 Append to `tests/entrypoints/test_repo_local_cgb.py`:
 
 ```python
 class TestCLILoadReposWithLocalCgb:
-    """CLI _load_repos() should resolve .cgb/ for repos that have it."""
+    """CLI _load_repos() should resolve .terrain/ for repos that have it."""
 
     def test_load_repos_resolves_local_cgb(self, tmp_path: Path):
-        """When a repo has .cgb/, _load_repos returns .cgb/ as artifact_dir."""
-        from code_graph_builder.entrypoints.cli.cli import _load_repos
+        """When a repo has .terrain/, _load_repos returns .terrain/ as artifact_dir."""
+        from terrain.entrypoints.cli.cli import _load_repos
 
         ws = tmp_path / "workspace"
         ws.mkdir()
@@ -336,8 +336,8 @@ class TestCLILoadReposWithLocalCgb:
         assert repos[0]["artifact_dir"] == local_cgb
 
     def test_load_repos_keeps_workspace_when_no_local_cgb(self, tmp_path: Path):
-        """When no .cgb/, _load_repos returns workspace artifact_dir."""
-        from code_graph_builder.entrypoints.cli.cli import _load_repos
+        """When no .terrain/, _load_repos returns workspace artifact_dir."""
+        from terrain.entrypoints.cli.cli import _load_repos
 
         ws = tmp_path / "workspace"
         ws.mkdir()
@@ -361,10 +361,10 @@ Expected: `test_load_repos_resolves_local_cgb` FAILS.
 
 - [ ] **Step 3: Update `_load_repos()` to use `_resolve_artifact_dir()`**
 
-In `code_graph_builder/entrypoints/cli/cli.py`, first add the import near the top of the file (with other local imports):
+In `terrain/entrypoints/cli/cli.py`, first add the import near the top of the file (with other local imports):
 
 ```python
-from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 ```
 
 Then modify `_load_repos()` (lines 385-410). Replace:
@@ -440,16 +440,16 @@ Expected: All 9 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add code_graph_builder/entrypoints/cli/cli.py tests/entrypoints/test_repo_local_cgb.py
-git commit -m "feat: CLI _load_repos prefers repo-local .cgb/ over workspace"
+git add terrain/entrypoints/cli/cli.py tests/entrypoints/test_repo_local_cgb.py
+git commit -m "feat: CLI _load_repos prefers repo-local .terrain/ over workspace"
 ```
 
 ---
 
-### Task 4: Add output destination prompt to `cgb index`
+### Task 4: Add output destination prompt to `terrain index`
 
 **Files:**
-- Modify: `code_graph_builder/entrypoints/cli/cli.py:1442-1575` (`cmd_index`)
+- Modify: `terrain/entrypoints/cli/cli.py:1442-1575` (`cmd_index`)
 - Modify: `tests/entrypoints/test_repo_local_cgb.py`
 
 - [ ] **Step 1: Write failing tests for output destination selection**
@@ -458,12 +458,12 @@ Append to `tests/entrypoints/test_repo_local_cgb.py`:
 
 ```python
 class TestIndexOutputDestination:
-    """cgb index should support --output local/workspace flags."""
+    """terrain index should support --output local/workspace flags."""
 
     def test_output_local_sets_artifact_dir_to_cgb(self, tmp_path: Path):
-        """--output local should direct artifacts to {repo}/.cgb/."""
-        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
-        from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+        """--output local should direct artifacts to {repo}/.terrain/."""
+        from terrain.entrypoints.cli.cli import _resolve_index_artifact_dir
+        from terrain.entrypoints.mcp.pipeline import artifact_dir_for
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -475,8 +475,8 @@ class TestIndexOutputDestination:
 
     def test_output_workspace_sets_artifact_dir_to_workspace(self, tmp_path: Path):
         """--output workspace should use the normal workspace artifact dir."""
-        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
-        from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+        from terrain.entrypoints.cli.cli import _resolve_index_artifact_dir
+        from terrain.entrypoints.mcp.pipeline import artifact_dir_for
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -490,7 +490,7 @@ class TestIndexOutputDestination:
     def test_output_none_defaults_to_local(self, tmp_path: Path):
         """When output is None (interactive would show menu), default to local
         in non-interactive context."""
-        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
+        from terrain.entrypoints.cli.cli import _resolve_index_artifact_dir
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -509,24 +509,24 @@ Expected: FAIL — `_resolve_index_artifact_dir` does not exist.
 
 - [ ] **Step 3: Implement `_resolve_index_artifact_dir()` and integrate into `cmd_index()`**
 
-Add the following function in `code_graph_builder/entrypoints/cli/cli.py`, before `cmd_index()` (around line 1440):
+Add the following function in `terrain/entrypoints/cli/cli.py`, before `cmd_index()` (around line 1440):
 
 ```python
 def _resolve_index_artifact_dir(
     repo_path: Path, ws: Path, output: str | None = None, interactive: bool = True,
 ) -> Path:
-    """Resolve the artifact directory for `cgb index` output.
+    """Resolve the artifact directory for `terrain index` output.
 
     Args:
         repo_path: The repository being indexed.
         ws: Workspace root directory.
-        output: "local" for .cgb/, "workspace" for workspace, None for interactive.
+        output: "local" for .terrain/, "workspace" for workspace, None for interactive.
         interactive: If True and output is None, show menu. Otherwise default to local.
 
     Returns:
         The artifact directory path.
     """
-    from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+    from terrain.entrypoints.mcp.pipeline import artifact_dir_for
 
     if output == "local":
         return repo_path / ".cgb"
@@ -539,7 +539,7 @@ def _resolve_index_artifact_dir(
 
     ws_dir = artifact_dir_for(ws, repo_path)
     options = [
-        f".cgb/  (repo-local, shareable via git)",
+        f".terrain/  (repo-local, shareable via git)",
         f"{ws_dir}  (workspace)",
     ]
     print()
@@ -588,9 +588,9 @@ With:
 ```python
         save_meta(artifact_dir, repo_path, 0, last_indexed_commit=_head, repo_name=custom_name)
         ws_root = _get_workspace_root()
-        # When outputting to .cgb/, also maintain a workspace stub for discovery
+        # When outputting to .terrain/, also maintain a workspace stub for discovery
         if artifact_dir == repo_path / ".cgb":
-            from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+            from terrain.entrypoints.mcp.pipeline import artifact_dir_for
             ws_stub = artifact_dir_for(ws_root, repo_path)
             ws_stub.mkdir(parents=True, exist_ok=True)
             save_meta(ws_stub, repo_path, 0, last_indexed_commit=_head, repo_name=custom_name)
@@ -609,9 +609,9 @@ With:
 
 ```python
         save_meta(artifact_dir, repo_path, page_count, last_indexed_commit=_head, repo_name=custom_name)
-        # Update workspace stub too when using .cgb/
+        # Update workspace stub too when using .terrain/
         if artifact_dir == repo_path / ".cgb":
-            from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+            from terrain.entrypoints.mcp.pipeline import artifact_dir_for
             ws_stub = artifact_dir_for(ws_root, repo_path)
             save_meta(ws_stub, repo_path, page_count, last_indexed_commit=_head, repo_name=custom_name)
 ```
@@ -624,18 +624,18 @@ Expected: All 12 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add code_graph_builder/entrypoints/cli/cli.py tests/entrypoints/test_repo_local_cgb.py
-git commit -m "feat: cgb index supports output to .cgb/ or workspace via menu/flag"
+git add terrain/entrypoints/cli/cli.py tests/entrypoints/test_repo_local_cgb.py
+git commit -m "feat: terrain index supports output to .terrain/ or workspace via menu/flag"
 ```
 
 ---
 
-### Task 5: Add `--output` CLI argument to `cgb index`
+### Task 5: Add `--output` CLI argument to `terrain index`
 
 **Files:**
-- Modify: `code_graph_builder/entrypoints/cli/cli.py` (argparse section)
+- Modify: `terrain/entrypoints/cli/cli.py` (argparse section)
 
-- [ ] **Step 1: Find the argparse section for `cgb index`**
+- [ ] **Step 1: Find the argparse section for `terrain index`**
 
 Search for `index_parser` or `add_parser("index"` in `cli.py`.
 
@@ -646,20 +646,20 @@ In the argparse setup for the `index` subcommand, add:
 ```python
 index_parser.add_argument(
     "--output", choices=["local", "workspace"], default=None,
-    help="Output destination: 'local' for .cgb/ in repo, 'workspace' for ~/.code-graph-builder/",
+    help="Output destination: 'local' for .terrain/ in repo, 'workspace' for ~/.terrain-ai/",
 )
 ```
 
 - [ ] **Step 3: Verify by running help**
 
-Run: `python -m code_graph_builder.entrypoints.cli.cli index --help`
+Run: `python -m terrain.entrypoints.cli.cli index --help`
 Expected: `--output {local,workspace}` appears in the help output.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add code_graph_builder/entrypoints/cli/cli.py
-git commit -m "feat: add --output flag to cgb index for destination selection"
+git add terrain/entrypoints/cli/cli.py
+git commit -m "feat: add --output flag to terrain index for destination selection"
 ```
 
 ---
@@ -687,5 +687,5 @@ Expected: No layer violations.
 
 ```bash
 git add -A
-git commit -m "test: verify repo-local .cgb/ feature passes full suite"
+git commit -m "test: verify repo-local .terrain/ feature passes full suite"
 ```

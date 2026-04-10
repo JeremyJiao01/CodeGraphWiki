@@ -1,4 +1,4 @@
-"""Tests for repo-local .cgb/ artifact directory resolution."""
+"""Tests for repo-local .terrain/ artifact directory resolution."""
 from __future__ import annotations
 
 import json
@@ -19,14 +19,14 @@ def _make_artifact_dir(path: Path, repo_path: str = "/fake/repo") -> None:
 
 
 class TestResolveArtifactDir:
-    """_resolve_artifact_dir prefers {repo_path}/.cgb/ over workspace artifact dir."""
+    """_resolve_artifact_dir prefers {repo_path}/.terrain/ over workspace artifact dir."""
 
     def test_prefers_local_cgb_when_exists(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
-        local_cgb = repo / ".cgb"
+        local_cgb = repo / ".terrain"
         _make_artifact_dir(local_cgb, repo_path=repo.as_posix())
 
         ws_artifact = tmp_path / "workspace" / "myrepo_abc123"
@@ -36,7 +36,7 @@ class TestResolveArtifactDir:
         assert result == local_cgb
 
     def test_falls_back_to_workspace_when_no_local_cgb(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -48,10 +48,10 @@ class TestResolveArtifactDir:
         assert result == ws_artifact
 
     def test_falls_back_when_local_cgb_has_no_graph_db(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         repo = tmp_path / "myrepo"
-        local_cgb = repo / ".cgb"
+        local_cgb = repo / ".terrain"
         local_cgb.mkdir(parents=True)
         (local_cgb / "meta.json").write_text("{}", encoding="utf-8")
 
@@ -62,7 +62,7 @@ class TestResolveArtifactDir:
         assert result == ws_artifact
 
     def test_falls_back_when_repo_path_missing_from_meta(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         ws_artifact = tmp_path / "workspace" / "myrepo_abc123"
         ws_artifact.mkdir(parents=True)
@@ -75,7 +75,7 @@ class TestResolveArtifactDir:
         assert result == ws_artifact
 
     def test_falls_back_when_repo_path_does_not_exist(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.mcp.tools import _resolve_artifact_dir
+        from terrain.entrypoints.mcp.tools import _resolve_artifact_dir
 
         ws_artifact = tmp_path / "workspace" / "myrepo_abc123"
         _make_artifact_dir(ws_artifact, repo_path="/nonexistent/path")
@@ -85,10 +85,10 @@ class TestResolveArtifactDir:
 
 
 class TestMCPAutoLoadWithLocalCgb:
-    """MCPToolsRegistry._try_auto_load() should prefer .cgb/ when available."""
+    """MCPToolsRegistry._try_auto_load() should prefer .terrain/ when available."""
 
     def test_auto_load_uses_local_cgb(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry
+        from terrain.entrypoints.mcp.tools import MCPToolsRegistry
 
         ws = tmp_path / "workspace"
         ws.mkdir()
@@ -98,7 +98,7 @@ class TestMCPAutoLoadWithLocalCgb:
         ws_artifact = ws / "myrepo_abc123"
         _make_artifact_dir(ws_artifact, repo_path=repo.as_posix())
 
-        local_cgb = repo / ".cgb"
+        local_cgb = repo / ".terrain"
         _make_artifact_dir(local_cgb, repo_path=repo.as_posix())
 
         (ws / "active.txt").write_text("myrepo_abc123", encoding="utf-8")
@@ -108,7 +108,7 @@ class TestMCPAutoLoadWithLocalCgb:
             mock_load.assert_called_once_with(local_cgb)
 
     def test_auto_load_falls_back_to_workspace(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry
+        from terrain.entrypoints.mcp.tools import MCPToolsRegistry
 
         ws = tmp_path / "workspace"
         ws.mkdir()
@@ -126,10 +126,10 @@ class TestMCPAutoLoadWithLocalCgb:
 
 
 class TestCLILoadReposWithLocalCgb:
-    """CLI _load_repos() should resolve .cgb/ for repos that have it."""
+    """CLI _load_repos() should resolve .terrain/ for repos that have it."""
 
     def test_load_repos_resolves_local_cgb(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.cli.cli import _load_repos
+        from terrain.entrypoints.cli.cli import _load_repos
 
         ws = tmp_path / "workspace"
         ws.mkdir()
@@ -139,7 +139,7 @@ class TestCLILoadReposWithLocalCgb:
         ws_artifact = ws / "myrepo_abc123"
         _make_artifact_dir(ws_artifact, repo_path=repo.as_posix())
 
-        local_cgb = repo / ".cgb"
+        local_cgb = repo / ".terrain"
         _make_artifact_dir(local_cgb, repo_path=repo.as_posix())
 
         (ws / "active.txt").write_text("myrepo_abc123", encoding="utf-8")
@@ -149,7 +149,7 @@ class TestCLILoadReposWithLocalCgb:
         assert repos[0]["artifact_dir"] == local_cgb
 
     def test_load_repos_keeps_workspace_when_no_local_cgb(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.cli.cli import _load_repos
+        from terrain.entrypoints.cli.cli import _load_repos
 
         ws = tmp_path / "workspace"
         ws.mkdir()
@@ -167,10 +167,10 @@ class TestCLILoadReposWithLocalCgb:
 
 
 class TestIndexOutputDestination:
-    """cgb index should support --output local/workspace flags."""
+    """terrain index should support --output local/workspace flags."""
 
     def test_output_local_sets_artifact_dir_to_cgb(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
+        from terrain.entrypoints.cli.cli import _resolve_index_artifact_dir
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -178,11 +178,11 @@ class TestIndexOutputDestination:
         ws.mkdir()
 
         result = _resolve_index_artifact_dir(repo, ws, output="local")
-        assert result == repo / ".cgb"
+        assert result == repo / ".terrain"
 
     def test_output_workspace_sets_artifact_dir_to_workspace(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
-        from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+        from terrain.entrypoints.cli.cli import _resolve_index_artifact_dir
+        from terrain.entrypoints.mcp.pipeline import artifact_dir_for
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -194,7 +194,7 @@ class TestIndexOutputDestination:
         assert result == expected
 
     def test_output_none_defaults_to_local_non_interactive(self, tmp_path: Path):
-        from code_graph_builder.entrypoints.cli.cli import _resolve_index_artifact_dir
+        from terrain.entrypoints.cli.cli import _resolve_index_artifact_dir
 
         repo = tmp_path / "myrepo"
         repo.mkdir()
@@ -202,4 +202,4 @@ class TestIndexOutputDestination:
         ws.mkdir()
 
         result = _resolve_index_artifact_dir(repo, ws, output=None, interactive=False)
-        assert result == repo / ".cgb"
+        assert result == repo / ".terrain"

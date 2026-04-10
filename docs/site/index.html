@@ -28,8 +28,8 @@
                     <p class="subtitle hero-fade-in" style="animation-delay: 0.6s;" data-i18n="hero_sub">A MCP turns your codebase into a knowledge graph, giving AI tools instant access to functions, call chains, and context.</p>
                     <div class="hero-fade-in" style="margin-top: var(--space-xl); display: flex; gap: var(--space-md); align-items: center; flex-wrap: wrap; animation-delay: 1.0s;">
                         <div style="display: inline-flex; align-items: center; padding: 10px 14px; background: var(--color-bg-white); color: var(--color-text-primary); border: 1px solid var(--color-material-2); border-radius: 6px; font-family: ui-monospace, monospace; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                            npx code-graph-builder@latest --setup
-                            <button class="copy-btn" style="position: static; margin-left: 16px; background: transparent; color: var(--color-text-secondary); padding: 6px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--color-material-2)'" onmouseout="this.style.background='transparent'" onclick="copyToClipboard('npx code-graph-builder@latest --setup')" title="Copy command">
+                            npx terrain-ai@latest --setup
+                            <button class="copy-btn" style="position: static; margin-left: 16px; background: transparent; color: var(--color-text-secondary); padding: 6px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--color-material-2)'" onmouseout="this.style.background='transparent'" onclick="copyToClipboard('npx terrain-ai@latest --setup')" title="Copy command">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                             </button>
                         </div>
@@ -54,7 +54,7 @@
         <!-- Pain Points -->
         <section class="pain-points reveal">
             <p>
-<span data-i18n="pain_text">"Most agents re-read your entire codebase every time they start a task — the same files, the same functions, the same slow discovery loop. Code Graph Builder indexes it once into a knowledge graph, and every session after that already knows where everything is."</span>
+<span data-i18n="pain_text">"Most agents re-read your entire codebase every time they start a task — the same files, the same functions, the same slow discovery loop. Terrain indexes it once into a knowledge graph, and every session after that already knows where everything is."</span>
             </p>
         </section>
 
@@ -304,8 +304,8 @@
 
             <h3 style="color: var(--color-bg-white);" data-i18n="qs_step1">Step 1: Install & Init</h3>
             <div class="code-block">
-                <button class="copy-btn" onclick="copyToClipboard('npx code-graph-builder@latest --setup')">Copy</button>
-                <code style="background: transparent; color: #9CDCFE; border: none; padding: 0;">npx code-graph-builder@latest --setup</code>
+                <button class="copy-btn" onclick="copyToClipboard('npx terrain-ai@latest --setup')">Copy</button>
+                <code style="background: transparent; color: #9CDCFE; border: none; padding: 0;">npx terrain-ai@latest --setup</code>
             </div>
 
             <h3 style="color: var(--color-bg-white); margin-top: var(--space-xl);" data-i18n="qs_step2">Step 2: Configure MCP</h3>
@@ -314,9 +314,9 @@
                 <button class="copy-btn" onclick="copyToClipboard(document.getElementById('mcpJson').innerText)">Copy</button>
                 <pre id="mcpJson" style="color: #CE9178; font-size: 14px; margin: 0;">{
   "mcpServers": {
-    "code-graph-builder": {
+    "terrain-ai": {
       "command": "npx",
-      "args": ["-y", "code-graph-builder@latest", "--server"]
+      "args": ["-y", "terrain-ai@latest", "--server"]
     }
   }
 }</pre>
@@ -572,7 +572,7 @@
 
                 // Show results with scores
                 const results = [
-                    { fn: 'CodeGraphBuilder.build_graph', file: 'builder.py:213', score: '0.96' },
+                    { fn: 'TerrainBuilder.build_graph', file: 'builder.py:213', score: '0.96' },
                     { fn: 'GraphUpdater.run', file: 'graph_updater.py:89', score: '0.83' },
                     { fn: '_load_parsers', file: 'builder.py:158', score: '0.71' },
                 ];
@@ -970,7 +970,7 @@
             promptEl.className = 'cli-line-enter';
             promptEl.style.color = 'var(--color-text-primary)';
             promptEl.style.fontWeight = '600';
-            promptEl.innerText = '> code-graph-builder build';
+            promptEl.innerText = '> terrain-ai build';
             cliContainer.appendChild(promptEl);
             
             await new Promise(r => setTimeout(r, 1200));
@@ -1292,7 +1292,7 @@
             en: {
                 hero_title: 'Your AI <i>finally</i> understands your codebase.',
                 hero_sub: 'A MCP turns your codebase into a knowledge graph, giving AI tools instant access to functions, call chains, and context.',
-                pain_text: '"Most agents re-read your entire codebase every time they start a task — the same files, the same functions, the same slow discovery loop. Code Graph Builder indexes it once into a knowledge graph, and every session after that already knows where everything is."',
+                pain_text: '"Most agents re-read your entire codebase every time they start a task — the same files, the same functions, the same slow discovery loop. Terrain indexes it once into a knowledge graph, and every session after that already knows where everything is."',
                 swipe_hint: 'Swipe left to discard card and explore next',
                 card1_title: 'One quiet read,<br>and nothing is forgotten.',
                 card2_title: 'An error is a whisper —<br>here, it becomes a sentence.',
@@ -1312,7 +1312,7 @@
             zh: {
                 hero_title: '你的 AI，<i>终于</i>读懂了你的代码。',
                 hero_sub: '一个 MCP 将代码库转化为知识图谱，让 AI 工具即时访问函数、调用链和上下文。',
-                pain_text: '"大多数 Agent 每次启动任务都要重新阅读整个代码库——同样的文件、同样的函数、同样缓慢的发现过程。Code Graph Builder 只需索引一次，之后每次会话都已经知道一切在哪里。"',
+                pain_text: '"大多数 Agent 每次启动任务都要重新阅读整个代码库——同样的文件、同样的函数、同样缓慢的发现过程。Terrain 只需索引一次，之后每次会话都已经知道一切在哪里。"',
                 swipe_hint: '左滑切换下一张卡片',
                 card1_title: '安静地读一遍，<br>便不再遗忘。',
                 card2_title: '错误是一声低语——<br>在这里，它成为完整的叙述。',

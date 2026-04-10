@@ -13,7 +13,7 @@
 ### Task 1: Add constants for func_ptr_assign query
 
 **Files:**
-- Modify: `code_graph_builder/foundation/types/constants.py:417-435`
+- Modify: `terrain/foundation/types/constants.py:417-435`
 
 - [ ] **Step 1: Add query key and capture constants**
 
@@ -35,7 +35,7 @@ CAPTURE_RHS = "rhs"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add code_graph_builder/foundation/types/constants.py
+git add terrain/foundation/types/constants.py
 git commit -m "feat: add func_ptr_assign query constants"
 ```
 
@@ -44,8 +44,8 @@ git commit -m "feat: add func_ptr_assign query constants"
 ### Task 2: Add func_ptr_assign query to C/C++ language spec
 
 **Files:**
-- Modify: `code_graph_builder/foundation/parsers/language_spec.py`
-- Modify: `code_graph_builder/foundation/parsers/parser_loader.py`
+- Modify: `terrain/foundation/parsers/language_spec.py`
+- Modify: `terrain/foundation/parsers/parser_loader.py`
 
 - [ ] **Step 1: Read language_spec.py to find C/C++ spec definitions**
 
@@ -97,7 +97,7 @@ Expected: `Query compiled OK, pattern count: 1`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add code_graph_builder/foundation/parsers/language_spec.py code_graph_builder/foundation/parsers/parser_loader.py
+git add terrain/foundation/parsers/language_spec.py terrain/foundation/parsers/parser_loader.py
 git commit -m "feat: add func_ptr_assign tree-sitter query for C/C++"
 ```
 
@@ -106,12 +106,12 @@ git commit -m "feat: add func_ptr_assign tree-sitter query for C/C++"
 ### Task 3: Add func_ptr_map to CallResolver
 
 **Files:**
-- Modify: `code_graph_builder/foundation/parsers/call_resolver.py`
-- Test: `code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py`
+- Modify: `terrain/foundation/parsers/call_resolver.py`
+- Test: `terrain/tests/foundation/parsers/test_func_ptr_detection.py`
 
 - [ ] **Step 1: Write failing test for register_func_ptr and resolve_func_ptr_call**
 
-Create `code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py`:
+Create `terrain/tests/foundation/parsers/test_func_ptr_detection.py`:
 
 ```python
 """Tests for C/C++ function pointer detection."""
@@ -119,7 +119,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from code_graph_builder.foundation.parsers.call_resolver import CallResolver
+from terrain.foundation.parsers.call_resolver import CallResolver
 
 
 def _make_resolver() -> CallResolver:
@@ -159,7 +159,7 @@ def test_resolve_call_fallback_to_func_ptr():
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-python3 -m pytest code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py -v
+python3 -m pytest terrain/tests/foundation/parsers/test_func_ptr_detection.py -v
 ```
 
 Expected: FAIL — `CallResolver` has no `register_func_ptr` method.
@@ -197,7 +197,7 @@ if cs.SEPARATOR_DOT in call_name:
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-python3 -m pytest code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py -v
+python3 -m pytest terrain/tests/foundation/parsers/test_func_ptr_detection.py -v
 ```
 
 Expected: 3 passed.
@@ -205,7 +205,7 @@ Expected: 3 passed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add code_graph_builder/foundation/parsers/call_resolver.py code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py
+git add terrain/foundation/parsers/call_resolver.py terrain/tests/foundation/parsers/test_func_ptr_detection.py
 git commit -m "feat: add func_ptr_map to CallResolver for indirect call resolution"
 ```
 
@@ -214,8 +214,8 @@ git commit -m "feat: add func_ptr_map to CallResolver for indirect call resoluti
 ### Task 4: Add process_func_ptr_assignments to CallProcessor
 
 **Files:**
-- Modify: `code_graph_builder/foundation/parsers/call_processor.py`
-- Test: `code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py`
+- Modify: `terrain/foundation/parsers/call_processor.py`
+- Test: `terrain/tests/foundation/parsers/test_func_ptr_detection.py`
 
 - [ ] **Step 1: Write failing test for process_func_ptr_assignments**
 
@@ -227,8 +227,8 @@ from pathlib import Path
 from tree_sitter import Language, Parser
 from unittest.mock import MagicMock, call
 
-from code_graph_builder.foundation.parsers.call_processor import CallProcessor
-from code_graph_builder.foundation.types import constants as cs
+from terrain.foundation.parsers.call_processor import CallProcessor
+from terrain.foundation.types import constants as cs
 
 
 def _parse_c(code: str):
@@ -413,7 +413,7 @@ def test_global_assignment_skipped():
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-python3 -m pytest code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py::test_dot_access_assignment -v
+python3 -m pytest terrain/tests/foundation/parsers/test_func_ptr_detection.py::test_dot_access_assignment -v
 ```
 
 Expected: FAIL — `CallProcessor` has no `process_func_ptr_assignments` method.
@@ -496,7 +496,7 @@ def process_func_ptr_assignments(
 - [ ] **Step 4: Run all tests**
 
 ```bash
-python3 -m pytest code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py -v
+python3 -m pytest terrain/tests/foundation/parsers/test_func_ptr_detection.py -v
 ```
 
 Expected: 8 passed (3 resolver + 5 call processor tests).
@@ -504,7 +504,7 @@ Expected: 8 passed (3 resolver + 5 call processor tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add code_graph_builder/foundation/parsers/call_processor.py code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py
+git add terrain/foundation/parsers/call_processor.py terrain/tests/foundation/parsers/test_func_ptr_detection.py
 git commit -m "feat: add process_func_ptr_assignments to CallProcessor"
 ```
 
@@ -513,7 +513,7 @@ git commit -m "feat: add process_func_ptr_assignments to CallProcessor"
 ### Task 5: Wire into GraphUpdater
 
 **Files:**
-- Modify: `code_graph_builder/domains/core/graph/graph_updater.py`
+- Modify: `terrain/domains/core/graph/graph_updater.py`
 
 - [ ] **Step 1: Read _process_function_calls method**
 
@@ -551,7 +551,7 @@ Expected: No layer violations.
 - [ ] **Step 4: Run full test suite**
 
 ```bash
-python3 -m pytest code_graph_builder/tests/ -v
+python3 -m pytest terrain/tests/ -v
 ```
 
 Expected: All tests pass (including the new func_ptr tests).
@@ -559,7 +559,7 @@ Expected: All tests pass (including the new func_ptr tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add code_graph_builder/domains/core/graph/graph_updater.py
+git add terrain/domains/core/graph/graph_updater.py
 git commit -m "feat: wire func ptr assignment detection into graph build pipeline"
 ```
 
@@ -568,7 +568,7 @@ git commit -m "feat: wire func ptr assignment detection into graph build pipelin
 ### Task 6: Final integration test + verify
 
 **Files:**
-- Test: `code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py`
+- Test: `terrain/tests/foundation/parsers/test_func_ptr_detection.py`
 
 - [ ] **Step 1: Add integration-style test**
 
@@ -617,7 +617,7 @@ def test_multiple_assignments_same_file():
 - [ ] **Step 2: Run all tests**
 
 ```bash
-python3 -m pytest code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py -v
+python3 -m pytest terrain/tests/foundation/parsers/test_func_ptr_detection.py -v
 ```
 
 Expected: 9 passed.
@@ -625,7 +625,7 @@ Expected: 9 passed.
 - [ ] **Step 3: Run full project test suite + dep_check**
 
 ```bash
-python3 -m pytest code_graph_builder/tests/ -v && python3 tools/dep_check.py
+python3 -m pytest terrain/tests/ -v && python3 tools/dep_check.py
 ```
 
 Expected: All pass, no violations.
@@ -633,6 +633,6 @@ Expected: All pass, no violations.
 - [ ] **Step 4: Final commit**
 
 ```bash
-git add code_graph_builder/tests/foundation/parsers/test_func_ptr_detection.py
+git add terrain/tests/foundation/parsers/test_func_ptr_detection.py
 git commit -m "test: add integration test for multiple func ptr assignments"
 ```

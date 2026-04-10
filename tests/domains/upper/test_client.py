@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from code_graph_builder.domains.upper.rag.client import (
+from terrain.domains.upper.rag.client import (
     ChatResponse,
     LLMClient,
     create_llm_client,
@@ -69,7 +69,7 @@ class TestLLMClient:
         assert headers["Authorization"] == "Bearer sk-test"
         assert headers["Content-Type"] == "application/json"
 
-    @patch("code_graph_builder.domains.upper.rag.client.requests.post")
+    @patch("terrain.domains.upper.rag.client.requests.post")
     def test_chat_success(self, mock_post):
         """Test successful chat completion."""
         mock_response = Mock()
@@ -93,7 +93,7 @@ class TestLLMClient:
         assert response.model == "kimi-k2.5"
         mock_post.assert_called_once()
 
-    @patch("code_graph_builder.domains.upper.rag.client.requests.post")
+    @patch("terrain.domains.upper.rag.client.requests.post")
     def test_chat_with_context(self, mock_post):
         """Test chat with context."""
         mock_response = Mock()
@@ -123,7 +123,7 @@ class TestLLMClient:
         json_data = call_args.kwargs["json"]
         assert any("Context:" in msg["content"] for msg in json_data["messages"])
 
-    @patch("code_graph_builder.domains.upper.rag.client.requests.post")
+    @patch("terrain.domains.upper.rag.client.requests.post")
     def test_chat_http_error(self, mock_post):
         """Test chat with HTTP error."""
         from requests.exceptions import HTTPError
@@ -142,7 +142,7 @@ class TestLLMClient:
         with pytest.raises(RuntimeError, match="API request failed"):
             client.chat("Hello")
 
-    @patch("code_graph_builder.domains.upper.rag.client.requests.post")
+    @patch("terrain.domains.upper.rag.client.requests.post")
     def test_chat_timeout(self, mock_post):
         """Test chat with timeout."""
         from requests.exceptions import Timeout
@@ -153,7 +153,7 @@ class TestLLMClient:
         with pytest.raises(RuntimeError, match="timeout"):
             client.chat("Hello")
 
-    @patch("code_graph_builder.domains.upper.rag.client.requests.post")
+    @patch("terrain.domains.upper.rag.client.requests.post")
     def test_chat_with_messages(self, mock_post):
         """Test chat with raw messages."""
         mock_response = Mock()
@@ -182,7 +182,7 @@ class TestLLMClient:
         json_data = call_args.kwargs["json"]
         assert json_data["messages"] == messages
 
-    @patch("code_graph_builder.domains.upper.rag.client.requests.get")
+    @patch("terrain.domains.upper.rag.client.requests.get")
     def test_health_check_success(self, mock_get):
         """Test successful health check."""
         mock_response = Mock()
@@ -192,7 +192,7 @@ class TestLLMClient:
         client = LLMClient(api_key="sk-test")
         assert client.health_check() is True
 
-    @patch("code_graph_builder.domains.upper.rag.client.requests.get")
+    @patch("terrain.domains.upper.rag.client.requests.get")
     def test_health_check_failure(self, mock_get):
         """Test failed health check."""
         mock_get.side_effect = Exception("Connection error")

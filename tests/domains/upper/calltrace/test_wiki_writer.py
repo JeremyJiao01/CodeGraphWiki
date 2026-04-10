@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from code_graph_builder.domains.upper.calltrace.tracer import (
+from terrain.domains.upper.calltrace.tracer import (
     CallPath,
     NodeInfo,
     SingleTraceResult,
     TraceResult,
 )
-from code_graph_builder.domains.upper.calltrace.wiki_writer import (
+from terrain.domains.upper.calltrace.wiki_writer import (
     _read_source_snippet,
     _render_wiki_page,
     write_wiki_pages,

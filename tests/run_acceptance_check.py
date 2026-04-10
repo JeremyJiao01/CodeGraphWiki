@@ -88,7 +88,7 @@ class AcceptanceChecker:
         # ruff check
         print("运行 ruff check...")
         returncode, stdout, stderr = run_command(
-            ["uv", "run", "ruff", "check", "code_graph_builder/"],
+            ["uv", "run", "ruff", "check", "terrain/"],
             cwd=self.project_root,
         )
         if returncode == 0:
@@ -102,7 +102,7 @@ class AcceptanceChecker:
         # ruff format check
         print("运行 ruff format --check...")
         returncode, stdout, stderr = run_command(
-            ["uv", "run", "ruff", "format", "--check", "code_graph_builder/"],
+            ["uv", "run", "ruff", "format", "--check", "terrain/"],
             cwd=self.project_root,
         )
         if returncode == 0:
@@ -116,7 +116,7 @@ class AcceptanceChecker:
         # ty type check
         print("运行 ty 类型检查...")
         returncode, stdout, stderr = run_command(
-            ["uv", "run", "ty", "code_graph_builder/"],
+            ["uv", "run", "ty", "terrain/"],
             cwd=self.project_root,
         )
         if returncode == 0:
@@ -131,7 +131,7 @@ class AcceptanceChecker:
         """检查单元测试."""
         print_header("单元测试检查")
 
-        print("运行 code_graph_builder 单元测试...")
+        print("运行 terrain 单元测试...")
         returncode, stdout, stderr = run_command(
             [
                 "uv",
@@ -163,7 +163,7 @@ class AcceptanceChecker:
                 "run",
                 "pytest",
                 "tests/",
-                "--cov=code_graph_builder",
+                "--cov=terrain",
                 "--cov-report=term-missing",
             ],
             cwd=self.project_root,
@@ -210,9 +210,9 @@ class AcceptanceChecker:
         try:
             # 动态导入避免依赖问题
             sys.path.insert(0, str(self.project_root))
-            from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+            from terrain.domains.core.graph.builder import TerrainBuilder
 
-            builder = CodeGraphBuilder(str(self.tinycc_path))
+            builder = TerrainBuilder(str(self.tinycc_path))
             result = builder.build_graph(clean=True)
 
             elapsed_time = time.time() - start_time
@@ -355,7 +355,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     project_root = Path(__file__).parent.parent.parent
 
-    print_header("Code Graph Builder 阶段二验收检查")
+    print_header("Terrain 阶段二验收检查")
     print(f"项目根目录: {project_root}")
     print(f"TinyCC 路径: {args.tinycc_path}")
 

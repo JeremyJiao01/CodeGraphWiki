@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from code_graph_builder.foundation.services.kuzu_service import KuzuIngestor
+from terrain.foundation.services.kuzu_service import KuzuIngestor
 
 
 @pytest.fixture

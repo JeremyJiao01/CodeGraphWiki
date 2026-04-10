@@ -2,7 +2,7 @@
 
 Step-by-step guide to add Tree-sitter support for a new programming language.
 
-All paths below are relative to `code_graph_builder/`.
+All paths below are relative to `terrain/`.
 
 ## Steps
 

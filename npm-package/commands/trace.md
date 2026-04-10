@@ -1,4 +1,4 @@
-追溯目标函数的完整调用链，分析从入口点到目标的所有路径，生成结构化的调查报告——利用 `code-graph-builder` MCP 服务器提供的工具。
+追溯目标函数的完整调用链，分析从入口点到目标的所有路径，生成结构化的调查报告——利用 `terrain` MCP 服务器提供的工具。
 
 **输入：** $ARGUMENTS（函数名——简单名如 `LogSaveWithSubId`，或全限定名如 `pkg.log.LogSaveWithSubId`）
 

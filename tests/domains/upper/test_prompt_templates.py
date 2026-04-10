@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from code_graph_builder.domains.upper.rag.prompt_templates import (
+from terrain.domains.upper.rag.prompt_templates import (
     CodeAnalysisPrompts,
     CodeContext,
     RAGPrompts,

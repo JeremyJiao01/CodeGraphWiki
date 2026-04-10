@@ -1,4 +1,4 @@
-"""Layer dependency checker for the code_graph_builder 5-layer architecture.
+"""Layer dependency checker for the terrain 5-layer architecture.
 
 Scans all Python files for import statements and checks them against layer rules:
   L0  foundation/types/         — stdlib + third-party only
@@ -18,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-PKG = "code_graph_builder"
+PKG = "terrain"
 
 # Layer numeric order for comparison
 LAYER_ORDER = {"L0": 0, "L1": 1, "L2": 2, "L3": 3, "L4": 4}
@@ -116,7 +116,7 @@ def _classify_module(module: str) -> str | None:
         return None
 
     parts = _module_to_path_parts(module)
-    # parts[0] = 'code_graph_builder'
+    # parts[0] = 'terrain'
     if len(parts) < 3:
         return None
 

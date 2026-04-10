@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from code_graph_builder.domains.core.graph.incremental_updater import (
+from terrain.domains.core.graph.incremental_updater import (
     IncrementalUpdater,
     IncrementalResult,
     INCREMENTAL_FILE_LIMIT,

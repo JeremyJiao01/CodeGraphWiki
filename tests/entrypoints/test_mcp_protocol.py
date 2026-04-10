@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def registry(tmp_path_factory):
-    from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry
+    from terrain.entrypoints.mcp.tools import MCPToolsRegistry
 
     workspace = tmp_path_factory.mktemp("workspace")
     reg = MCPToolsRegistry(workspace=workspace)
@@ -34,7 +34,7 @@ def registry(tmp_path_factory):
 @pytest.fixture(scope="module")
 def indexed_registry(tmp_path_factory):
     """Registry with tinycc indexed (graph + api-docs, skip embed/wiki)."""
-    from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry
+    from terrain.entrypoints.mcp.tools import MCPToolsRegistry
 
     workspace = tmp_path_factory.mktemp("indexed_workspace")
     reg = MCPToolsRegistry(workspace=workspace)
@@ -144,7 +144,7 @@ class TestCallToolDispatch:
 
     def test_dispatch_get_repository_info_no_repo(self, registry):
         """Should raise ToolError when no repo is indexed."""
-        from code_graph_builder.entrypoints.mcp.tools import ToolError
+        from terrain.entrypoints.mcp.tools import ToolError
 
         with pytest.raises(ToolError):
             self._simulate_call_tool(registry, "get_repository_info", {})
@@ -173,7 +173,7 @@ class TestToolErrorHandling:
     """Verify ToolError is properly raised and structured."""
 
     def test_require_active_raises_toolerror(self, registry):
-        from code_graph_builder.entrypoints.mcp.tools import ToolError
+        from terrain.entrypoints.mcp.tools import ToolError
 
         # Tools that require an active repo and take no required args
         tools_no_args = [
@@ -200,7 +200,7 @@ class TestToolErrorHandling:
         )
 
     def test_switch_nonexistent_repo_raises(self, registry):
-        from code_graph_builder.entrypoints.mcp.tools import ToolError
+        from terrain.entrypoints.mcp.tools import ToolError
 
         with pytest.raises(ToolError):
             _run(registry._handle_switch_repository(repo_name="nonexistent_abc"))
@@ -252,7 +252,7 @@ class TestGraphOnlyTools:
 
     def test_get_api_doc_known_function(self, indexed_registry):
         """Should return API doc for a function that exists."""
-        from code_graph_builder.entrypoints.mcp.tools import ToolError
+        from terrain.entrypoints.mcp.tools import ToolError
 
         # First get a real qualified name from list_api_interfaces
         apis = _run(indexed_registry._handle_list_api_interfaces())
@@ -273,7 +273,7 @@ class TestGraphOnlyTools:
 
     def test_list_wiki_pages_no_wiki(self, indexed_registry):
         """Wiki was skipped, should handle gracefully."""
-        from code_graph_builder.entrypoints.mcp.tools import ToolError
+        from terrain.entrypoints.mcp.tools import ToolError
 
         try:
             result = _run(indexed_registry._handle_list_wiki_pages())
@@ -283,7 +283,7 @@ class TestGraphOnlyTools:
 
     def test_get_code_snippet(self, indexed_registry):
         """get_code_snippet should return source or raise ToolError."""
-        from code_graph_builder.entrypoints.mcp.tools import ToolError
+        from terrain.entrypoints.mcp.tools import ToolError
 
         # Use a function known to exist in the graph
         try:

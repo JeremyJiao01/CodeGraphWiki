@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from code_graph_builder.domains.core.graph.graph_updater import GraphUpdater
-from code_graph_builder.foundation.services.memory_service import MemoryIngestor
+from terrain.domains.core.graph.graph_updater import GraphUpdater
+from terrain.foundation.services.memory_service import MemoryIngestor
 
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def tmp_repo(tmp_path):
 
 
 def _make_updater(repo_path: Path) -> GraphUpdater:
-    from code_graph_builder.foundation.parsers.parser_loader import load_parsers
+    from terrain.foundation.parsers.parser_loader import load_parsers
     parsers, queries = load_parsers()
     ingestor = MemoryIngestor()
     return GraphUpdater(ingestor=ingestor, repo_path=repo_path, parsers=parsers, queries=queries)

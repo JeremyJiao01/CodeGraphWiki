@@ -10,10 +10,10 @@
 
       <!-- Screen 1: MCP 协议概述 -->
       <section class="screen animate-in" style="margin-top:var(--space-12)">
-        <h2 class="screen-heading">MCP：让 Claude 直接调用 CGB 的 13 个工具</h2>
+        <h2 class="screen-heading">MCP：让 Claude 直接调用 Terrain 的 13 个工具</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
-          <span class="term" data-definition="MCP（Model Context Protocol）是 Anthropic 定义的开放标准协议，规定 LLM 如何发现和调用外部工具。工具以 JSON Schema 描述参数类型，通信通过 JSON-RPC 2.0 格式收发消息。CGB 实现了 MCP server，这样 Claude Desktop/Claude Code 就能原生调用 CGB 的所有分析能力。">MCP（Model Context Protocol）</span>
-          是 Anthropic 定义的标准，让 LLM 能调用外部工具。CGB 的 MCP server 通过
+          <span class="term" data-definition="MCP（Model Context Protocol）是 Anthropic 定义的开放标准协议，规定 LLM 如何发现和调用外部工具。工具以 JSON Schema 描述参数类型，通信通过 JSON-RPC 2.0 格式收发消息。Terrain 实现了 MCP server，这样 Claude Desktop/Claude Code 就能原生调用 Terrain 的所有分析能力。">MCP（Model Context Protocol）</span>
+          是 Anthropic 定义的标准，让 LLM 能调用外部工具。Terrain 的 MCP server 通过
           <span class="term" data-definition="stdio（标准输入/输出）通信意味着 MCP server 以子进程方式启动，通过进程的 stdin/stdout 读写 JSON-RPC 消息。不需要开 HTTP 端口，不需要网络配置，进程级别的隔离更安全，也无需担心端口冲突。Claude Desktop 直接 spawn 子进程即可。">stdio 管道</span>
           通信——没有 HTTP 服务器，没有端口，Claude 直接 spawn 子进程，通过 stdin/stdout 交换
           <span class="term" data-definition="JSON-RPC 2.0 是一种轻量级远程调用协议，消息格式为 JSON。请求：{jsonrpc:'2.0', method:'tools/call', params:{name:'find_api', arguments:{query:'...'}}, id:1}。响应：{jsonrpc:'2.0', result:{...}, id:1}。MCP 在此基础上定义了 tools/list、tools/call、resources/read 等方法。">JSON-RPC</span>
@@ -46,7 +46,7 @@
 
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">为什么选 stdio 而不是 HTTP？</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">stdio 通信的好处：零网络配置、进程级别权限隔离、没有端口冲突、无需认证 token（调用方本身就是本机进程），非常适合开发者工具场景。CGB 的 MCP server 入口是 <code>cgb-mcp</code>，底层是 <code>entrypoints/mcp/__main__.py</code>，用 Python 的 <code>sys.stdin/stdout</code> 实现完整的 JSON-RPC 2.0 消息循环。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">stdio 通信的好处：零网络配置、进程级别权限隔离、没有端口冲突、无需认证 token（调用方本身就是本机进程），非常适合开发者工具场景。Terrain 的 MCP server 入口是 <code>terrain-mcp</code>，底层是 <code>entrypoints/mcp/__main__.py</code>，用 Python 的 <code>sys.stdin/stdout</code> 实现完整的 JSON-RPC 2.0 消息循环。</p>
         </div>
       </section>
 
@@ -132,7 +132,7 @@ found: middleware.require_auth (score: 0.83)
 
         <div class="animate-in" style="background:var(--color-accent-light);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-5);margin:var(--space-6) 0">
           <div style="font-family:var(--font-display);font-weight:600;margin-bottom:var(--space-2);color:var(--color-accent)">工具调用对用户完全透明</div>
-          <p style="font-size:var(--text-sm);line-height:1.7">Claude 自动决定何时、调用哪个工具、传入什么参数——用户只需提问。整个 JSON-RPC 往返通常在 100-500ms 内完成。如果 Claude Desktop 配置了 CGB MCP，每次对话中 Claude 都能访问最新的代码图谱，回答基于真实代码，而不是训练记忆。</p>
+          <p style="font-size:var(--text-sm);line-height:1.7">Claude 自动决定何时、调用哪个工具、传入什么参数——用户只需提问。整个 JSON-RPC 往返通常在 100-500ms 内完成。如果 Claude Desktop 配置了 Terrain MCP，每次对话中 Claude 都能访问最新的代码图谱，回答基于真实代码，而不是训练记忆。</p>
         </div>
       </section>
 
@@ -160,7 +160,7 @@ found: middleware.require_auth (score: 0.83)
               </div>
               <div style="padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--color-border)">
                 <div style="font-family:var(--font-mono);font-size:var(--text-xs);color:var(--color-actor-5);margin-bottom:var(--space-1)">list_repositories</div>
-                <div style="font-size:var(--text-xs);color:var(--color-text-secondary);line-height:1.6">列出 ~/.code-graph-builder/ 下所有 artifact_dir，含 indexed_at 时间戳。</div>
+                <div style="font-size:var(--text-xs);color:var(--color-text-secondary);line-height:1.6">列出 ~/.terrain-ai/ 下所有 artifact_dir，含 indexed_at 时间戳。</div>
               </div>
               <div style="padding:var(--space-4) var(--space-5);border-right:1px solid var(--color-border)">
                 <div style="font-family:var(--font-mono);font-size:var(--text-xs);color:var(--color-actor-5);margin-bottom:var(--space-1)">switch_repository</div>
@@ -232,9 +232,9 @@ found: middleware.require_auth (score: 0.83)
         <h2 class="screen-heading">工作空间布局与增量同步机制</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
           所有索引产物都存在
-          <span class="term" data-definition="CGB 工作空间默认位于 ~/.code-graph-builder/。可通过 CGB_WORKSPACE 环境变量覆盖。工作空间内每个仓库有独立的 artifact_dir，名字格式是 repo_name + 8位路径 hash，保证不同路径的同名仓库不冲突。">~/.code-graph-builder/</span>
+          <span class="term" data-definition="Terrain 工作空间默认位于 ~/.terrain-ai/。可通过 TERRAIN_WORKSPACE 环境变量覆盖。工作空间内每个仓库有独立的 artifact_dir，名字格式是 repo_name + 8位路径 hash，保证不同路径的同名仓库不冲突。">~/.terrain-ai/</span>
           目录下。每个仓库有独立的
-          <span class="term" data-definition="artifact_dir 是 CGB 为一个仓库分配的存储目录，名字由仓库名+路径hash组成（如 myrepo_abc12345/）。内含 graph.db、vectors.pkl、meta.json、api_docs/ 等所有产物。换机器时只需复制这个目录，再用 link_repository 重新绑定路径即可。">artifact_dir</span>，
+          <span class="term" data-definition="artifact_dir 是 Terrain 为一个仓库分配的存储目录，名字由仓库名+路径hash组成（如 myrepo_abc12345/）。内含 graph.db、vectors.pkl、meta.json、api_docs/ 等所有产物。换机器时只需复制这个目录，再用 link_repository 重新绑定路径即可。">artifact_dir</span>，
           每次工具调用前会自动检查是否需要增量同步。
         </p>
 
@@ -291,7 +291,7 @@ found: middleware.require_auth (score: 0.83)
           <p style="font-size:var(--text-sm);line-height:1.7">
             当代码未改动时，检查开销极低（读一次文件 + 一次 git 命令）&lt;1ms，对工具调用几乎无感知。
             当有代码改动时，只重建涉及变更文件的节点，避免对整个代码库全量重建（可能需要数分钟）。
-            这套机制让 CGB MCP server 可以在日常开发中"持续在线"——代码改动后不需要手动触发重建，
+            这套机制让 Terrain MCP server 可以在日常开发中"持续在线"——代码改动后不需要手动触发重建，
             下次工具调用时自动同步。
           </p>
         </div>

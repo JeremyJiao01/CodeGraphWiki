@@ -22,7 +22,7 @@ class TestSkipSyncTools:
         # Read the server module source to extract the constant
         # (it's defined inside a function, so we verify via source inspection)
         import inspect
-        from code_graph_builder.entrypoints.mcp import server
+        from terrain.entrypoints.mcp import server
 
         source = inspect.getsource(server)
         assert "_SKIP_SYNC_TOOLS" in source
@@ -35,7 +35,7 @@ class TestSkipSyncTools:
         """_maybe_incremental_sync is wrapped in asyncio.wait_for with a
         timeout to prevent blocking forever on git calls."""
         import inspect
-        from code_graph_builder.entrypoints.mcp import server
+        from terrain.entrypoints.mcp import server
 
         source = inspect.getsource(server)
         assert "wait_for" in source
@@ -49,7 +49,7 @@ class TestWindowsIOSafety:
     def test_server_removes_default_logger(self):
         """Server startup must call logger.remove() to strip stderr sink."""
         import inspect
-        from code_graph_builder.entrypoints.mcp import server
+        from terrain.entrypoints.mcp import server
 
         source = inspect.getsource(server)
         assert "logger.remove()" in source

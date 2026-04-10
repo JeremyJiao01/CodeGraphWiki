@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from code_graph_builder.domains.upper.rag.markdown_generator import (
+from terrain.domains.upper.rag.markdown_generator import (
     AnalysisResult,
     MarkdownGenerator,
     SourceReference,
     create_source_reference_from_context,
     format_code_block,
 )
-from code_graph_builder.domains.upper.rag.prompt_templates import CodeContext
+from terrain.domains.upper.rag.prompt_templates import CodeContext
 
 
 class TestSourceReference:

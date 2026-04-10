@@ -2,10 +2,10 @@
 
 Finds the latest .whl in dist/, installs it, starts the MCP server as a
 subprocess, and communicates via the actual MCP stdio JSON-RPC protocol.
-Requires a pre-indexed tinycc workspace at ~/.code-graph-builder/.
+Requires a pre-indexed tinycc workspace at ~/.terrain/.
 
 Run manually:
-    python -m pytest code_graph_builder/tests/entrypoints/test_mcp_e2e.py -v -s
+    python -m pytest terrain/tests/entrypoints/test_mcp_e2e.py -v -s
 """
 
 from __future__ import annotations
@@ -25,12 +25,12 @@ import pytest
 # ---------------------------------------------------------------------------
 
 DIST_DIR = Path(__file__).resolve().parents[3] / "dist"
-WORKSPACE = Path.home() / ".code-graph-builder"
+WORKSPACE = Path.home() / ".terrain"
 _TINYCC_ARTIFACTS = list(WORKSPACE.glob("tinycc_*/graph.db")) if WORKSPACE.exists() else []
 
 pytestmark = pytest.mark.skipif(
     not _TINYCC_ARTIFACTS,
-    reason="No indexed tinycc workspace found at ~/.code-graph-builder/tinycc_*/graph.db",
+    reason="No indexed tinycc workspace found at ~/.terrain/tinycc_*/graph.db",
 )
 
 
@@ -175,10 +175,10 @@ def installed_whl():
 @pytest.fixture(scope="module")
 def mcp_client(installed_whl):
     """Start the MCP server subprocess and yield a connected MCPClient."""
-    env = {**os.environ, "CGB_WORKSPACE": str(WORKSPACE)}
+    env = {**os.environ, "TERRAIN_WORKSPACE": str(WORKSPACE)}
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "code_graph_builder.entrypoints.mcp.server"],
+        [sys.executable, "-m", "terrain.entrypoints.mcp.server"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

@@ -10,12 +10,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from code_graph_builder.domains.upper.rag import RAGConfig, create_rag_engine
-from code_graph_builder.domains.upper.rag.camel_agent import CamelAgent, create_camel_agent
-from code_graph_builder.domains.upper.rag.config import MoonshotConfig, RetrievalConfig
-from code_graph_builder.domains.upper.rag.client import ChatResponse, LLMClient, create_llm_client
-from code_graph_builder.domains.upper.rag.markdown_generator import AnalysisResult, MarkdownGenerator, SourceReference
-from code_graph_builder.domains.upper.rag.prompt_templates import CodeAnalysisPrompts, CodeContext, RAGPrompts
+from terrain.domains.upper.rag import RAGConfig, create_rag_engine
+from terrain.domains.upper.rag.camel_agent import CamelAgent, create_camel_agent
+from terrain.domains.upper.rag.config import MoonshotConfig, RetrievalConfig
+from terrain.domains.upper.rag.client import ChatResponse, LLMClient, create_llm_client
+from terrain.domains.upper.rag.markdown_generator import AnalysisResult, MarkdownGenerator, SourceReference
+from terrain.domains.upper.rag.prompt_templates import CodeAnalysisPrompts, CodeContext, RAGPrompts
 
 
 # =============================================================================

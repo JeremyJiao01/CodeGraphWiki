@@ -23,61 +23,61 @@ class TestClassifyLayer(unittest.TestCase):
 
     def test_l0_types(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/foundation/types/models.py"), "L0"
+            classify_layer("terrain/foundation/types/models.py"), "L0"
         )
 
     def test_l0_types_nested(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/foundation/types/sub/foo.py"), "L0"
+            classify_layer("terrain/foundation/types/sub/foo.py"), "L0"
         )
 
     def test_l1_parsers(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/foundation/parsers/python.py"), "L1"
+            classify_layer("terrain/foundation/parsers/python.py"), "L1"
         )
 
     def test_l1_services(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/foundation/services/graph.py"), "L1"
+            classify_layer("terrain/foundation/services/graph.py"), "L1"
         )
 
     def test_l1_utils(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/foundation/utils/helpers.py"), "L1"
+            classify_layer("terrain/foundation/utils/helpers.py"), "L1"
         )
 
     def test_l2_core(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/domains/core/graph/builder.py"), "L2"
+            classify_layer("terrain/domains/core/graph/builder.py"), "L2"
         )
 
     def test_l2_core_embedding(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/domains/core/embedding/store.py"), "L2"
+            classify_layer("terrain/domains/core/embedding/store.py"), "L2"
         )
 
     def test_l3_upper(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/domains/upper/apidoc/gen.py"), "L3"
+            classify_layer("terrain/domains/upper/apidoc/gen.py"), "L3"
         )
 
     def test_l3_upper_rag(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/domains/upper/rag/search.py"), "L3"
+            classify_layer("terrain/domains/upper/rag/search.py"), "L3"
         )
 
     def test_l4_entrypoints(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/entrypoints/cli.py"), "L4"
+            classify_layer("terrain/entrypoints/cli.py"), "L4"
         )
 
     def test_l4_entrypoints_mcp(self):
         self.assertEqual(
-            classify_layer("code_graph_builder/entrypoints/mcp/server.py"), "L4"
+            classify_layer("terrain/entrypoints/mcp/server.py"), "L4"
         )
 
     def test_unknown_flat_file(self):
-        self.assertIsNone(classify_layer("code_graph_builder/builder.py"))
+        self.assertIsNone(classify_layer("terrain/builder.py"))
 
     def test_unknown_random_path(self):
         self.assertIsNone(classify_layer("some/random/path.py"))
@@ -88,38 +88,38 @@ class TestGetDomain(unittest.TestCase):
 
     def test_core_graph(self):
         self.assertEqual(
-            _get_domain("code_graph_builder/domains/core/graph/builder.py"), "graph"
+            _get_domain("terrain/domains/core/graph/builder.py"), "graph"
         )
 
     def test_core_embedding(self):
         self.assertEqual(
-            _get_domain("code_graph_builder/domains/core/embedding/store.py"),
+            _get_domain("terrain/domains/core/embedding/store.py"),
             "embedding",
         )
 
     def test_upper_apidoc(self):
         self.assertEqual(
-            _get_domain("code_graph_builder/domains/upper/apidoc/gen.py"), "apidoc"
+            _get_domain("terrain/domains/upper/apidoc/gen.py"), "apidoc"
         )
 
     def test_upper_rag(self):
         self.assertEqual(
-            _get_domain("code_graph_builder/domains/upper/rag/search.py"), "rag"
+            _get_domain("terrain/domains/upper/rag/search.py"), "rag"
         )
 
     def test_entrypoints_cli(self):
         self.assertEqual(
-            _get_domain("code_graph_builder/entrypoints/cli.py"), "cli"
+            _get_domain("terrain/entrypoints/cli.py"), "cli"
         )
 
     def test_entrypoints_mcp(self):
         self.assertEqual(
-            _get_domain("code_graph_builder/entrypoints/mcp/server.py"), "mcp"
+            _get_domain("terrain/entrypoints/mcp/server.py"), "mcp"
         )
 
     def test_no_domain(self):
         self.assertIsNone(
-            _get_domain("code_graph_builder/foundation/types/models.py")
+            _get_domain("terrain/foundation/types/models.py")
         )
 
 
@@ -130,22 +130,22 @@ class TestCheckImport(unittest.TestCase):
 
     def test_stdlib_allowed_everywhere(self):
         for path in [
-            "code_graph_builder/foundation/types/models.py",
-            "code_graph_builder/foundation/parsers/python.py",
-            "code_graph_builder/domains/core/graph/builder.py",
-            "code_graph_builder/domains/upper/apidoc/gen.py",
-            "code_graph_builder/entrypoints/cli.py",
+            "terrain/foundation/types/models.py",
+            "terrain/foundation/parsers/python.py",
+            "terrain/domains/core/graph/builder.py",
+            "terrain/domains/upper/apidoc/gen.py",
+            "terrain/entrypoints/cli.py",
         ]:
             self.assertIsNone(check_import(path, "os"))
             self.assertIsNone(check_import(path, "json"))
 
     def test_thirdparty_allowed_everywhere(self):
         for path in [
-            "code_graph_builder/foundation/types/models.py",
-            "code_graph_builder/foundation/parsers/python.py",
-            "code_graph_builder/domains/core/graph/builder.py",
-            "code_graph_builder/domains/upper/apidoc/gen.py",
-            "code_graph_builder/entrypoints/cli.py",
+            "terrain/foundation/types/models.py",
+            "terrain/foundation/parsers/python.py",
+            "terrain/domains/core/graph/builder.py",
+            "terrain/domains/upper/apidoc/gen.py",
+            "terrain/entrypoints/cli.py",
         ]:
             self.assertIsNone(check_import(path, "pydantic"))
 
@@ -153,16 +153,16 @@ class TestCheckImport(unittest.TestCase):
 
     def test_l0_cannot_import_project(self):
         result = check_import(
-            "code_graph_builder/foundation/types/models.py",
-            "code_graph_builder.foundation.parsers.python",
+            "terrain/foundation/types/models.py",
+            "terrain.foundation.parsers.python",
         )
         self.assertIsNotNone(result)
 
     def test_l0_cannot_import_l0(self):
         # L0 can't even import other L0 modules via project path
         result = check_import(
-            "code_graph_builder/foundation/types/models.py",
-            "code_graph_builder.foundation.types.other",
+            "terrain/foundation/types/models.py",
+            "terrain.foundation.types.other",
         )
         self.assertIsNotNone(result)
 
@@ -170,31 +170,31 @@ class TestCheckImport(unittest.TestCase):
 
     def test_l1_can_import_l0(self):
         result = check_import(
-            "code_graph_builder/foundation/parsers/python.py",
-            "code_graph_builder.foundation.types.models",
+            "terrain/foundation/parsers/python.py",
+            "terrain.foundation.types.models",
         )
         self.assertIsNone(result)
 
     def test_l1_cannot_import_l2(self):
         result = check_import(
-            "code_graph_builder/foundation/parsers/python.py",
-            "code_graph_builder.domains.core.graph.builder",
+            "terrain/foundation/parsers/python.py",
+            "terrain.domains.core.graph.builder",
         )
         self.assertIsNotNone(result)
 
     def test_l1_cannot_import_l1_cross_subdirectory(self):
         # L1 parsers cannot import L1 services
         result = check_import(
-            "code_graph_builder/foundation/parsers/python.py",
-            "code_graph_builder.foundation.services.graph",
+            "terrain/foundation/parsers/python.py",
+            "terrain.foundation.services.graph",
         )
         self.assertIsNotNone(result)
 
     def test_l1_cannot_import_l1_same_subdirectory(self):
         # L1 parsers cannot import another L1 parsers module either
         result = check_import(
-            "code_graph_builder/foundation/parsers/factory.py",
-            "code_graph_builder.foundation.parsers.utils",
+            "terrain/foundation/parsers/factory.py",
+            "terrain.foundation.parsers.utils",
         )
         self.assertIsNotNone(result)
 
@@ -202,30 +202,30 @@ class TestCheckImport(unittest.TestCase):
 
     def test_l2_can_import_l0(self):
         result = check_import(
-            "code_graph_builder/domains/core/graph/builder.py",
-            "code_graph_builder.foundation.types.models",
+            "terrain/domains/core/graph/builder.py",
+            "terrain.foundation.types.models",
         )
         self.assertIsNone(result)
 
     def test_l2_can_import_l1(self):
         result = check_import(
-            "code_graph_builder/domains/core/graph/builder.py",
-            "code_graph_builder.foundation.parsers.python",
+            "terrain/domains/core/graph/builder.py",
+            "terrain.foundation.parsers.python",
         )
         self.assertIsNone(result)
 
     def test_l2_cannot_import_l3(self):
         result = check_import(
-            "code_graph_builder/domains/core/graph/builder.py",
-            "code_graph_builder.domains.upper.apidoc.gen",
+            "terrain/domains/core/graph/builder.py",
+            "terrain.domains.upper.apidoc.gen",
         )
         self.assertIsNotNone(result)
 
     def test_l2_cross_domain_forbidden(self):
         # graph cannot import embedding
         result = check_import(
-            "code_graph_builder/domains/core/graph/builder.py",
-            "code_graph_builder.domains.core.embedding.store",
+            "terrain/domains/core/graph/builder.py",
+            "terrain.domains.core.embedding.store",
         )
         self.assertIsNotNone(result)
 
@@ -233,30 +233,30 @@ class TestCheckImport(unittest.TestCase):
 
     def test_l3_can_import_l0(self):
         result = check_import(
-            "code_graph_builder/domains/upper/apidoc/gen.py",
-            "code_graph_builder.foundation.types.models",
+            "terrain/domains/upper/apidoc/gen.py",
+            "terrain.foundation.types.models",
         )
         self.assertIsNone(result)
 
     def test_l3_can_import_l2(self):
         result = check_import(
-            "code_graph_builder/domains/upper/apidoc/gen.py",
-            "code_graph_builder.domains.core.graph.builder",
+            "terrain/domains/upper/apidoc/gen.py",
+            "terrain.domains.core.graph.builder",
         )
         self.assertIsNone(result)
 
     def test_l3_cannot_import_l4(self):
         result = check_import(
-            "code_graph_builder/domains/upper/apidoc/gen.py",
-            "code_graph_builder.entrypoints.cli",
+            "terrain/domains/upper/apidoc/gen.py",
+            "terrain.entrypoints.cli",
         )
         self.assertIsNotNone(result)
 
     def test_l3_cross_domain_forbidden(self):
         # apidoc cannot import rag
         result = check_import(
-            "code_graph_builder/domains/upper/apidoc/gen.py",
-            "code_graph_builder.domains.upper.rag.search",
+            "terrain/domains/upper/apidoc/gen.py",
+            "terrain.domains.upper.rag.search",
         )
         self.assertIsNotNone(result)
 
@@ -264,23 +264,23 @@ class TestCheckImport(unittest.TestCase):
 
     def test_l4_can_import_l2(self):
         result = check_import(
-            "code_graph_builder/entrypoints/cli.py",
-            "code_graph_builder.domains.core.graph.builder",
+            "terrain/entrypoints/cli.py",
+            "terrain.domains.core.graph.builder",
         )
         self.assertIsNone(result)
 
     def test_l4_can_import_l3(self):
         result = check_import(
-            "code_graph_builder/entrypoints/cli.py",
-            "code_graph_builder.domains.upper.apidoc.gen",
+            "terrain/entrypoints/cli.py",
+            "terrain.domains.upper.apidoc.gen",
         )
         self.assertIsNone(result)
 
     def test_l4_cross_entrypoint_forbidden(self):
         # mcp cannot import cli
         result = check_import(
-            "code_graph_builder/entrypoints/mcp/server.py",
-            "code_graph_builder.entrypoints.cli",
+            "terrain/entrypoints/mcp/server.py",
+            "terrain.entrypoints.cli",
         )
         self.assertIsNotNone(result)
 
@@ -298,13 +298,13 @@ class TestScanFile(unittest.TestCase):
     def test_clean_l1_file(self):
         code = """\
         import os
-        from code_graph_builder.foundation.types.models import Node
+        from terrain.foundation.types.models import Node
         """
         path = self._write_temp(code)
         try:
             violations = scan_file(
                 path,
-                file_layer_path="code_graph_builder/foundation/parsers/python.py",
+                file_layer_path="terrain/foundation/parsers/python.py",
             )
             self.assertEqual(violations, [])
         finally:
@@ -312,13 +312,13 @@ class TestScanFile(unittest.TestCase):
 
     def test_violation_l0_imports_project(self):
         code = """\
-        from code_graph_builder.foundation.parsers.python import parse
+        from terrain.foundation.parsers.python import parse
         """
         path = self._write_temp(code)
         try:
             violations = scan_file(
                 path,
-                file_layer_path="code_graph_builder/foundation/types/models.py",
+                file_layer_path="terrain/foundation/types/models.py",
             )
             self.assertEqual(len(violations), 1)
             self.assertIn("L0", violations[0])
@@ -327,13 +327,13 @@ class TestScanFile(unittest.TestCase):
 
     def test_violation_cross_domain(self):
         code = """\
-        from code_graph_builder.domains.core.embedding.store import VectorStore
+        from terrain.domains.core.embedding.store import VectorStore
         """
         path = self._write_temp(code)
         try:
             violations = scan_file(
                 path,
-                file_layer_path="code_graph_builder/domains/core/graph/builder.py",
+                file_layer_path="terrain/domains/core/graph/builder.py",
             )
             self.assertEqual(len(violations), 1)
             self.assertIn("cross-domain", violations[0].lower())
@@ -351,7 +351,7 @@ class TestScanFile(unittest.TestCase):
         try:
             violations = scan_file(
                 path,
-                file_layer_path="code_graph_builder/foundation/types/models.py",
+                file_layer_path="terrain/foundation/types/models.py",
             )
             self.assertEqual(violations, [])
         finally:
@@ -359,14 +359,14 @@ class TestScanFile(unittest.TestCase):
 
     def test_multiple_violations(self):
         code = """\
-        from code_graph_builder.foundation.parsers.python import parse
-        from code_graph_builder.domains.core.graph.builder import Builder
+        from terrain.foundation.parsers.python import parse
+        from terrain.domains.core.graph.builder import Builder
         """
         path = self._write_temp(code)
         try:
             violations = scan_file(
                 path,
-                file_layer_path="code_graph_builder/foundation/types/models.py",
+                file_layer_path="terrain/foundation/types/models.py",
             )
             self.assertEqual(len(violations), 2)
         finally:
@@ -387,12 +387,12 @@ class TestMain(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             tests_dir = os.path.join(
                 tmpdir,
-                "code_graph_builder",
+                "terrain",
                 "tests",
             )
             os.makedirs(tests_dir)
             with open(os.path.join(tests_dir, "test_foo.py"), "w") as f:
-                f.write("from code_graph_builder.entrypoints.cli import main\n")
+                f.write("from terrain.entrypoints.cli import main\n")
             result = main(tmpdir)
             self.assertEqual(result, 0)
 
@@ -401,12 +401,12 @@ class TestMain(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             examples_dir = os.path.join(
                 tmpdir,
-                "code_graph_builder",
+                "terrain",
                 "examples",
             )
             os.makedirs(examples_dir)
             with open(os.path.join(examples_dir, "demo.py"), "w") as f:
-                f.write("from code_graph_builder.entrypoints.cli import main\n")
+                f.write("from terrain.entrypoints.cli import main\n")
             result = main(tmpdir)
             self.assertEqual(result, 0)
 
@@ -415,14 +415,14 @@ class TestMain(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             file_dir = os.path.join(
                 tmpdir,
-                "code_graph_builder",
+                "terrain",
                 "foundation",
                 "types",
             )
             os.makedirs(file_dir)
             with open(os.path.join(file_dir, "models.py"), "w") as f:
                 f.write(
-                    "from code_graph_builder.foundation.parsers.python import parse\n"
+                    "from terrain.foundation.parsers.python import parse\n"
                 )
             result = main(tmpdir)
             self.assertNotEqual(result, 0)

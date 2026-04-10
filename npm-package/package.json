@@ -1,10 +1,10 @@
 {
-  "name": "code-graph-builder",
-  "version": "1.1.0",
-  "description": "Code knowledge graph builder with MCP server for AI-assisted code navigation",
+  "name": "terrain-ai",
+  "version": "2.0.0",
+  "description": "Give your AI a complete map of any codebase — function signatures, call graphs, and semantic search",
   "license": "MIT",
   "bin": {
-    "code-graph-builder": "./bin/cli.mjs"
+    "terrain": "./bin/cli.mjs"
   },
   "files": [
     "bin/",
@@ -17,7 +17,8 @@
     "code-graph",
     "knowledge-graph",
     "code-navigation",
-    "ai-assistant"
+    "ai-assistant",
+    "terrain"
   ],
   "engines": {
     "node": ">=18"

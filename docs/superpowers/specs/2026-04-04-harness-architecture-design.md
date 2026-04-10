@@ -8,7 +8,7 @@
 
 ## 1. Goal
 
-Restructure `code_graph_builder/` into a strict 5-layer architecture with enforced dependency rules, comprehensive test coverage, CI automation, and agent-oriented contributing documentation.
+Restructure `terrain/` into a strict 5-layer architecture with enforced dependency rules, comprehensive test coverage, CI automation, and agent-oriented contributing documentation.
 
 The `npm-package/` directory is **excluded** from the layer model — it remains an independent distribution wrapper.
 
@@ -17,7 +17,7 @@ The `npm-package/` directory is **excluded** from the layer model — it remains
 ## 2. Target Directory Structure
 
 ```
-code_graph_builder/
+terrain/
 │
 ├── foundation/                          # L0 + L1
 │   ├── types/                           # L0: Pure data definitions
@@ -38,7 +38,7 @@ code_graph_builder/
 ├── domains/
 │   ├── core/                            # L2: Core domains
 │   │   ├── graph/                       # Graph building
-│   │   │   ├── builder.py               # CodeGraphBuilder main API
+│   │   │   ├── builder.py               # TerrainBuilder main API
 │   │   │   └── graph_updater.py         # Graph update logic
 │   │   └── embedding/                   # Vector embeddings
 │   │       └── ...
@@ -261,8 +261,8 @@ After all batches complete:
 
 - [ ] `python -m pytest tests/ -v` — all pass, matches baseline
 - [ ] `pip install -e .` — succeeds
-- [ ] `code-graph-builder` CLI — starts correctly
-- [ ] `cgb-mcp` MCP server — starts correctly
+- [ ] `terrain-ai` CLI — starts correctly
+- [ ] `terrain-mcp` MCP server — starts correctly
 - [ ] `npm run server` — works
 - [ ] `python tools/dep_check.py` — zero violations
 - [ ] `grep` old import paths — zero remaining references

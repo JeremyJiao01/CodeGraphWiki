@@ -31,9 +31,9 @@ GBK_EXPECTED_STRUCTS = {"UserInfo"}
 
 def _build_graph_for_dir(project_dir: Path):
     """Build a memory-backed graph for *project_dir* and return the builder."""
-    from code_graph_builder.domains.core.graph.builder import CodeGraphBuilder
+    from terrain.domains.core.graph.builder import TerrainBuilder
 
-    builder = CodeGraphBuilder(
+    builder = TerrainBuilder(
         repo_path=str(project_dir),
         backend="memory",
     )

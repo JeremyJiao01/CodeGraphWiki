@@ -12,7 +12,7 @@ L4  entrypoints/{mcp,cli}/                     Entry points: MCP server, CLI com
 
 ### Mapping to Source Tree
 
-All paths below are relative to `code_graph_builder/`.
+All paths below are relative to `terrain/`.
 
 | Layer | Source path(s) |
 |-------|---------------|

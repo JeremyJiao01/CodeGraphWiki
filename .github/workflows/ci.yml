@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  CGB_WORKSPACE: /tmp/cgb-test
+  TERRAIN_WORKSPACE: /tmp/cgb-test
 
 jobs:
   test:

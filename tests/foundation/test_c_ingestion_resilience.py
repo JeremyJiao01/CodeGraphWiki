@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from code_graph_builder.foundation.parsers.definition_processor import DefinitionProcessor
-from code_graph_builder.foundation.types import constants as cs
+from terrain.foundation.parsers.definition_processor import DefinitionProcessor
+from terrain.foundation.types import constants as cs
 
 
 def _make_processor():
@@ -44,7 +44,7 @@ class TestCIngestionIsolation:
     """Individual function/typedef/macro failures must not block
     the rest of the file's ingestion."""
 
-    @patch("code_graph_builder.foundation.parsers.definition_processor.normalize_to_utf8_bytes",
+    @patch("terrain.foundation.parsers.definition_processor.normalize_to_utf8_bytes",
            return_value=b"int main() { return 0; }")
     def test_typedef_failure_does_not_block_functions(self, mock_normalize):
         """If _ingest_c_typedefs raises, functions are still ingested."""
@@ -79,7 +79,7 @@ class TestCIngestionIsolation:
             mock_funcs.assert_called_once()
             assert result is not None
 
-    @patch("code_graph_builder.foundation.parsers.definition_processor.normalize_to_utf8_bytes",
+    @patch("terrain.foundation.parsers.definition_processor.normalize_to_utf8_bytes",
            return_value=b"int main() { return 0; }")
     def test_macro_failure_does_not_block_functions(self, mock_normalize):
         """If _ingest_c_macros raises, the overall result is still returned."""

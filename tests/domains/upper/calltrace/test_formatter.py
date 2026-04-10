@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from code_graph_builder.domains.upper.calltrace.tracer import (
+from terrain.domains.upper.calltrace.tracer import (
     CallPath,
     NodeInfo,
     SingleTraceResult,
     TraceResult,
 )
-from code_graph_builder.domains.upper.calltrace.formatter import (
+from terrain.domains.upper.calltrace.formatter import (
     format_tree,
     format_trace_result,
 )

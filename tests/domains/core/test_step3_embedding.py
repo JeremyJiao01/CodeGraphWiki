@@ -29,7 +29,7 @@ pytestmark = [
 @pytest.fixture(scope="module")
 def pipeline_artifacts(tmp_path_factory):
     """Run Step 1 (graph) + Step 2 (api-docs) + Step 3 (embedding) once."""
-    from code_graph_builder.entrypoints.mcp.pipeline import (
+    from terrain.entrypoints.mcp.pipeline import (
         build_graph,
         build_vector_index,
         generate_api_docs_step,
@@ -247,7 +247,7 @@ class TestCacheReload:
 
     def test_reload_matches_original(self, pipeline_artifacts):
         """Reloaded vector store should have same size as original."""
-        from code_graph_builder.entrypoints.mcp.pipeline import build_vector_index
+        from terrain.entrypoints.mcp.pipeline import build_vector_index
 
         vs_original = pipeline_artifacts["vector_store"]
         builder = pipeline_artifacts["builder"]

@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-CGB_WORKSPACE="${CGB_WORKSPACE:-$HOME/.code-graph-builder}"
+CGB_WORKSPACE="${CGB_WORKSPACE:-$HOME/.terrain}"
 DEBUG_LOG="$CGB_WORKSPACE/debug.log"
 # Ensure workspace exists
 mkdir -p "$CGB_WORKSPACE"

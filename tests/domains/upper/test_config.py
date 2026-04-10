@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from code_graph_builder.domains.upper.rag.config import (
+from terrain.domains.upper.rag.config import (
     MoonshotConfig,
     OutputConfig,
     RAGConfig,

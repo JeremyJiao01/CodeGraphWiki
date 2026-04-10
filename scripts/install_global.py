@@ -2,7 +2,7 @@
 """Install CodeGraphWiki custom commands globally for Claude Code.
 
 This script:
-1. pip-installs the code_graph_builder package (editable or normal)
+1. pip-installs the terrain package (editable or normal)
 2. Creates ~/.claude/commands/code-graph/
 3. Copies cgb_cli.py (the entry point) into that directory
 4. Copies all .md command files into that directory
@@ -32,7 +32,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 COMMANDS_SRC = PROJECT_ROOT / ".claude" / "commands"
-CLI_WRAPPER = PROJECT_ROOT / "code_graph_builder" / "cgb_cli.py"
+CLI_WRAPPER = PROJECT_ROOT / "terrain" / "cgb_cli.py"
 
 TARGET_DIR = Path.home() / ".claude" / "commands" / "code-graph"
 SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
@@ -108,7 +108,7 @@ def main():
 
     # Step 1: pip install the package
     mode_label = "editable" if editable else "normal"
-    print(f"[1/{total_steps}] Installing code_graph_builder ({mode_label} mode)...")
+    print(f"[1/{total_steps}] Installing terrain ({mode_label} mode)...")
 
     cmd = [sys.executable, "-m", "pip", "install"]
     if editable:

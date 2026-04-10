@@ -79,7 +79,7 @@ full suite on every push and pull request. This means:
 
 When your change touches files covered by specific test suites, you **must** run those tests locally before pushing. This is not optional — CI catches failures, but local testing catches them faster and avoids broken pushes.
 
-All paths below are relative to `code_graph_builder/`.
+All paths below are relative to `terrain/`.
 
 | Changed Files | Required Tests | Command |
 |---------------|---------------|---------|
@@ -112,10 +112,10 @@ All paths below are relative to `code_graph_builder/`.
 
 ## Pipeline Entry Point Consistency
 
-`entrypoints/mcp/pipeline.py` is shared by both the MCP server and the CLI (`cgb index`, `cgb rebuild`). When modifying pipeline behavior, **both entry points must be validated**:
+`entrypoints/mcp/pipeline.py` is shared by both the MCP server and the CLI (`terrain index`, `terrain rebuild`). When modifying pipeline behavior, **both entry points must be validated**:
 
 1. **MCP path** — run `python -m pytest tests/entrypoints/ -v`
-2. **CLI path** — manually verify `cgb index <path>` and `cgb rebuild` complete without error
+2. **CLI path** — manually verify `terrain index <path>` and `terrain rebuild` complete without error
 
 A change that only passes MCP tests may silently break the CLI, and vice versa. Both must be checked before merge.
 

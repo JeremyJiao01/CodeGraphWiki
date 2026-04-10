@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from code_graph_builder.foundation.parsers.call_resolver import CallResolver
+from terrain.foundation.parsers.call_resolver import CallResolver
 
 
 def _make_resolver() -> CallResolver:
@@ -45,8 +45,8 @@ from pathlib import Path
 from tree_sitter import Language, Parser
 from unittest.mock import MagicMock
 
-from code_graph_builder.foundation.parsers.call_processor import CallProcessor
-from code_graph_builder.foundation.types import constants as cs
+from terrain.foundation.parsers.call_processor import CallProcessor
+from terrain.foundation.types import constants as cs
 
 
 def _parse_c(code: str):

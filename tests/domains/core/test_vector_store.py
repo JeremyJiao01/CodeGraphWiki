@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def vector_store() -> "MemoryVectorStore":
     """Create a fresh MemoryVectorStore instance."""
-    from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+    from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
     return MemoryVectorStore(dimension=768)
 
@@ -48,7 +48,7 @@ class TestMemoryVectorStore:
 
     def test_store_initialization(self) -> None:
         """Test MemoryVectorStore initializes correctly."""
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         store = MemoryVectorStore(dimension=768)
 
@@ -314,7 +314,7 @@ class TestCosineSimilarity:
 
     def test_cosine_similarity_identical_vectors(self) -> None:
         """Test cosine similarity of identical vectors is 1.0."""
-        from code_graph_builder.domains.core.embedding.vector_store import cosine_similarity
+        from terrain.domains.core.embedding.vector_store import cosine_similarity
 
         v1 = [1.0, 2.0, 3.0]
         v2 = [1.0, 2.0, 3.0]
@@ -325,7 +325,7 @@ class TestCosineSimilarity:
 
     def test_cosine_similarity_opposite_vectors(self) -> None:
         """Test cosine similarity of opposite vectors is -1.0."""
-        from code_graph_builder.domains.core.embedding.vector_store import cosine_similarity
+        from terrain.domains.core.embedding.vector_store import cosine_similarity
 
         v1 = [1.0, 2.0, 3.0]
         v2 = [-1.0, -2.0, -3.0]
@@ -336,7 +336,7 @@ class TestCosineSimilarity:
 
     def test_cosine_similarity_orthogonal_vectors(self) -> None:
         """Test cosine similarity of orthogonal vectors is 0.0."""
-        from code_graph_builder.domains.core.embedding.vector_store import cosine_similarity
+        from terrain.domains.core.embedding.vector_store import cosine_similarity
 
         v1 = [1.0, 0.0, 0.0]
         v2 = [0.0, 1.0, 0.0]
@@ -347,7 +347,7 @@ class TestCosineSimilarity:
 
     def test_cosine_similarity_different_magnitudes(self) -> None:
         """Test cosine similarity is independent of vector magnitude."""
-        from code_graph_builder.domains.core.embedding.vector_store import cosine_similarity
+        from terrain.domains.core.embedding.vector_store import cosine_similarity
 
         v1 = [1.0, 0.0, 0.0]
         v2 = [5.0, 0.0, 0.0]
@@ -358,7 +358,7 @@ class TestCosineSimilarity:
 
     def test_cosine_similarity_zero_vector_raises(self) -> None:
         """Test cosine similarity with zero vector raises error."""
-        from code_graph_builder.domains.core.embedding.vector_store import cosine_similarity
+        from terrain.domains.core.embedding.vector_store import cosine_similarity
 
         v1 = [1.0, 2.0, 3.0]
         v2 = [0.0, 0.0, 0.0]
@@ -368,7 +368,7 @@ class TestCosineSimilarity:
 
     def test_cosine_similarity_different_lengths_raises(self) -> None:
         """Test cosine similarity with different length vectors raises error."""
-        from code_graph_builder.domains.core.embedding.vector_store import cosine_similarity
+        from terrain.domains.core.embedding.vector_store import cosine_similarity
 
         v1 = [1.0, 2.0, 3.0]
         v2 = [1.0, 2.0]
@@ -378,7 +378,7 @@ class TestCosineSimilarity:
 
     def test_cosine_similarity_typical_case(self) -> None:
         """Test cosine similarity with typical vectors."""
-        from code_graph_builder.domains.core.embedding.vector_store import cosine_similarity
+        from terrain.domains.core.embedding.vector_store import cosine_similarity
 
         v1 = [1.0, 2.0, 3.0]
         v2 = [4.0, 5.0, 6.0]
@@ -399,7 +399,7 @@ class TestVectorStoreEdgeCases:
 
     def test_empty_embedding_raises(self) -> None:
         """Test storing empty embedding raises error."""
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         store = MemoryVectorStore(dimension=768)
 
@@ -412,7 +412,7 @@ class TestVectorStoreEdgeCases:
 
     def test_very_large_embedding(self) -> None:
         """Test storing very large embedding."""
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         large_embedding = [0.001] * 10000
         store = MemoryVectorStore(dimension=len(large_embedding))
@@ -427,7 +427,7 @@ class TestVectorStoreEdgeCases:
 
     def test_special_characters_in_qualified_name(self) -> None:
         """Test storing with special characters in qualified_name."""
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         store = MemoryVectorStore(dimension=768)
 
@@ -442,7 +442,7 @@ class TestVectorStoreEdgeCases:
 
     def test_unicode_in_qualified_name(self) -> None:
         """Test storing with unicode characters in qualified_name."""
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         store = MemoryVectorStore(dimension=768)
 
@@ -457,7 +457,7 @@ class TestVectorStoreEdgeCases:
 
     def test_negative_node_id(self) -> None:
         """Test storing with negative node_id."""
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         store = MemoryVectorStore(dimension=768)
 
@@ -497,7 +497,7 @@ class TestVectorStoreIntegration:
 
     def test_store_and_retrieve_roundtrip(self) -> None:
         """Test full roundtrip of store and retrieve."""
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         store = MemoryVectorStore(dimension=768)
 
@@ -525,7 +525,7 @@ class TestVectorStoreIntegration:
 
     def test_multiple_searches_consistency(self) -> None:
         """Test that multiple searches return consistent results."""
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         store = MemoryVectorStore(dimension=768)
 

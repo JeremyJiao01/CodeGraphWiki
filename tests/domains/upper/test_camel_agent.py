@@ -6,13 +6,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from code_graph_builder.domains.upper.rag.camel_agent import (
+from terrain.domains.upper.rag.camel_agent import (
     CamelAgent,
     CamelAgentResponse,
     MultiAgentRAG,
     create_camel_agent,
 )
-from code_graph_builder.domains.upper.rag.client import ChatResponse
+from terrain.domains.upper.rag.client import ChatResponse
 
 
 class TestCamelAgentResponse:
@@ -38,7 +38,7 @@ class TestCamelAgentResponse:
 class TestCamelAgent:
     """Tests for CamelAgent."""
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_init(self, mock_create_client):
         """Test initialization."""
         mock_client = Mock()
@@ -54,7 +54,7 @@ class TestCamelAgent:
         assert agent.backstory == "Expert programmer"
         assert "Code Analyst" in agent.system_prompt
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_build_system_prompt(self, mock_create_client):
         """Test system prompt building."""
         mock_client = Mock()
@@ -70,7 +70,7 @@ class TestCamelAgent:
         assert "Test things" in prompt
         assert "Testing expert" in prompt
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_analyze(self, mock_create_client):
         """Test analyze method."""
         mock_client = Mock()
@@ -94,7 +94,7 @@ class TestCamelAgent:
         assert response.content == "Analysis result"
         assert response.role == "Analyst"
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_analyze_error(self, mock_create_client):
         """Test analyze method with error."""
         mock_client = Mock()
@@ -112,7 +112,7 @@ class TestCamelAgent:
         assert "Error" in response.content
         assert "error" in response.metadata
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_review_code_general(self, mock_create_client):
         """Test general code review."""
         mock_client = Mock()
@@ -135,7 +135,7 @@ class TestCamelAgent:
         assert isinstance(response, CamelAgentResponse)
         mock_client.chat_with_messages.assert_called_once()
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_review_code_security(self, mock_create_client):
         """Test security code review."""
         mock_client = Mock()
@@ -160,7 +160,7 @@ class TestCamelAgent:
         messages = call_args[0][0]
         assert any("security" in msg["content"].lower() for msg in messages)
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_explain_code_brief(self, mock_create_client):
         """Test brief code explanation."""
         mock_client = Mock()
@@ -185,7 +185,7 @@ class TestCamelAgent:
         messages = call_args[0][0]
         assert any("brief" in msg["content"].lower() for msg in messages)
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_suggest_improvements(self, mock_create_client):
         """Test improvement suggestions."""
         mock_client = Mock()
@@ -213,7 +213,7 @@ class TestCamelAgent:
         messages = call_args[0][0]
         assert any("readability" in msg["content"] for msg in messages)
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_answer_question(self, mock_create_client):
         """Test answering questions."""
         mock_client = Mock()
@@ -240,7 +240,7 @@ class TestCamelAgent:
 class TestMultiAgentRAG:
     """Tests for MultiAgentRAG."""
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.CamelAgent")
+    @patch("terrain.domains.upper.rag.camel_agent.CamelAgent")
     def test_init(self, mock_agent_class):
         """Test initialization."""
         mock_rag_engine = Mock()
@@ -253,7 +253,7 @@ class TestMultiAgentRAG:
         # Should create 4 agents
         assert mock_agent_class.call_count == 4
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.CamelAgent")
+    @patch("terrain.domains.upper.rag.camel_agent.CamelAgent")
     def test_analyze(self, mock_agent_class):
         """Test multi-agent analysis."""
         mock_rag_engine = Mock()
@@ -271,7 +271,7 @@ class TestMultiAgentRAG:
         assert "architecture" in results
         mock_rag_engine.query.assert_called_once_with("Test query")
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.CamelAgent")
+    @patch("terrain.domains.upper.rag.camel_agent.CamelAgent")
     def test_comprehensive_review(self, mock_agent_class):
         """Test comprehensive review."""
         mock_rag_engine = Mock()
@@ -297,7 +297,7 @@ class TestMultiAgentRAG:
 class TestCreateCamelAgent:
     """Tests for create_camel_agent factory function."""
 
-    @patch("code_graph_builder.domains.upper.rag.camel_agent.create_llm_client")
+    @patch("terrain.domains.upper.rag.camel_agent.create_llm_client")
     def test_create_agent(self, mock_create_client):
         """Test creating agent."""
         mock_client = Mock()

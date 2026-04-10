@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from code_graph_builder.entrypoints.mcp.pipeline import save_meta
+from terrain.entrypoints.mcp.pipeline import save_meta
 
 
 def test_save_meta_persists_last_indexed_commit(tmp_path):

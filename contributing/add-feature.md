@@ -2,7 +2,7 @@
 
 File checklists per scenario. Follow the layer rules in `contributing/architecture.md`.
 
-All paths below are relative to `code_graph_builder/`.
+All paths below are relative to `terrain/`.
 
 ---
 

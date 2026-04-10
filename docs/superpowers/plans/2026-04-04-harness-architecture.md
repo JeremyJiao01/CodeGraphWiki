@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Restructure `code_graph_builder/` into a strict 5-layer architecture with dependency enforcement, test-driven migration, CI, and agent-oriented contributing docs.
+**Goal:** Restructure `terrain/` into a strict 5-layer architecture with dependency enforcement, test-driven migration, CI, and agent-oriented contributing docs.
 
 **Architecture:** Bottom-up migration in 10 batches. Each batch: confirm test baseline → move files → fix imports → place shim → run tests → commit. All work in a git worktree. A `tools/dep_check.py` script enforces layer rules. GitHub Actions CI runs dep-check + pytest on every push/PR.
 
@@ -17,7 +17,7 @@
 Based on full codebase analysis, the complete target structure is:
 
 ```
-code_graph_builder/
+terrain/
 ├── foundation/                          # L0 + L1
 │   ├── types/                           # L0: Pure data definitions
 │   │   ├── __init__.py
@@ -146,7 +146,7 @@ cd ../CodeGraphWiki-harness
 
 ```bash
 git status
-python -m pytest code_graph_builder/tests/ -v --tb=short 2>&1 | tail -20
+python -m pytest terrain/tests/ -v --tb=short 2>&1 | tail -20
 ```
 
 Record the test baseline (number of passed/failed/skipped). All subsequent batches must match this baseline.
@@ -184,101 +184,101 @@ from tools.dep_check import classify_layer, check_import, scan_file, RULES
 
 class TestClassifyLayer:
     def test_foundation_types(self):
-        assert classify_layer("code_graph_builder/foundation/types/constants.py") == "L0"
+        assert classify_layer("terrain/foundation/types/constants.py") == "L0"
 
     def test_foundation_parsers(self):
-        assert classify_layer("code_graph_builder/foundation/parsers/factory.py") == "L1"
+        assert classify_layer("terrain/foundation/parsers/factory.py") == "L1"
 
     def test_foundation_services(self):
-        assert classify_layer("code_graph_builder/foundation/services/kuzu_service.py") == "L1"
+        assert classify_layer("terrain/foundation/services/kuzu_service.py") == "L1"
 
     def test_foundation_utils(self):
-        assert classify_layer("code_graph_builder/foundation/utils/encoding.py") == "L1"
+        assert classify_layer("terrain/foundation/utils/encoding.py") == "L1"
 
     def test_domains_core(self):
-        assert classify_layer("code_graph_builder/domains/core/graph/builder.py") == "L2"
+        assert classify_layer("terrain/domains/core/graph/builder.py") == "L2"
 
     def test_domains_upper(self):
-        assert classify_layer("code_graph_builder/domains/upper/rag/rag_engine.py") == "L3"
+        assert classify_layer("terrain/domains/upper/rag/rag_engine.py") == "L3"
 
     def test_entrypoints(self):
-        assert classify_layer("code_graph_builder/entrypoints/mcp/server.py") == "L4"
+        assert classify_layer("terrain/entrypoints/mcp/server.py") == "L4"
 
     def test_unknown(self):
-        assert classify_layer("code_graph_builder/something_else.py") is None
+        assert classify_layer("terrain/something_else.py") is None
 
 
 class TestCheckImport:
     def test_l0_cannot_import_l1(self):
         result = check_import(
-            file_path="code_graph_builder/foundation/types/constants.py",
-            imported_module="code_graph_builder.foundation.parsers.factory",
+            file_path="terrain/foundation/types/constants.py",
+            imported_module="terrain.foundation.parsers.factory",
         )
         assert result is not None  # violation
         assert "L0 cannot import L1" in result
 
     def test_l1_can_import_l0(self):
         result = check_import(
-            file_path="code_graph_builder/foundation/parsers/factory.py",
-            imported_module="code_graph_builder.foundation.types.constants",
+            file_path="terrain/foundation/parsers/factory.py",
+            imported_module="terrain.foundation.types.constants",
         )
         assert result is None  # no violation
 
     def test_l2_cannot_import_l3(self):
         result = check_import(
-            file_path="code_graph_builder/domains/core/graph/builder.py",
-            imported_module="code_graph_builder.domains.upper.rag.rag_engine",
+            file_path="terrain/domains/core/graph/builder.py",
+            imported_module="terrain.domains.upper.rag.rag_engine",
         )
         assert result is not None
         assert "L2 cannot import L3" in result
 
     def test_l2_cross_domain_forbidden(self):
         result = check_import(
-            file_path="code_graph_builder/domains/core/graph/builder.py",
-            imported_module="code_graph_builder.domains.core.embedding.vector_store",
+            file_path="terrain/domains/core/graph/builder.py",
+            imported_module="terrain.domains.core.embedding.vector_store",
         )
         assert result is not None
         assert "cross-domain" in result.lower()
 
     def test_l3_cross_domain_forbidden(self):
         result = check_import(
-            file_path="code_graph_builder/domains/upper/apidoc/api_doc_generator.py",
-            imported_module="code_graph_builder.domains.upper.rag.rag_engine",
+            file_path="terrain/domains/upper/apidoc/api_doc_generator.py",
+            imported_module="terrain.domains.upper.rag.rag_engine",
         )
         assert result is not None
         assert "cross-domain" in result.lower()
 
     def test_l4_can_import_all_lower(self):
         for module in [
-            "code_graph_builder.foundation.types.constants",
-            "code_graph_builder.foundation.parsers.factory",
-            "code_graph_builder.domains.core.graph.builder",
-            "code_graph_builder.domains.upper.rag.rag_engine",
+            "terrain.foundation.types.constants",
+            "terrain.foundation.parsers.factory",
+            "terrain.domains.core.graph.builder",
+            "terrain.domains.upper.rag.rag_engine",
         ]:
             result = check_import(
-                file_path="code_graph_builder/entrypoints/mcp/tools.py",
+                file_path="terrain/entrypoints/mcp/tools.py",
                 imported_module=module,
             )
             assert result is None, f"L4 should be able to import {module}"
 
     def test_l4_cross_entrypoint_forbidden(self):
         result = check_import(
-            file_path="code_graph_builder/entrypoints/mcp/server.py",
-            imported_module="code_graph_builder.entrypoints.cli.commands_cli",
+            file_path="terrain/entrypoints/mcp/server.py",
+            imported_module="terrain.entrypoints.cli.commands_cli",
         )
         assert result is not None
         assert "cross-" in result.lower()
 
     def test_stdlib_always_allowed(self):
         result = check_import(
-            file_path="code_graph_builder/foundation/types/constants.py",
+            file_path="terrain/foundation/types/constants.py",
             imported_module="os",
         )
         assert result is None
 
     def test_third_party_always_allowed(self):
         result = check_import(
-            file_path="code_graph_builder/foundation/types/constants.py",
+            file_path="terrain/foundation/types/constants.py",
             imported_module="loguru",
         )
         assert result is None
@@ -288,19 +288,19 @@ class TestScanFile:
     def test_detects_violation(self, tmp_path):
         # Create a file that violates L0 → L1 rule
         f = tmp_path / "violation.py"
-        f.write_text("from code_graph_builder.foundation.parsers.factory import ProcessorFactory\n")
+        f.write_text("from terrain.foundation.parsers.factory import ProcessorFactory\n")
         violations = scan_file(
             str(f),
-            file_layer_path="code_graph_builder/foundation/types/violation.py",
+            file_layer_path="terrain/foundation/types/violation.py",
         )
         assert len(violations) == 1
 
     def test_clean_file(self, tmp_path):
         f = tmp_path / "clean.py"
-        f.write_text("from code_graph_builder.foundation.types.constants import NodeLabel\nimport os\n")
+        f.write_text("from terrain.foundation.types.constants import NodeLabel\nimport os\n")
         violations = scan_file(
             str(f),
-            file_layer_path="code_graph_builder/foundation/parsers/clean.py",
+            file_layer_path="terrain/foundation/parsers/clean.py",
         )
         assert len(violations) == 0
 ```
@@ -319,7 +319,7 @@ Create `tools/__init__.py` (empty) and `tools/dep_check.py`:
 
 ```python
 #!/usr/bin/env python3
-"""Layer dependency checker for code_graph_builder.
+"""Layer dependency checker for terrain.
 
 Enforces the 5-layer architecture:
   L0  foundation/types/        → stdlib + third-party only
@@ -329,7 +329,7 @@ Enforces the 5-layer architecture:
   L4  entrypoints/             → L0, L1, L2, L3 (no cross-entrypoint)
 
 Usage: python tools/dep_check.py [path]
-  Defaults to scanning code_graph_builder/ from the repo root.
+  Defaults to scanning terrain/ from the repo root.
   Exits 0 if clean, 1 if violations found.
 """
 
@@ -337,7 +337,7 @@ import ast
 import sys
 from pathlib import Path
 
-PKG = "code_graph_builder"
+PKG = "terrain"
 
 # Layer classification based on path segments after PKG
 LAYER_MAP = [
@@ -403,7 +403,7 @@ def _module_to_path_prefix(module: str) -> str | None:
     """Convert a dotted module path to a slash path prefix for layer lookup."""
     if not module.startswith(PKG):
         return None
-    rest = module[len(PKG) + 1:]  # strip 'code_graph_builder.'
+    rest = module[len(PKG) + 1:]  # strip 'terrain.'
     return rest.replace(".", "/")
 
 
@@ -496,7 +496,7 @@ def scan_file(file_path: str, file_layer_path: str | None = None) -> list[str]:
 def main(root: str | None = None) -> int:
     """Scan the entire package and report violations."""
     if root is None:
-        # Default: find repo root (directory containing code_graph_builder/)
+        # Default: find repo root (directory containing terrain/)
         script_dir = Path(__file__).resolve().parent
         root = str(script_dir.parent)
 
@@ -552,29 +552,29 @@ git commit -m "feat: add layer dependency checker (tools/dep_check.py)"
 Audit existing tests and add missing coverage before any file moves.
 
 **Files:**
-- Modify: `code_graph_builder/tests/` (audit existing)
-- Create: `code_graph_builder/tests/test_encoding_parsing.py` (GBK/GB2312)
-- Create: `code_graph_builder/tests/fixtures/` (test fixtures)
+- Modify: `terrain/tests/` (audit existing)
+- Create: `terrain/tests/test_encoding_parsing.py` (GBK/GB2312)
+- Create: `terrain/tests/fixtures/` (test fixtures)
 
 - [ ] **Step 1: Run existing tests, record baseline**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short 2>&1 | tee /tmp/test_baseline.txt
+python -m pytest terrain/tests/ -v --tb=short 2>&1 | tee /tmp/test_baseline.txt
 echo "---"
-python -m pytest code_graph_builder/tests/ -v --tb=short 2>&1 | grep -E "passed|failed|error|skipped" | tail -5
+python -m pytest terrain/tests/ -v --tb=short 2>&1 | grep -E "passed|failed|error|skipped" | tail -5
 ```
 
 Save this output — it is the baseline that every batch must match.
 
 - [ ] **Step 2: Create GBK/GB2312 test fixtures**
 
-Create `code_graph_builder/tests/fixtures/` directory and add GBK-encoded C test files:
+Create `terrain/tests/fixtures/` directory and add GBK-encoded C test files:
 
 ```bash
-mkdir -p code_graph_builder/tests/fixtures
+mkdir -p terrain/tests/fixtures
 ```
 
-Create `code_graph_builder/tests/fixtures/create_gbk_fixtures.py` (a helper script to generate properly encoded test files):
+Create `terrain/tests/fixtures/create_gbk_fixtures.py` (a helper script to generate properly encoded test files):
 
 ```python
 #!/usr/bin/env python3
@@ -651,12 +651,12 @@ if __name__ == "__main__":
 Run it to generate fixtures:
 
 ```bash
-python code_graph_builder/tests/fixtures/create_gbk_fixtures.py
+python terrain/tests/fixtures/create_gbk_fixtures.py
 ```
 
 - [ ] **Step 3: Write GBK/GB2312 parsing test**
 
-Create `code_graph_builder/tests/test_encoding_parsing.py`:
+Create `terrain/tests/test_encoding_parsing.py`:
 
 ```python
 """Tests for parsing GBK/GB2312 encoded C files.
@@ -668,8 +668,8 @@ with Chinese comments and string literals.
 import pytest
 from pathlib import Path
 
-from code_graph_builder.builder import CodeGraphBuilder
-from code_graph_builder.config import MemoryConfig, ScanConfig
+from terrain.builder import TerrainBuilder
+from terrain.config import MemoryConfig, ScanConfig
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -677,9 +677,9 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 @pytest.fixture
 def memory_builder():
-    """Create a CodeGraphBuilder with in-memory backend."""
+    """Create a TerrainBuilder with in-memory backend."""
     config = MemoryConfig()
-    return CodeGraphBuilder(config)
+    return TerrainBuilder(config)
 
 
 class TestGBKParsing:
@@ -793,7 +793,7 @@ class TestUTF8Comparison:
         }
 
         # Parse UTF-8 version (need a fresh builder since Memory backend accumulates)
-        builder2 = CodeGraphBuilder(MemoryConfig())
+        builder2 = TerrainBuilder(MemoryConfig())
         result_utf8 = builder2.build(
             str(FIXTURES_DIR),
             scan_config=ScanConfig(include_patterns=["test_utf8.c"]),
@@ -812,7 +812,7 @@ class TestUTF8Comparison:
 - [ ] **Step 4: Run the encoding test**
 
 ```bash
-python -m pytest code_graph_builder/tests/test_encoding_parsing.py -v
+python -m pytest terrain/tests/test_encoding_parsing.py -v
 ```
 
 Expected: All tests PASS. If any fail, debug and fix the parser/encoding layer before proceeding.
@@ -820,7 +820,7 @@ Expected: All tests PASS. If any fail, debug and fix the parser/encoding layer b
 - [ ] **Step 5: Run full test suite to confirm baseline unchanged**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: Same results as baseline from Step 1, plus the new encoding tests.
@@ -828,7 +828,7 @@ Expected: Same results as baseline from Step 1, plus the new encoding tests.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add code_graph_builder/tests/fixtures/ code_graph_builder/tests/test_encoding_parsing.py
+git add terrain/tests/fixtures/ terrain/tests/test_encoding_parsing.py
 git commit -m "test: add GBK/GB2312 encoding test fixtures and parser tests"
 ```
 
@@ -839,73 +839,73 @@ git commit -m "test: add GBK/GB2312 encoding test fixtures and parser tests"
 Move `constants.py`, `types.py`, `config.py`, `models.py` into `foundation/types/`.
 
 **Files:**
-- Move: `code_graph_builder/constants.py` → `code_graph_builder/foundation/types/constants.py`
-- Move: `code_graph_builder/types.py` → `code_graph_builder/foundation/types/types.py`
-- Move: `code_graph_builder/config.py` → `code_graph_builder/foundation/types/config.py`
-- Move: `code_graph_builder/models.py` → `code_graph_builder/foundation/types/models.py`
-- Create: `code_graph_builder/foundation/__init__.py`
-- Create: `code_graph_builder/foundation/types/__init__.py`
+- Move: `terrain/constants.py` → `terrain/foundation/types/constants.py`
+- Move: `terrain/types.py` → `terrain/foundation/types/types.py`
+- Move: `terrain/config.py` → `terrain/foundation/types/config.py`
+- Move: `terrain/models.py` → `terrain/foundation/types/models.py`
+- Create: `terrain/foundation/__init__.py`
+- Create: `terrain/foundation/types/__init__.py`
 - Create: compatibility shims at original locations
 
 - [ ] **Step 1: Create directory structure**
 
 ```bash
-mkdir -p code_graph_builder/foundation/types
-touch code_graph_builder/foundation/__init__.py
-touch code_graph_builder/foundation/types/__init__.py
+mkdir -p terrain/foundation/types
+touch terrain/foundation/__init__.py
+touch terrain/foundation/types/__init__.py
 ```
 
 - [ ] **Step 2: Move files**
 
 ```bash
-git mv code_graph_builder/constants.py code_graph_builder/foundation/types/constants.py
-git mv code_graph_builder/types.py code_graph_builder/foundation/types/types.py
-git mv code_graph_builder/config.py code_graph_builder/foundation/types/config.py
-git mv code_graph_builder/models.py code_graph_builder/foundation/types/models.py
+git mv terrain/constants.py terrain/foundation/types/constants.py
+git mv terrain/types.py terrain/foundation/types/types.py
+git mv terrain/config.py terrain/foundation/types/config.py
+git mv terrain/models.py terrain/foundation/types/models.py
 ```
 
 - [ ] **Step 3: Create compatibility shims**
 
-Create `code_graph_builder/constants.py`:
+Create `terrain/constants.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.types.constants import *  # noqa: F401,F403
+from terrain.foundation.types.constants import *  # noqa: F401,F403
 ```
 
-Create `code_graph_builder/types.py`:
+Create `terrain/types.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.types.types import *  # noqa: F401,F403
+from terrain.foundation.types.types import *  # noqa: F401,F403
 ```
 
-Create `code_graph_builder/config.py`:
+Create `terrain/config.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.types.config import *  # noqa: F401,F403
+from terrain.foundation.types.config import *  # noqa: F401,F403
 ```
 
-Create `code_graph_builder/models.py`:
+Create `terrain/models.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.types.models import *  # noqa: F401,F403
+from terrain.foundation.types.models import *  # noqa: F401,F403
 ```
 
 - [ ] **Step 4: Update internal imports within the moved files**
 
-Scan the four moved files for any `from code_graph_builder.constants import` or similar cross-references, and update them to use the new `foundation.types` paths. The shims ensure external consumers still work.
+Scan the four moved files for any `from terrain.constants import` or similar cross-references, and update them to use the new `foundation.types` paths. The shims ensure external consumers still work.
 
 ```bash
 # Find internal cross-references in the moved files
-grep -n "from code_graph_builder\.\(constants\|types\|config\|models\)" \
-  code_graph_builder/foundation/types/*.py
+grep -n "from terrain\.\(constants\|types\|config\|models\)" \
+  terrain/foundation/types/*.py
 ```
 
-Update any matches to use `code_graph_builder.foundation.types.*` paths.
+Update any matches to use `terrain.foundation.types.*` paths.
 
 - [ ] **Step 5: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All tests PASS, identical to baseline. The shims ensure nothing breaks.
@@ -924,57 +924,57 @@ git commit -m "refactor: migrate constants/types/config/models to foundation/typ
 Move `utils/` contents and `settings.py` into `foundation/utils/`.
 
 **Files:**
-- Move: `code_graph_builder/utils/encoding.py` → `code_graph_builder/foundation/utils/encoding.py`
-- Move: `code_graph_builder/utils/path_utils.py` → `code_graph_builder/foundation/utils/path_utils.py`
-- Move: `code_graph_builder/utils/__init__.py` → `code_graph_builder/foundation/utils/__init__.py`
-- Move: `code_graph_builder/settings.py` → `code_graph_builder/foundation/utils/settings.py`
-- Create: compatibility shims at `code_graph_builder/utils/` and `code_graph_builder/settings.py`
+- Move: `terrain/utils/encoding.py` → `terrain/foundation/utils/encoding.py`
+- Move: `terrain/utils/path_utils.py` → `terrain/foundation/utils/path_utils.py`
+- Move: `terrain/utils/__init__.py` → `terrain/foundation/utils/__init__.py`
+- Move: `terrain/settings.py` → `terrain/foundation/utils/settings.py`
+- Create: compatibility shims at `terrain/utils/` and `terrain/settings.py`
 
 - [ ] **Step 1: Create directory and move files**
 
 ```bash
-mkdir -p code_graph_builder/foundation/utils
+mkdir -p terrain/foundation/utils
 
 # Move utils contents
-git mv code_graph_builder/utils/encoding.py code_graph_builder/foundation/utils/encoding.py
-git mv code_graph_builder/utils/path_utils.py code_graph_builder/foundation/utils/path_utils.py
-git mv code_graph_builder/utils/__init__.py code_graph_builder/foundation/utils/__init__.py
+git mv terrain/utils/encoding.py terrain/foundation/utils/encoding.py
+git mv terrain/utils/path_utils.py terrain/foundation/utils/path_utils.py
+git mv terrain/utils/__init__.py terrain/foundation/utils/__init__.py
 
 # Move settings.py
-git mv code_graph_builder/settings.py code_graph_builder/foundation/utils/settings.py
+git mv terrain/settings.py terrain/foundation/utils/settings.py
 ```
 
 - [ ] **Step 2: Create compatibility shims**
 
-Recreate `code_graph_builder/utils/__init__.py`:
+Recreate `terrain/utils/__init__.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.utils import *  # noqa: F401,F403
+from terrain.foundation.utils import *  # noqa: F401,F403
 ```
 
-Create `code_graph_builder/utils/encoding.py`:
+Create `terrain/utils/encoding.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.utils.encoding import *  # noqa: F401,F403
+from terrain.foundation.utils.encoding import *  # noqa: F401,F403
 ```
 
-Create `code_graph_builder/utils/path_utils.py`:
+Create `terrain/utils/path_utils.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.utils.path_utils import *  # noqa: F401,F403
+from terrain.foundation.utils.path_utils import *  # noqa: F401,F403
 ```
 
-Create `code_graph_builder/settings.py`:
+Create `terrain/settings.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.utils.settings import *  # noqa: F401,F403
+from terrain.foundation.utils.settings import *  # noqa: F401,F403
 ```
 
 - [ ] **Step 3: Update internal imports in moved files**
 
 ```bash
-grep -rn "from code_graph_builder\.\(utils\|settings\)" \
-  code_graph_builder/foundation/utils/*.py
+grep -rn "from terrain\.\(utils\|settings\)" \
+  terrain/foundation/utils/*.py
 ```
 
 Update any internal cross-references to use new paths.
@@ -982,7 +982,7 @@ Update any internal cross-references to use new paths.
 - [ ] **Step 4: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All tests PASS, identical to baseline.
@@ -1001,55 +1001,55 @@ git commit -m "refactor: migrate utils/ and settings.py to foundation/utils/ (L1
 Move `parsers/`, `parser_loader.py`, and `language_spec.py` into `foundation/parsers/`.
 
 **Files:**
-- Move: all files from `code_graph_builder/parsers/` → `code_graph_builder/foundation/parsers/`
-- Move: `code_graph_builder/parser_loader.py` → `code_graph_builder/foundation/parsers/parser_loader.py`
-- Move: `code_graph_builder/language_spec.py` → `code_graph_builder/foundation/parsers/language_spec.py`
+- Move: all files from `terrain/parsers/` → `terrain/foundation/parsers/`
+- Move: `terrain/parser_loader.py` → `terrain/foundation/parsers/parser_loader.py`
+- Move: `terrain/language_spec.py` → `terrain/foundation/parsers/language_spec.py`
 - Create: compatibility shims
 
 - [ ] **Step 1: Create directory and move files**
 
 ```bash
-mkdir -p code_graph_builder/foundation/parsers
+mkdir -p terrain/foundation/parsers
 
 # Move all parser files
-for f in code_graph_builder/parsers/*.py; do
+for f in terrain/parsers/*.py; do
   fname=$(basename "$f")
-  git mv "$f" "code_graph_builder/foundation/parsers/$fname"
+  git mv "$f" "terrain/foundation/parsers/$fname"
 done
 
 # Move root-level parser files
-git mv code_graph_builder/parser_loader.py code_graph_builder/foundation/parsers/parser_loader.py
-git mv code_graph_builder/language_spec.py code_graph_builder/foundation/parsers/language_spec.py
+git mv terrain/parser_loader.py terrain/foundation/parsers/parser_loader.py
+git mv terrain/language_spec.py terrain/foundation/parsers/language_spec.py
 
 # Remove empty old parsers directory if git leaves it
-rmdir code_graph_builder/parsers 2>/dev/null || true
+rmdir terrain/parsers 2>/dev/null || true
 ```
 
 - [ ] **Step 2: Create compatibility shims**
 
-Recreate `code_graph_builder/parsers/__init__.py`:
+Recreate `terrain/parsers/__init__.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.foundation.parsers import *  # noqa: F401,F403
+from terrain.foundation.parsers import *  # noqa: F401,F403
 ```
 
-Create shims for each file in `code_graph_builder/parsers/`:
+Create shims for each file in `terrain/parsers/`:
 ```python
-# code_graph_builder/parsers/factory.py
-from code_graph_builder.foundation.parsers.factory import *  # noqa: F401,F403
+# terrain/parsers/factory.py
+from terrain.foundation.parsers.factory import *  # noqa: F401,F403
 ```
 
 (Repeat pattern for: `call_processor.py`, `call_resolver.py`, `definition_processor.py`, `import_processor.py`, `structure_processor.py`, `type_inference.py`, `utils.py`)
 
 Create root-level shims:
 ```python
-# code_graph_builder/parser_loader.py
-from code_graph_builder.foundation.parsers.parser_loader import *  # noqa: F401,F403
+# terrain/parser_loader.py
+from terrain.foundation.parsers.parser_loader import *  # noqa: F401,F403
 ```
 
 ```python
-# code_graph_builder/language_spec.py
-from code_graph_builder.foundation.parsers.language_spec import *  # noqa: F401,F403
+# terrain/language_spec.py
+from terrain.foundation.parsers.language_spec import *  # noqa: F401,F403
 ```
 
 - [ ] **Step 3: Update internal imports in moved files**
@@ -1057,20 +1057,20 @@ from code_graph_builder.foundation.parsers.language_spec import *  # noqa: F401,
 The parser files import from each other and from L0 types. Update:
 
 ```bash
-grep -rn "from code_graph_builder\.\(parsers\|parser_loader\|language_spec\|constants\|types\|models\)" \
-  code_graph_builder/foundation/parsers/*.py
+grep -rn "from terrain\.\(parsers\|parser_loader\|language_spec\|constants\|types\|models\)" \
+  terrain/foundation/parsers/*.py
 ```
 
 Update imports:
-- `from code_graph_builder.parsers.X` → `from code_graph_builder.foundation.parsers.X`
-- `from code_graph_builder.constants` → `from code_graph_builder.foundation.types.constants`
-- `from code_graph_builder.types` → `from code_graph_builder.foundation.types.types`
-- `from code_graph_builder.models` → `from code_graph_builder.foundation.types.models`
+- `from terrain.parsers.X` → `from terrain.foundation.parsers.X`
+- `from terrain.constants` → `from terrain.foundation.types.constants`
+- `from terrain.types` → `from terrain.foundation.types.types`
+- `from terrain.models` → `from terrain.foundation.types.models`
 
 - [ ] **Step 4: Run GBK/GB2312 encoding tests specifically**
 
 ```bash
-python -m pytest code_graph_builder/tests/test_encoding_parsing.py -v
+python -m pytest terrain/tests/test_encoding_parsing.py -v
 ```
 
 Expected: All PASS — parser migration did not break encoding handling.
@@ -1078,7 +1078,7 @@ Expected: All PASS — parser migration did not break encoding handling.
 - [ ] **Step 5: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All tests PASS, identical to baseline.
@@ -1095,29 +1095,29 @@ git commit -m "refactor: migrate parsers/ to foundation/parsers/ (L1)"
 ## Task 6: Batch 4 — Migrate foundation/services/ (L1)
 
 **Files:**
-- Move: all files from `code_graph_builder/services/` → `code_graph_builder/foundation/services/`
+- Move: all files from `terrain/services/` → `terrain/foundation/services/`
 - Create: compatibility shims
 
 - [ ] **Step 1: Move files**
 
 ```bash
-mkdir -p code_graph_builder/foundation/services
-for f in code_graph_builder/services/*.py; do
+mkdir -p terrain/foundation/services
+for f in terrain/services/*.py; do
   fname=$(basename "$f")
-  git mv "$f" "code_graph_builder/foundation/services/$fname"
+  git mv "$f" "terrain/foundation/services/$fname"
 done
-rmdir code_graph_builder/services 2>/dev/null || true
+rmdir terrain/services 2>/dev/null || true
 ```
 
 - [ ] **Step 2: Create compatibility shims**
 
-Recreate `code_graph_builder/services/__init__.py` and per-file shims following the same pattern as Task 5 Step 2.
+Recreate `terrain/services/__init__.py` and per-file shims following the same pattern as Task 5 Step 2.
 
 - [ ] **Step 3: Update internal imports in moved files**
 
 ```bash
-grep -rn "from code_graph_builder\.\(services\|types\|constants\)" \
-  code_graph_builder/foundation/services/*.py
+grep -rn "from terrain\.\(services\|types\|constants\)" \
+  terrain/foundation/services/*.py
 ```
 
 Update to use `foundation.types.*` and `foundation.services.*` paths.
@@ -1125,7 +1125,7 @@ Update to use `foundation.types.*` and `foundation.services.*` paths.
 - [ ] **Step 4: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All PASS.
@@ -1142,32 +1142,32 @@ git commit -m "refactor: migrate services/ to foundation/services/ (L1)"
 ## Task 7: Batch 5 — Migrate domains/core/graph/ (L2)
 
 **Files:**
-- Move: `code_graph_builder/builder.py` → `code_graph_builder/domains/core/graph/builder.py`
-- Move: `code_graph_builder/graph_updater.py` → `code_graph_builder/domains/core/graph/graph_updater.py`
+- Move: `terrain/builder.py` → `terrain/domains/core/graph/builder.py`
+- Move: `terrain/graph_updater.py` → `terrain/domains/core/graph/graph_updater.py`
 - Create: compatibility shims
 
 - [ ] **Step 1: Create directory and move files**
 
 ```bash
-mkdir -p code_graph_builder/domains/core/graph
-touch code_graph_builder/domains/__init__.py
-touch code_graph_builder/domains/core/__init__.py
-touch code_graph_builder/domains/core/graph/__init__.py
+mkdir -p terrain/domains/core/graph
+touch terrain/domains/__init__.py
+touch terrain/domains/core/__init__.py
+touch terrain/domains/core/graph/__init__.py
 
-git mv code_graph_builder/builder.py code_graph_builder/domains/core/graph/builder.py
-git mv code_graph_builder/graph_updater.py code_graph_builder/domains/core/graph/graph_updater.py
+git mv terrain/builder.py terrain/domains/core/graph/builder.py
+git mv terrain/graph_updater.py terrain/domains/core/graph/graph_updater.py
 ```
 
 - [ ] **Step 2: Create compatibility shims**
 
 ```python
-# code_graph_builder/builder.py
-from code_graph_builder.domains.core.graph.builder import *  # noqa: F401,F403
+# terrain/builder.py
+from terrain.domains.core.graph.builder import *  # noqa: F401,F403
 ```
 
 ```python
-# code_graph_builder/graph_updater.py
-from code_graph_builder.domains.core.graph.graph_updater import *  # noqa: F401,F403
+# terrain/graph_updater.py
+from terrain.domains.core.graph.graph_updater import *  # noqa: F401,F403
 ```
 
 - [ ] **Step 3: Update internal imports in moved files**
@@ -1175,8 +1175,8 @@ from code_graph_builder.domains.core.graph.graph_updater import *  # noqa: F401,
 `builder.py` and `graph_updater.py` import heavily from L0 and L1. Update all to use new paths:
 
 ```bash
-grep -rn "from code_graph_builder\." \
-  code_graph_builder/domains/core/graph/*.py
+grep -rn "from terrain\." \
+  terrain/domains/core/graph/*.py
 ```
 
 Update all matches to new `foundation.*` paths.
@@ -1184,7 +1184,7 @@ Update all matches to new `foundation.*` paths.
 - [ ] **Step 4: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All PASS.
@@ -1201,41 +1201,41 @@ git commit -m "refactor: migrate builder/graph_updater to domains/core/graph/ (L
 ## Task 8: Batch 6 — Migrate domains/core/embedding/ and domains/core/search/ (L2)
 
 **Files:**
-- Move: `code_graph_builder/embeddings/*` → `code_graph_builder/domains/core/embedding/`
-- Move: `code_graph_builder/tools/graph_query.py` → `code_graph_builder/domains/core/search/graph_query.py`
-- Move: `code_graph_builder/tools/semantic_search.py` → `code_graph_builder/domains/core/search/semantic_search.py`
+- Move: `terrain/embeddings/*` → `terrain/domains/core/embedding/`
+- Move: `terrain/tools/graph_query.py` → `terrain/domains/core/search/graph_query.py`
+- Move: `terrain/tools/semantic_search.py` → `terrain/domains/core/search/semantic_search.py`
 - Create: compatibility shims
 
 - [ ] **Step 1: Create directories and move files**
 
 ```bash
-mkdir -p code_graph_builder/domains/core/embedding
-mkdir -p code_graph_builder/domains/core/search
-touch code_graph_builder/domains/core/embedding/__init__.py
-touch code_graph_builder/domains/core/search/__init__.py
+mkdir -p terrain/domains/core/embedding
+mkdir -p terrain/domains/core/search
+touch terrain/domains/core/embedding/__init__.py
+touch terrain/domains/core/search/__init__.py
 
 # Move embeddings
-for f in code_graph_builder/embeddings/*.py; do
+for f in terrain/embeddings/*.py; do
   fname=$(basename "$f")
-  git mv "$f" "code_graph_builder/domains/core/embedding/$fname"
+  git mv "$f" "terrain/domains/core/embedding/$fname"
 done
-rmdir code_graph_builder/embeddings 2>/dev/null || true
+rmdir terrain/embeddings 2>/dev/null || true
 
 # Move tools
-git mv code_graph_builder/tools/graph_query.py code_graph_builder/domains/core/search/graph_query.py
-git mv code_graph_builder/tools/semantic_search.py code_graph_builder/domains/core/search/semantic_search.py
+git mv terrain/tools/graph_query.py terrain/domains/core/search/graph_query.py
+git mv terrain/tools/semantic_search.py terrain/domains/core/search/semantic_search.py
 ```
 
 - [ ] **Step 2: Create compatibility shims**
 
-Create shims at original `code_graph_builder/embeddings/` and `code_graph_builder/tools/` locations following the established pattern.
+Create shims at original `terrain/embeddings/` and `terrain/tools/` locations following the established pattern.
 
 - [ ] **Step 3: Update internal imports in moved files**
 
 ```bash
-grep -rn "from code_graph_builder\." \
-  code_graph_builder/domains/core/embedding/*.py \
-  code_graph_builder/domains/core/search/*.py
+grep -rn "from terrain\." \
+  terrain/domains/core/embedding/*.py \
+  terrain/domains/core/search/*.py
 ```
 
 Update to new paths.
@@ -1243,7 +1243,7 @@ Update to new paths.
 - [ ] **Step 4: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All PASS.
@@ -1260,37 +1260,37 @@ git commit -m "refactor: migrate embeddings/ and tools/ to domains/core/ (L2)"
 ## Task 9: Batch 7 — Migrate domains/upper/apidoc/ (L3)
 
 **Files:**
-- Move: `code_graph_builder/mcp/api_doc_generator.py` → `code_graph_builder/domains/upper/apidoc/api_doc_generator.py`
+- Move: `terrain/mcp/api_doc_generator.py` → `terrain/domains/upper/apidoc/api_doc_generator.py`
 - Create: compatibility shim
 
 - [ ] **Step 1: Create directory and move file**
 
 ```bash
-mkdir -p code_graph_builder/domains/upper/apidoc
-touch code_graph_builder/domains/upper/__init__.py
-touch code_graph_builder/domains/upper/apidoc/__init__.py
+mkdir -p terrain/domains/upper/apidoc
+touch terrain/domains/upper/__init__.py
+touch terrain/domains/upper/apidoc/__init__.py
 
-git mv code_graph_builder/mcp/api_doc_generator.py code_graph_builder/domains/upper/apidoc/api_doc_generator.py
+git mv terrain/mcp/api_doc_generator.py terrain/domains/upper/apidoc/api_doc_generator.py
 ```
 
 - [ ] **Step 2: Create compatibility shim**
 
 ```python
-# code_graph_builder/mcp/api_doc_generator.py
-from code_graph_builder.domains.upper.apidoc.api_doc_generator import *  # noqa: F401,F403
+# terrain/mcp/api_doc_generator.py
+from terrain.domains.upper.apidoc.api_doc_generator import *  # noqa: F401,F403
 ```
 
 - [ ] **Step 3: Update internal imports**
 
 ```bash
-grep -rn "from code_graph_builder\." \
-  code_graph_builder/domains/upper/apidoc/*.py
+grep -rn "from terrain\." \
+  terrain/domains/upper/apidoc/*.py
 ```
 
 - [ ] **Step 4: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All PASS.
@@ -1307,57 +1307,57 @@ git commit -m "refactor: migrate api_doc_generator to domains/upper/apidoc/ (L3)
 ## Task 10: Batch 8 — Migrate domains/upper/rag/ and domains/upper/guidance/ (L3)
 
 **Files:**
-- Move: all `code_graph_builder/rag/*.py` (not `rag/tests/`) → `code_graph_builder/domains/upper/rag/`
-- Move: all `code_graph_builder/guidance/*.py` → `code_graph_builder/domains/upper/guidance/`
+- Move: all `terrain/rag/*.py` (not `rag/tests/`) → `terrain/domains/upper/rag/`
+- Move: all `terrain/guidance/*.py` → `terrain/domains/upper/guidance/`
 - Create: compatibility shims
 
 - [ ] **Step 1: Create directories and move files**
 
 ```bash
-mkdir -p code_graph_builder/domains/upper/rag
-mkdir -p code_graph_builder/domains/upper/guidance
-touch code_graph_builder/domains/upper/rag/__init__.py
-touch code_graph_builder/domains/upper/guidance/__init__.py
+mkdir -p terrain/domains/upper/rag
+mkdir -p terrain/domains/upper/guidance
+touch terrain/domains/upper/rag/__init__.py
+touch terrain/domains/upper/guidance/__init__.py
 
 # Move RAG files (exclude tests/ subdirectory)
-for f in code_graph_builder/rag/*.py; do
+for f in terrain/rag/*.py; do
   fname=$(basename "$f")
-  git mv "$f" "code_graph_builder/domains/upper/rag/$fname"
+  git mv "$f" "terrain/domains/upper/rag/$fname"
 done
 
 # Move guidance files
-for f in code_graph_builder/guidance/*.py; do
+for f in terrain/guidance/*.py; do
   fname=$(basename "$f")
-  git mv "$f" "code_graph_builder/domains/upper/guidance/$fname"
+  git mv "$f" "terrain/domains/upper/guidance/$fname"
 done
 
 # Clean up empty directories
-rmdir code_graph_builder/guidance 2>/dev/null || true
+rmdir terrain/guidance 2>/dev/null || true
 ```
 
 Note: `rag/tests/` stays in place for now — it will be reorganized in Task 12.
 
 - [ ] **Step 2: Create compatibility shims**
 
-Create shims at original `code_graph_builder/rag/` and `code_graph_builder/guidance/` locations.
+Create shims at original `terrain/rag/` and `terrain/guidance/` locations.
 
 - [ ] **Step 3: Update internal imports in moved files**
 
 ```bash
-grep -rn "from code_graph_builder\." \
-  code_graph_builder/domains/upper/rag/*.py \
-  code_graph_builder/domains/upper/guidance/*.py
+grep -rn "from terrain\." \
+  terrain/domains/upper/rag/*.py \
+  terrain/domains/upper/guidance/*.py
 ```
 
 Key updates:
-- `from code_graph_builder.rag.X` → `from code_graph_builder.domains.upper.rag.X`
-- `from code_graph_builder.embeddings.X` → `from code_graph_builder.domains.core.embedding.X`
-- `from code_graph_builder.tools.X` → `from code_graph_builder.domains.core.search.X`
+- `from terrain.rag.X` → `from terrain.domains.upper.rag.X`
+- `from terrain.embeddings.X` → `from terrain.domains.core.embedding.X`
+- `from terrain.tools.X` → `from terrain.domains.core.search.X`
 
 - [ ] **Step 4: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All PASS.
@@ -1374,50 +1374,50 @@ git commit -m "refactor: migrate rag/ and guidance/ to domains/upper/ (L3)"
 ## Task 11: Batch 9 — Migrate entrypoints/ (L4)
 
 **Files:**
-- Move: `code_graph_builder/mcp/server.py` → `code_graph_builder/entrypoints/mcp/server.py`
-- Move: `code_graph_builder/mcp/tools.py` → `code_graph_builder/entrypoints/mcp/tools.py`
-- Move: `code_graph_builder/mcp/pipeline.py` → `code_graph_builder/entrypoints/mcp/pipeline.py`
-- Move: `code_graph_builder/mcp/file_editor.py` → `code_graph_builder/entrypoints/mcp/file_editor.py`
-- Move: `code_graph_builder/mcp/__init__.py` → `code_graph_builder/entrypoints/mcp/__init__.py`
-- Move: `code_graph_builder/cli.py` → `code_graph_builder/entrypoints/cli/cli.py`
-- Move: `code_graph_builder/cgb_cli.py` → `code_graph_builder/entrypoints/cli/cgb_cli.py`
-- Move: `code_graph_builder/commands_cli.py` → `code_graph_builder/entrypoints/cli/commands_cli.py`
+- Move: `terrain/mcp/server.py` → `terrain/entrypoints/mcp/server.py`
+- Move: `terrain/mcp/tools.py` → `terrain/entrypoints/mcp/tools.py`
+- Move: `terrain/mcp/pipeline.py` → `terrain/entrypoints/mcp/pipeline.py`
+- Move: `terrain/mcp/file_editor.py` → `terrain/entrypoints/mcp/file_editor.py`
+- Move: `terrain/mcp/__init__.py` → `terrain/entrypoints/mcp/__init__.py`
+- Move: `terrain/cli.py` → `terrain/entrypoints/cli/cli.py`
+- Move: `terrain/cgb_cli.py` → `terrain/entrypoints/cli/cgb_cli.py`
+- Move: `terrain/commands_cli.py` → `terrain/entrypoints/cli/commands_cli.py`
 - Update: `pyproject.toml` entry points
 
 - [ ] **Step 1: Create directories and move files**
 
 ```bash
-mkdir -p code_graph_builder/entrypoints/mcp
-mkdir -p code_graph_builder/entrypoints/cli
-touch code_graph_builder/entrypoints/__init__.py
-touch code_graph_builder/entrypoints/cli/__init__.py
+mkdir -p terrain/entrypoints/mcp
+mkdir -p terrain/entrypoints/cli
+touch terrain/entrypoints/__init__.py
+touch terrain/entrypoints/cli/__init__.py
 
 # Move MCP files
-for f in code_graph_builder/mcp/__init__.py code_graph_builder/mcp/server.py \
-         code_graph_builder/mcp/tools.py code_graph_builder/mcp/pipeline.py \
-         code_graph_builder/mcp/file_editor.py; do
+for f in terrain/mcp/__init__.py terrain/mcp/server.py \
+         terrain/mcp/tools.py terrain/mcp/pipeline.py \
+         terrain/mcp/file_editor.py; do
   fname=$(basename "$f")
-  git mv "$f" "code_graph_builder/entrypoints/mcp/$fname"
+  git mv "$f" "terrain/entrypoints/mcp/$fname"
 done
-rmdir code_graph_builder/mcp 2>/dev/null || true
+rmdir terrain/mcp 2>/dev/null || true
 
 # Move CLI files
-git mv code_graph_builder/cli.py code_graph_builder/entrypoints/cli/cli.py
-git mv code_graph_builder/cgb_cli.py code_graph_builder/entrypoints/cli/cgb_cli.py
-git mv code_graph_builder/commands_cli.py code_graph_builder/entrypoints/cli/commands_cli.py
+git mv terrain/cli.py terrain/entrypoints/cli/cli.py
+git mv terrain/cgb_cli.py terrain/entrypoints/cli/cgb_cli.py
+git mv terrain/commands_cli.py terrain/entrypoints/cli/commands_cli.py
 ```
 
 - [ ] **Step 2: Create compatibility shims**
 
-Create shims at original `code_graph_builder/mcp/`, `code_graph_builder/cli.py`, etc.
+Create shims at original `terrain/mcp/`, `terrain/cli.py`, etc.
 
-Critical shim — `code_graph_builder/mcp/__init__.py`:
+Critical shim — `terrain/mcp/__init__.py`:
 ```python
 # Compatibility shim — will be removed after full migration
-from code_graph_builder.entrypoints.mcp import *  # noqa: F401,F403
+from terrain.entrypoints.mcp import *  # noqa: F401,F403
 ```
 
-This is critical because `pyproject.toml` entry point `cgb-mcp` points to `code_graph_builder.mcp:main`.
+This is critical because `pyproject.toml` entry point `terrain-mcp` points to `terrain.mcp:main`.
 
 - [ ] **Step 3: Update pyproject.toml entry points**
 
@@ -1425,35 +1425,35 @@ Update `pyproject.toml`:
 
 ```toml
 [project.scripts]
-code-graph-builder = "code_graph_builder.entrypoints.cli.cli:main"
-cgb-mcp = "code_graph_builder.entrypoints.mcp:main"
+terrain-ai = "terrain.entrypoints.cli.cli:main"
+terrain-mcp = "terrain.entrypoints.mcp:main"
 ```
 
 - [ ] **Step 4: Update internal imports in moved files**
 
 ```bash
-grep -rn "from code_graph_builder\." \
-  code_graph_builder/entrypoints/mcp/*.py \
-  code_graph_builder/entrypoints/cli/*.py
+grep -rn "from terrain\." \
+  terrain/entrypoints/mcp/*.py \
+  terrain/entrypoints/cli/*.py
 ```
 
 This is the largest import update — `mcp/tools.py` imports from nearly every module. Update all to new paths.
 
-- [ ] **Step 5: Update `code_graph_builder/__init__.py`**
+- [ ] **Step 5: Update `terrain/__init__.py`**
 
 Update the package root `__init__.py` to import from new locations:
 
 ```bash
-grep -n "from code_graph_builder\." code_graph_builder/__init__.py
+grep -n "from terrain\." terrain/__init__.py
 ```
 
-Update all imports to new paths (e.g., `from code_graph_builder.foundation.types.config import ...`).
+Update all imports to new paths (e.g., `from terrain.foundation.types.config import ...`).
 
 - [ ] **Step 6: Verify entry points work**
 
 ```bash
 pip install -e . 2>&1 | tail -5
-code-graph-builder --help 2>&1 | head -5
+terrain-ai --help 2>&1 | head -5
 ```
 
 Expected: Both commands succeed.
@@ -1461,7 +1461,7 @@ Expected: Both commands succeed.
 - [ ] **Step 7: Run full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All PASS.
@@ -1478,23 +1478,23 @@ git commit -m "refactor: migrate mcp/ and cli to entrypoints/ (L4) + update pypr
 ## Task 12: Batch 10 — Reorganize Tests + Remove Shims
 
 **Files:**
-- Reorganize: `code_graph_builder/tests/` → new structure mirroring layers
-- Move: `code_graph_builder/rag/tests/` → `code_graph_builder/tests/domains/upper/`
+- Reorganize: `terrain/tests/` → new structure mirroring layers
+- Move: `terrain/rag/tests/` → `terrain/tests/domains/upper/`
 - Delete: all compatibility shims
 - Verify: zero old import paths remain
 
 - [ ] **Step 1: Create new test directory structure**
 
 ```bash
-mkdir -p code_graph_builder/tests/foundation
-mkdir -p code_graph_builder/tests/domains/core
-mkdir -p code_graph_builder/tests/domains/upper
-mkdir -p code_graph_builder/tests/entrypoints
-touch code_graph_builder/tests/foundation/__init__.py
-touch code_graph_builder/tests/domains/__init__.py
-touch code_graph_builder/tests/domains/core/__init__.py
-touch code_graph_builder/tests/domains/upper/__init__.py
-touch code_graph_builder/tests/entrypoints/__init__.py
+mkdir -p terrain/tests/foundation
+mkdir -p terrain/tests/domains/core
+mkdir -p terrain/tests/domains/upper
+mkdir -p terrain/tests/entrypoints
+touch terrain/tests/foundation/__init__.py
+touch terrain/tests/domains/__init__.py
+touch terrain/tests/domains/core/__init__.py
+touch terrain/tests/domains/upper/__init__.py
+touch terrain/tests/entrypoints/__init__.py
 ```
 
 - [ ] **Step 2: Move test files to new locations**
@@ -1503,40 +1503,40 @@ Map existing tests to layers:
 
 ```bash
 # Foundation tests
-git mv code_graph_builder/tests/test_basic.py code_graph_builder/tests/foundation/test_types.py
-git mv code_graph_builder/tests/test_settings.py code_graph_builder/tests/foundation/test_settings.py
-git mv code_graph_builder/tests/test_encoding_parsing.py code_graph_builder/tests/foundation/test_encoding_parsing.py
-git mv code_graph_builder/tests/test_c_api_extraction.py code_graph_builder/tests/foundation/test_c_api_extraction.py
-git mv code_graph_builder/tests/test_call_resolution_scenarios.py code_graph_builder/tests/foundation/test_call_resolution.py
+git mv terrain/tests/test_basic.py terrain/tests/foundation/test_types.py
+git mv terrain/tests/test_settings.py terrain/tests/foundation/test_settings.py
+git mv terrain/tests/test_encoding_parsing.py terrain/tests/foundation/test_encoding_parsing.py
+git mv terrain/tests/test_c_api_extraction.py terrain/tests/foundation/test_c_api_extraction.py
+git mv terrain/tests/test_call_resolution_scenarios.py terrain/tests/foundation/test_call_resolution.py
 
 # Domain/core tests
-git mv code_graph_builder/tests/test_step1_graph_build.py code_graph_builder/tests/domains/core/test_graph_build.py
-git mv code_graph_builder/tests/test_vector_store.py code_graph_builder/tests/domains/core/test_vector_store.py
-git mv code_graph_builder/tests/test_embedder.py code_graph_builder/tests/domains/core/test_embedder.py
-git mv code_graph_builder/tests/test_integration_semantic.py code_graph_builder/tests/domains/core/test_semantic.py
+git mv terrain/tests/test_step1_graph_build.py terrain/tests/domains/core/test_graph_build.py
+git mv terrain/tests/test_vector_store.py terrain/tests/domains/core/test_vector_store.py
+git mv terrain/tests/test_embedder.py terrain/tests/domains/core/test_embedder.py
+git mv terrain/tests/test_integration_semantic.py terrain/tests/domains/core/test_semantic.py
 
 # Domain/upper tests
-git mv code_graph_builder/tests/test_step2_api_docs.py code_graph_builder/tests/domains/upper/test_api_docs.py
-git mv code_graph_builder/tests/test_step3_embedding.py code_graph_builder/tests/domains/upper/test_embedding_pipeline.py
-git mv code_graph_builder/tests/test_rag.py code_graph_builder/tests/domains/upper/test_rag.py
-git mv code_graph_builder/tests/test_api_find.py code_graph_builder/tests/domains/upper/test_api_find.py
-git mv code_graph_builder/tests/test_api_find_integration.py code_graph_builder/tests/domains/upper/test_api_find_integration.py
+git mv terrain/tests/test_step2_api_docs.py terrain/tests/domains/upper/test_api_docs.py
+git mv terrain/tests/test_step3_embedding.py terrain/tests/domains/upper/test_embedding_pipeline.py
+git mv terrain/tests/test_rag.py terrain/tests/domains/upper/test_rag.py
+git mv terrain/tests/test_api_find.py terrain/tests/domains/upper/test_api_find.py
+git mv terrain/tests/test_api_find_integration.py terrain/tests/domains/upper/test_api_find_integration.py
 
 # Move rag/tests/ contents
-for f in code_graph_builder/rag/tests/test_*.py; do
+for f in terrain/rag/tests/test_*.py; do
   fname=$(basename "$f")
-  git mv "$f" "code_graph_builder/tests/domains/upper/$fname"
+  git mv "$f" "terrain/tests/domains/upper/$fname"
 done
 
 # Entrypoint tests
-git mv code_graph_builder/tests/test_mcp_protocol.py code_graph_builder/tests/entrypoints/test_mcp_protocol.py
-git mv code_graph_builder/tests/test_mcp_user_flow.py code_graph_builder/tests/entrypoints/test_mcp_user_flow.py
+git mv terrain/tests/test_mcp_protocol.py terrain/tests/entrypoints/test_mcp_protocol.py
+git mv terrain/tests/test_mcp_user_flow.py terrain/tests/entrypoints/test_mcp_user_flow.py
 ```
 
 - [ ] **Step 3: Update test imports**
 
 ```bash
-grep -rn "from code_graph_builder\." code_graph_builder/tests/ | grep -v __pycache__
+grep -rn "from terrain\." terrain/tests/ | grep -v __pycache__
 ```
 
 Update all test imports to use new `foundation.*`, `domains.*`, `entrypoints.*` paths.
@@ -1544,7 +1544,7 @@ Update all test imports to use new `foundation.*`, `domains.*`, `entrypoints.*` 
 - [ ] **Step 4: Run full test suite from new locations**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All PASS.
@@ -1553,8 +1553,8 @@ Expected: All PASS.
 
 ```bash
 # Check for any remaining old-style imports in non-shim source files
-grep -rn "from code_graph_builder\.\(constants\|types\|config\|models\|parsers\|parser_loader\|language_spec\|services\|utils\|settings\|builder\|graph_updater\|embeddings\|tools\|rag\|guidance\|mcp\|cli\|cgb_cli\|commands_cli\)" \
-  code_graph_builder/ \
+grep -rn "from terrain\.\(constants\|types\|config\|models\|parsers\|parser_loader\|language_spec\|services\|utils\|settings\|builder\|graph_updater\|embeddings\|tools\|rag\|guidance\|mcp\|cli\|cgb_cli\|commands_cli\)" \
+  terrain/ \
   --include="*.py" \
   | grep -v "Compatibility shim" \
   | grep -v __pycache__ \
@@ -1568,19 +1568,19 @@ Expected: Only shim files should match. If any non-shim source file still uses o
 
 ```bash
 # Remove shim files (they all contain "Compatibility shim")
-grep -rl "Compatibility shim" code_graph_builder/ --include="*.py" | while read f; do
+grep -rl "Compatibility shim" terrain/ --include="*.py" | while read f; do
   rm "$f"
   echo "Deleted shim: $f"
 done
 
 # Clean up empty directories left behind
-find code_graph_builder/ -type d -empty -delete
+find terrain/ -type d -empty -delete
 ```
 
 - [ ] **Step 7: Run full test suite after shim removal**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Expected: All PASS. If any test fails, a direct import of the old path still exists — find and fix it.
@@ -1597,7 +1597,7 @@ Expected: `All imports conform to layer rules. PASSED.`
 
 ```bash
 pip install -e . 2>&1 | tail -5
-code-graph-builder --help 2>&1 | head -5
+terrain-ai --help 2>&1 | head -5
 ```
 
 - [ ] **Step 10: Commit**
@@ -1652,9 +1652,9 @@ jobs:
         run: python tools/dep_check.py
 
       - name: Run tests
-        run: python -m pytest code_graph_builder/tests/ -v --tb=short -x
+        run: python -m pytest terrain/tests/ -v --tb=short -x
         env:
-          CGB_WORKSPACE: /tmp/cgb-test
+          TERRAIN_WORKSPACE: /tmp/cgb-test
 ```
 
 - [ ] **Step 2: Commit**
@@ -1746,16 +1746,16 @@ tests/
 
 ```bash
 # Full suite
-python -m pytest code_graph_builder/tests/ -v
+python -m pytest terrain/tests/ -v
 
 # Single layer
-python -m pytest code_graph_builder/tests/foundation/ -v
+python -m pytest terrain/tests/foundation/ -v
 
 # Single file
-python -m pytest code_graph_builder/tests/foundation/test_encoding_parsing.py -v
+python -m pytest terrain/tests/foundation/test_encoding_parsing.py -v
 
 # Single test
-python -m pytest code_graph_builder/tests/foundation/test_encoding_parsing.py::TestGBKParsing::test_gbk_file_functions_detected -v
+python -m pytest terrain/tests/foundation/test_encoding_parsing.py::TestGBKParsing::test_gbk_file_functions_detected -v
 ```
 
 ## Test Types
@@ -1770,14 +1770,14 @@ GBK/GB2312 encoded C files are tested in `tests/foundation/test_encoding_parsing
 Fixtures live in `tests/fixtures/`. To regenerate:
 
 ```bash
-python code_graph_builder/tests/fixtures/create_gbk_fixtures.py
+python terrain/tests/fixtures/create_gbk_fixtures.py
 ```
 
 ## Before Submitting
 
 ```bash
 python tools/dep_check.py           # Layer rules
-python -m pytest code_graph_builder/tests/ -v  # All tests
+python -m pytest terrain/tests/ -v  # All tests
 ```
 ```
 
@@ -1911,7 +1911,7 @@ Add tests with sample source code in the new language:
 
 ```bash
 python tools/dep_check.py
-python -m pytest code_graph_builder/tests/foundation/ -v
+python -m pytest terrain/tests/foundation/ -v
 ```
 ```
 
@@ -1958,19 +1958,19 @@ See `contributing/architecture.md` for full rules.
 
 1. Read `contributing/add-feature.md` to find which files to touch.
 2. Run `python tools/dep_check.py` before committing.
-3. Run `python -m pytest code_graph_builder/tests/ -v` to verify.
+3. Run `python -m pytest terrain/tests/ -v` to verify.
 
 ## Key Entry Points
 
-- `code-graph-builder` CLI: `entrypoints/cli/cli.py`
-- `cgb-mcp` MCP server: `entrypoints/mcp/server.py`
-- Main API: `domains/core/graph/builder.py` → `CodeGraphBuilder`
+- `terrain-ai` CLI: `entrypoints/cli/cli.py`
+- `terrain-mcp` MCP server: `entrypoints/mcp/server.py`
+- Main API: `domains/core/graph/builder.py` → `TerrainBuilder`
 
 ## Build & Test
 
 ```bash
 pip install -e ".[treesitter-full]"
-python -m pytest code_graph_builder/tests/ -v
+python -m pytest terrain/tests/ -v
 python tools/dep_check.py
 ```
 ```
@@ -1992,7 +1992,7 @@ git commit -m "docs: add CLAUDE.md with architecture overview for agents"
 - [ ] **Step 1: Full test suite**
 
 ```bash
-python -m pytest code_graph_builder/tests/ -v --tb=short
+python -m pytest terrain/tests/ -v --tb=short
 ```
 
 Compare with baseline from Task 2 Step 1. Must have same pass/fail/skip counts (test names will differ due to reorganization).
@@ -2009,7 +2009,7 @@ Expected: `All imports conform to layer rules. PASSED.`
 
 ```bash
 pip install -e . 2>&1 | tail -5
-code-graph-builder --help 2>&1 | head -5
+terrain-ai --help 2>&1 | head -5
 ```
 
 - [ ] **Step 4: npm verification**
@@ -2024,8 +2024,8 @@ npm run server 2>&1 | head -10
 - [ ] **Step 5: Grep for any remaining old imports**
 
 ```bash
-grep -rn "from code_graph_builder\.\(constants\|types\|config\|models\|builder\|graph_updater\|parser_loader\|language_spec\|settings\)" \
-  code_graph_builder/ --include="*.py" | grep -v __pycache__ | grep -v /examples/
+grep -rn "from terrain\.\(constants\|types\|config\|models\|builder\|graph_updater\|parser_loader\|language_spec\|settings\)" \
+  terrain/ --include="*.py" | grep -v __pycache__ | grep -v /examples/
 ```
 
 Expected: Zero results (or only `__init__.py` re-exports if intentionally kept).

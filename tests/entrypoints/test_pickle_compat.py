@@ -11,7 +11,7 @@ import pickle
 
 import pytest
 
-from code_graph_builder.entrypoints.mcp.tools import _CompatUnpickler
+from terrain.entrypoints.mcp.tools import _CompatUnpickler
 
 
 class TestCompatUnpickler:
@@ -23,42 +23,42 @@ class TestCompatUnpickler:
         assert len(_CompatUnpickler._RENAMES) >= 6
 
     def test_old_embeddings_path_redirected(self):
-        """Old 'code_graph_builder.embeddings.vector_store' -> new path."""
+        """Old 'terrain.embeddings.vector_store' -> new path."""
         unpickler = _CompatUnpickler(io.BytesIO(b""))
-        new_mod, new_name = "code_graph_builder.domains.core.embedding.vector_store", "MemoryVectorStore"
+        new_mod, new_name = "terrain.domains.core.embedding.vector_store", "MemoryVectorStore"
 
         # find_class should resolve without error
         cls = unpickler.find_class(
-            "code_graph_builder.embeddings.vector_store", "MemoryVectorStore"
+            "terrain.embeddings.vector_store", "MemoryVectorStore"
         )
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
         assert cls is MemoryVectorStore
 
     def test_old_embedding_without_s_redirected(self):
         """Even older path without 's' is also redirected."""
         unpickler = _CompatUnpickler(io.BytesIO(b""))
         cls = unpickler.find_class(
-            "code_graph_builder.embedding.vector_store", "MemoryVectorStore"
+            "terrain.embedding.vector_store", "MemoryVectorStore"
         )
-        from code_graph_builder.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
         assert cls is MemoryVectorStore
 
     def test_old_vector_record_redirected(self):
         """VectorRecord from old path resolves correctly."""
         unpickler = _CompatUnpickler(io.BytesIO(b""))
         cls = unpickler.find_class(
-            "code_graph_builder.embeddings.vector_store", "VectorRecord"
+            "terrain.embeddings.vector_store", "VectorRecord"
         )
-        from code_graph_builder.domains.core.embedding.vector_store import VectorRecord
+        from terrain.domains.core.embedding.vector_store import VectorRecord
         assert cls is VectorRecord
 
     def test_old_semantic_search_redirected(self):
         """Old tools.semantic_search path resolves to domains.core.search."""
         unpickler = _CompatUnpickler(io.BytesIO(b""))
         cls = unpickler.find_class(
-            "code_graph_builder.tools.semantic_search", "SemanticSearchService"
+            "terrain.tools.semantic_search", "SemanticSearchService"
         )
-        from code_graph_builder.domains.core.search.semantic_search import SemanticSearchService
+        from terrain.domains.core.search.semantic_search import SemanticSearchService
         assert cls is SemanticSearchService
 
     def test_unknown_module_passes_through(self):
@@ -69,7 +69,7 @@ class TestCompatUnpickler:
 
     def test_round_trip_with_compat_unpickler(self):
         """Pickle round-trip: serialize with new path, load with _CompatUnpickler."""
-        from code_graph_builder.domains.core.embedding.vector_store import VectorRecord
+        from terrain.domains.core.embedding.vector_store import VectorRecord
 
         record = VectorRecord(
             node_id="test_id",

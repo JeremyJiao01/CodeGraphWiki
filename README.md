@@ -1,69 +1,90 @@
-# Code Graph Builder
+# Terrain
 
 English | [Chinese / CN](README_CN.md)
 
-Build a knowledge graph from any codebase, generate API documentation, and search code semantically -- all accessible as an MCP server for AI coding assistants.
+Give your AI coding assistant a complete map of any codebase — function signatures, call graphs, and semantic search across every line of code.
 
-## What It Does
+## The Problem
 
-```
-Your Code Repository
-    |
-    v
-[Tree-sitter AST Parsing]  -->  Knowledge Graph (Kuzu)
-    |                               |
-    |                               v
-    |                        API Documentation (Markdown)
-    |                               |
-    |                               v
-    |                        Vector Embeddings
-    |                               |
-    v                               v
-MCP Server  <--------------  Semantic Search
-    |
-    v
-Claude Code / Cursor / Windsurf / Any MCP Client
-```
+You drop a 500,000-line codebase in front of Claude Code. It reads what it can see. It guesses what it can't. You get answers that are *almost* right.
 
-**Core workflow for AI agents:**
+Terrain indexes the entire codebase once, then gives your AI a precise, queryable knowledge graph — so it stops guessing.
+
+## What This Looks Like
+
+Ask Claude Code about an unfamiliar codebase:
+
+> "How does the authentication token get refreshed?"
+
+Without Terrain, the AI skims files and makes educated guesses — possibly missing the real implementation buried three call levels deep.
+
+With Terrain:
 
 ```
-initialize_repository  ->  find_api  ->  get_api_doc
+find_api("authentication token refresh")
+
+→ refresh_access_token() in auth/token_manager.c:187
+  Signature: int refresh_access_token(TokenCtx *ctx, const char *refresh_token)
+  Called by: session_heartbeat() → event_loop_tick() → main()
+  Calls:     http_post(), parse_jwt(), update_session_store()
 ```
 
-1. Index the codebase once
-2. Search by vague semantic description ("PWM duty cycle update")
-3. Get precise function signatures, call trees, and usage examples
+Precise. Complete. Instant.
 
 ## Quick Start
 
-### Install via npx (recommended)
-
 ```bash
-# First run --interactive setup wizard
-npx code-graph-builder@latest --setup
-
-# Start MCP server
-npx code-graph-builder@latest --server
+npx terrain-ai@latest --setup
 ```
 
-The setup wizard:
-1. Auto-installs the Python package if not found
-2. Configures workspace, LLM provider, and embedding provider
-3. Runs an MCP smoke test to verify the server works
-4. Optionally registers as a global MCP server for Claude Code (`claude mcp add --scope user`)
+The setup wizard installs the Python package, configures your LLM and embedding provider, and registers Terrain as a global MCP server for Claude Code. One command.
 
-### Install via pip
+Then in Claude Code — point it at any repo and ask anything.
+
+## Index a Codebase
 
 ```bash
-pip install code-graph-builder
-cgb-mcp  # Start MCP server
+terrain index /path/to/your/repo
+```
+
+Takes a few minutes the first time. Incremental updates after that:
+
+```bash
+terrain index -i   # git-diff based, fast
+```
+
+## What You Can Ask
+
+| You want to know... | What to ask |
+|---|---|
+| Where does X get initialized? | "find where X is initialized" |
+| What calls this function? | "find callers of function\_name" |
+| How does feature Y work end-to-end? | "trace the call chain for Y" |
+| What functions handle Z? | "find Z handler" |
+
+## Supported Languages
+
+C/C++, Python, JavaScript/TypeScript, Rust, Go, Java, Scala, C#, PHP, Lua
+
+---
+
+## Reference
+
+### Install
+
+```bash
+# Recommended
+npx terrain-ai@latest --setup
+
+# Or via pip
+pip install terrain-ai
+terrain-mcp  # Start MCP server
 ```
 
 ### Uninstall
 
 ```bash
-npx code-graph-builder@latest --uninstall
+npx terrain-ai@latest --uninstall
 ```
 
 Removes: Claude MCP registration, Python package, workspace data.
@@ -75,70 +96,68 @@ Add to your MCP client config (Claude Code, Cursor, Windsurf, etc.):
 ```json
 {
   "mcpServers": {
-    "code-graph-builder": {
+    "terrain": {
       "command": "npx",
-      "args": ["-y", "code-graph-builder@latest", "--server"]
+      "args": ["-y", "terrain-ai@latest", "--server"]
     }
   }
 }
 ```
 
-On Windows, use:
+On Windows:
 
 ```json
 {
   "mcpServers": {
-    "code-graph-builder": {
+    "terrain": {
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "code-graph-builder@latest", "--server"]
+      "args": ["/c", "npx", "-y", "terrain-ai@latest", "--server"]
     }
   }
 }
 ```
 
-## CLI Tool (`cgb`)
+### CLI Tool (\`terrain\`)
 
-The `cgb` command-line tool provides workspace management, indexing, and querying outside of MCP.
-
-### Workspace Commands
+#### Workspace
 
 ```bash
-cgb status              # Show active repository, workspace, LLM & embedding info
-cgb list                # List all indexed repositories
-cgb repo                # Interactively switch active repository
-cgb config              # Interactive configuration wizard (LLM, embedding, workspace)
-cgb link <path>         # Link a local repo to shared pre-built artifacts
-cgb link <path> --db x  # Link to a specific artifact directory
+terrain status              # Show active repository, workspace, LLM & embedding info
+terrain list                # List all indexed repositories
+terrain repo                # Interactively switch active repository
+terrain config              # Interactive configuration wizard (LLM, embedding, workspace)
+terrain link <path>         # Link a local repo to shared pre-built artifacts
+terrain link <path> --db x  # Link to a specific artifact directory
 ```
 
-### Indexing
+#### Indexing
 
 ```bash
-cgb index               # Index current directory (graph → api-docs → embeddings)
-cgb index /path/to/repo # Index a specific path
-cgb index -i            # Incremental update (git-diff based, fast)
-cgb index --no-embed    # Skip embedding generation
-cgb index --no-wiki     # Skip wiki generation only
+terrain index               # Index current directory (graph → api-docs → embeddings)
+terrain index /path/to/repo # Index a specific path
+terrain index -i            # Incremental update (git-diff based, fast)
+terrain index --no-embed    # Skip embedding generation
+terrain index --no-wiki     # Skip wiki generation only
 ```
 
-### Rebuild & Clean
+#### Rebuild & Clean
 
 ```bash
-cgb rebuild             # Rebuild all steps for active repository
-cgb rebuild --step graph   # Rebuild only the graph
-cgb rebuild --step api     # Rebuild only API docs
-cgb rebuild --step embed   # Rebuild only embeddings
-cgb rebuild --step wiki    # Rebuild only wiki
+terrain rebuild             # Rebuild all steps for active repository
+terrain rebuild --step graph   # Rebuild only the graph
+terrain rebuild --step api     # Rebuild only API docs
+terrain rebuild --step embed   # Rebuild only embeddings
+terrain rebuild --step wiki    # Rebuild only wiki
 
-cgb clean               # Remove indexed data (interactive)
-cgb clean repo_name     # Remove specific repository
-cgb clean --all         # Remove all indexed repositories
+terrain clean               # Remove indexed data (interactive)
+terrain clean repo_name     # Remove specific repository
+terrain clean --all         # Remove all indexed repositories
 ```
 
-### Low-Level Commands
+#### Low-Level Commands
 
 ```bash
-cgb scan /path          # Scan repo and build knowledge graph
+terrain scan /path          # Scan repo and build knowledge graph
   --backend kuzu|memgraph|memory
   --db-path ./graph.db
   --exclude "vendor,build"
@@ -146,45 +165,68 @@ cgb scan /path          # Scan repo and build knowledge graph
   --clean               # Clean DB before scanning
   -o graph.json         # Export graph to JSON
 
-cgb query "MATCH (f:Function) RETURN f.name LIMIT 10"
+terrain query "MATCH (f:Function) RETURN f.name LIMIT 10"
   --format table|json
 
-cgb export /path -o graph.json
+terrain export /path -o graph.json
   --build               # Build graph before exporting
 
-cgb stats               # Show graph statistics (nodes, relationships)
+terrain stats               # Show graph statistics (nodes, relationships)
 ```
 
-### Global Flags
+#### Global Flags
 
 ```bash
-cgb --version           # Show version
-cgb -v ...              # Verbose/debug output
-cgb --help              # Show help
+terrain --version           # Show version
+terrain -v ...              # Verbose/debug output
+terrain --help              # Show help
 ```
 
-## Architecture
+### MCP Tools
 
-The project follows a 5-layer harness architecture:
+**Core workflow for AI agents:** `initialize_repository` → `find_api` → `get_api_doc`
 
-```
-L4  entrypoints/         MCP server, CLI
-L3  domains/upper/       apidoc, rag, guidance, calltrace
-L2  domains/core/        graph, embedding, search
-L1  foundation/          parsers, services, utils
-L0  foundation/types/    constants, models, type definitions
-```
+#### Repository Management
 
-## Pipeline
+| Tool | Description |
+|---|---|
+| `initialize_repository` | Index a repo: graph + API docs + embeddings |
+| `get_repository_info` | Active repo stats (node/relationship counts, service status) |
+| `list_repositories` | All indexed repos with pipeline completion status |
+| `switch_repository` | Switch active repo for queries |
+| `link_repository` | Reuse existing index for a different repo path (no re-indexing) |
+
+#### Code Search & Documentation
+
+| Tool | Description |
+|---|---|
+| `find_api` | Hybrid semantic + keyword search with API doc (primary search tool) |
+| `list_api_docs` | Browse L1 module index or L2 module details |
+| `get_api_doc` | L3 function detail: signature, call tree, usage examples, source |
+| `generate_api_docs` | Generate/update API docs (full / resume / enhance) |
+
+#### Call Graph Analysis
+
+| Tool | Description |
+|---|---|
+| `find_callers` | Find all functions that call a specific function (no LLM required) |
+| `trace_call_chain` | BFS upward call chain trace with entry point discovery |
+
+#### Configuration & Maintenance
+
+| Tool | Description |
+|---|---|
+| `get_config` | Show server configuration and service availability |
+| `rebuild_embeddings` | Build or rebuild vector embeddings |
+
+### Pipeline
 
 | Step | What | Input | Output |
-|------|------|-------|--------|
+|---|---|---|---|
 | 1. graph-build | Tree-sitter AST parsing | Source code | Kuzu graph database |
 | 2. api-doc-gen | Query graph, render docs | Graph | 3-level Markdown (index / module / function) |
 | 2b. desc-gen | LLM generates descriptions | Functions without docstrings | Descriptions in L3 Markdown |
 | 3. embed-gen | Vectorize function docs | L3 Markdown files | Vector store (pickle) |
-
-Steps 1-3 run automatically via `initialize_repository`. Wiki generation is available separately via `generate_wiki`.
 
 ```
 initialize_repository  ->  Steps 1-3 (full pipeline)
@@ -194,57 +236,11 @@ rebuild_embeddings     ->  Step 3
 generate_wiki          ->  Separate (not in main pipeline)
 ```
 
-### API Doc Generation Modes
-
-| Mode | Behavior |
-|------|----------|
-| `full` | Rebuild all docs from graph |
-| `resume` | Generate only for functions with TODO placeholders |
-| `enhance` | LLM-powered module summaries + API usage workflows |
-
-## MCP Tools
-
-### Primary Tools (13 exposed)
-
-#### Repository Management
-| Tool | Description |
-|------|-------------|
-| `initialize_repository` | Index a repo: graph + API docs + embeddings |
-| `get_repository_info` | Active repo stats (node/relationship counts, service status) |
-| `list_repositories` | All indexed repos with pipeline completion status |
-| `switch_repository` | Switch active repo for queries |
-| `link_repository` | Reuse existing index for a different repo path (no re-indexing) |
-
-#### Code Search & Documentation
-| Tool | Description |
-|------|-------------|
-| `find_api` | Hybrid semantic + keyword search with API doc (primary search tool) |
-| `list_api_docs` | Browse L1 module index or L2 module details |
-| `get_api_doc` | L3 function detail: signature, call tree, usage examples, source |
-| `generate_api_docs` | Generate/update API docs (full / resume / enhance) |
-
-#### Call Graph Analysis
-| Tool | Description |
-|------|-------------|
-| `find_callers` | Find all functions that call a specific function (no LLM required) |
-| `trace_call_chain` | BFS upward call chain trace with entry point discovery |
-
-#### Configuration & Maintenance
-| Tool | Description |
-|------|-------------|
-| `get_config` | Show server configuration and service availability |
-| `rebuild_embeddings` | Build or rebuild vector embeddings |
-
-### Hidden Tools (available via handler)
-
-These tools are superseded by the API-doc-based workflow above but remain accessible:
-`query_code_graph`, `get_code_snippet`, `semantic_search`, `locate_function`, `list_api_interfaces`, `list_wiki_pages`, `get_wiki_page`, `generate_wiki`, `build_graph`, `prepare_guidance`
-
-## API Documentation Format
+### API Documentation Format
 
 Generated docs are optimized for both AI agent reading and vector retrieval.
 
-### L3 Function Detail (embedding unit)
+#### L3 Function Detail (embedding unit)
 
 ```markdown
 # parse_btype
@@ -271,24 +267,9 @@ parse_btype
 
 - type_decl (tinycc.tccgen) -> tccgen.c:1200
 - post_type (tinycc.tccgen) -> tccgen.c:1350
-
-## Parameters & Memory
-
-| Parameter | Direction | Ownership |
-|-----------|-----------|-----------|
-| `CType *type` | in/out | borrowed, modified |
-| `AttributeDef *ad` | in/out | borrowed, modified |
-
-## Implementation
-
-```c
-int parse_btype(CType *type, AttributeDef *ad, int ignore_label) {
-    // ... source code embedded
-}
-```
 ```
 
-### C/C++ Specific Features
+#### C/C++ Specific Features
 
 - Extracts `//` and `/* */` comments above functions as descriptions
 - Struct/union/enum members displayed with types
@@ -300,10 +281,10 @@ int parse_btype(CType *type, AttributeDef *ad, int ignore_label) {
 - Function pointer tracking and indirect call resolution
 - GB2312/GBK encoding support for source files
 
-## Supported Languages
+### Supported Languages (detail)
 
 | Language | Functions | Classes/Structs | Calls | Imports | Types |
-|----------|-----------|-----------------|-------|---------|-------|
+|---|---|---|---|---|---|
 | C / C++ | Yes | struct, union, enum, typedef, macro | Yes | #include | Yes |
 | Python | Yes | Yes | Yes | Yes | - |
 | JavaScript / TypeScript | Yes | Yes | Yes | Yes | - |
@@ -315,7 +296,7 @@ int parse_btype(CType *type, AttributeDef *ad, int ignore_label) {
 | PHP | Yes | class | Yes | - | - |
 | Lua | Yes | - | Yes | - | - |
 
-## Graph Schema
+### Graph Schema
 
 **Nodes**: `Project`, `Package`, `Module`, `File`, `Folder`, `Class`, `Function`, `Method`, `Type`, `Enum`, `Union`
 
@@ -323,44 +304,56 @@ int parse_btype(CType *type, AttributeDef *ad, int ignore_label) {
 
 **Properties**: `qualified_name` (PK), `name`, `path`, `start_line`, `end_line`, `signature`, `return_type`, `visibility`, `parameters`, `kind`, `docstring`
 
-## Environment Variables
+### Architecture
 
-### LLM (first match wins)
+The project follows a 5-layer harness architecture:
+
+```
+L4  entrypoints/         MCP server, CLI
+L3  domains/upper/       apidoc, rag, guidance, calltrace
+L2  domains/core/        graph, embedding, search
+L1  foundation/          parsers, services, utils
+L0  foundation/types/    constants, models, type definitions
+```
+
+### Environment Variables
+
+#### LLM (first match wins)
 
 | Variable | Purpose | Default |
-|----------|---------|---------|
+|---|---|---|
 | `LLM_API_KEY` | Generic LLM key (highest priority) | - |
 | `LLM_BASE_URL` | API endpoint | `https://api.openai.com/v1` |
 | `LLM_MODEL` | Model name | `gpt-4o` |
 | `OPENAI_API_KEY` | OpenAI or compatible | - |
 | `MOONSHOT_API_KEY` | Moonshot / Kimi (legacy) | - |
 
-### Embedding
+#### Embedding
 
 | Variable | Purpose | Default |
-|----------|---------|---------|
+|---|---|---|
 | `DASHSCOPE_API_KEY` | DashScope (Qwen3 Embedding) | - |
 | `DASHSCOPE_BASE_URL` | DashScope endpoint | `https://dashscope.aliyuncs.com/api/v1` |
 
-### System
+#### System
 
 | Variable | Purpose | Default |
-|----------|---------|---------|
-| `CGB_WORKSPACE` | Workspace directory | `~/.code-graph-builder` |
+|---|---|---|
+| `TERRAIN_WORKSPACE` | Workspace directory | `~/.terrain` |
 
-## Installation Options
+### Installation Options
 
-### Install from PyPI
+#### Install from PyPI
 
 ```bash
 # Core (includes C/C++, Python, JS/TS grammars)
-pip install code-graph-builder
+pip install terrain-ai
 
 # With all language grammars (Rust, Go, Java, Scala, Lua)
-pip install "code-graph-builder[treesitter-full]"
+pip install "terrain-ai[treesitter-full]"
 ```
 
-### Install from local source
+#### Install from local source
 
 ```bash
 git clone https://github.com/JeremyJiao01/CodeGraphWiki.git
@@ -373,30 +366,23 @@ pip install ".[treesitter-full]"
 pip install -e ".[treesitter-full]"
 ```
 
-### Build and install from wheel
+#### Build and install from wheel
 
 ```bash
 git clone https://github.com/JeremyJiao01/CodeGraphWiki.git
 cd CodeGraphWiki
 
-# Build wheel and sdist
 python3 -m build
-
-# Install the wheel
-pip install dist/code_graph_builder-*.whl
-
-# Or force reinstall over existing version
-pip install --force-reinstall dist/code_graph_builder-*.whl
+pip install dist/terrain_ai-*.whl
 ```
 
-## Development
+### Development
 
 ```bash
 git clone https://github.com/JeremyJiao01/CodeGraphWiki.git
 cd CodeGraphWiki
 pip install -e ".[treesitter-full]"
 
-# Run tests
 python3 -m pytest tests/ -v
 
 # Integration tests (requires tinycc repo at ../tinycc)

@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def builder(tmp_path_factory):
     """Build the tinycc graph once for all tests."""
-    from code_graph_builder.entrypoints.mcp.pipeline import build_graph
+    from terrain.entrypoints.mcp.pipeline import build_graph
 
     db_path = tmp_path_factory.mktemp("graph") / "graph.db"
     b = build_graph(
@@ -38,7 +38,7 @@ def builder(tmp_path_factory):
 @pytest.fixture(scope="module")
 def api_docs_dir(builder, tmp_path_factory):
     """Generate API docs and return the output directory."""
-    from code_graph_builder.entrypoints.mcp.pipeline import generate_api_docs_step
+    from terrain.entrypoints.mcp.pipeline import generate_api_docs_step
 
     artifact_dir = tmp_path_factory.mktemp("artifacts")
     result = generate_api_docs_step(

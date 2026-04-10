@@ -10,12 +10,12 @@
 
       <!-- Screen 1: RAG 架构概述 -->
       <section class="screen animate-in" style="margin-top:var(--space-12)">
-        <h2 class="screen-heading">RAG = 检索 + 生成，CGB 的双通道设计</h2>
+        <h2 class="screen-heading">RAG = 检索 + 生成，Terrain 的双通道设计</h2>
         <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--space-4)">
           <span class="term" data-definition="RAG（Retrieval-Augmented Generation）：检索增强生成。核心思路是：LLM 不直接回答问题，而是先从知识库检索相关内容，把检索结果塞入 prompt，再让 LLM 基于真实上下文生成答案。解决了 LLM 无法实时了解私有代码库的问题。">RAG</span>
-          解决的核心问题是：LLM 不认识你的私有代码库。CGB 的 RAG 是
+          解决的核心问题是：LLM 不认识你的私有代码库。Terrain 的 RAG 是
           <strong>双通道检索</strong>——不只用向量相似度，还能把自然语言转成
-          <span class="term" data-definition="Cypher 是图数据库的查询语言，类似 SQL。例如 MATCH (f:Function)-[:CALLS]->(g:Function) WHERE f.name='parse_args' RETURN g.name 查询 parse_args 调用了哪些函数。CGB 的图里存了 CALLS/DEFINES/INHERITS 等关系，Cypher 能精确利用这些结构。">Cypher 图查询</span>，
+          <span class="term" data-definition="Cypher 是图数据库的查询语言，类似 SQL。例如 MATCH (f:Function)-[:CALLS]->(g:Function) WHERE f.name='parse_args' RETURN g.name 查询 parse_args 调用了哪些函数。Terrain 的图里存了 CALLS/DEFINES/INHERITS 等关系，Cypher 能精确利用这些结构。">Cypher 图查询</span>，
           两路结果融合后送给 LLM。这让回答既有语义广度，又有结构精度。
         </p>
 

@@ -5,7 +5,7 @@
 
 ## 1. 目标
 
-为 CodeGraphWiki（Code Graph Builder）构建一个静态产品官网，部署在 GitHub Pages。
+为 CodeGraphWiki（Terrain）构建一个静态产品官网，部署在 GitHub Pages。
 
 核心目标：访客在 30 秒内理解"这是什么、为什么我需要它"，并在 5 分钟内通过交互体验感受到产品的核心价值，尤其是调用链追踪这一差异化能力。
 
@@ -36,17 +36,17 @@
 > "Your AI assistant finally understands your codebase."
 
 **副标题：**
-> "Code Graph Builder parses your source code into a knowledge graph — so Claude, Cursor, and Windsurf can find the exact function, call tree, and usage example they need."
+> "Terrain parses your source code into a knowledge graph — so Claude, Cursor, and Windsurf can find the exact function, call tree, and usage example they need."
 
 **CTA：**
-- 主按钮：`npx code-graph-builder@latest --setup`（带一键复制功能）
+- 主按钮：`npx terrain-ai@latest --setup`（带一键复制功能）
 - 次按钮：View on GitHub
 
 ### 4.2 痛点共鸣
 
 一段叙述性文字，不超过 3 句话：
 
-> "Your AI assistant is brilliant — but it's navigating your codebase blind. It doesn't know your private APIs, your internal call chains, or which function actually handles that edge case. Code Graph Builder gives it a map."
+> "Your AI assistant is brilliant — but it's navigating your codebase blind. It doesn't know your private APIs, your internal call chains, or which function actually handles that edge case. Terrain gives it a map."
 
 ### 4.3 交互模块 1 — Pipeline 动画
 
@@ -112,7 +112,7 @@ Step 3  embed-gen       ██████████  ✓  Embeddings ready, s
 
 ```bash
 # Step 1: 安装并初始化
-npx code-graph-builder@latest --setup
+npx terrain-ai@latest --setup
 
 # Step 2: 在 MCP 客户端配置（Claude Code / Cursor / Windsurf）
 # 配置完成后直接向 AI 提问即可
@@ -123,9 +123,9 @@ npx code-graph-builder@latest --setup
 ```json
 {
   "mcpServers": {
-    "code-graph-builder": {
+    "terrain-ai": {
       "command": "npx",
-      "args": ["-y", "code-graph-builder@latest", "--server"]
+      "args": ["-y", "terrain-ai@latest", "--server"]
     }
   }
 }

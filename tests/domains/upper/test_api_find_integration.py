@@ -30,7 +30,7 @@ pytestmark = [
 @pytest.fixture(scope="module")
 def mcp_registry(tmp_path_factory):
     """Set up MCPToolsRegistry with fully indexed tinycc repo."""
-    from code_graph_builder.entrypoints.mcp.tools import MCPToolsRegistry
+    from terrain.entrypoints.mcp.tools import MCPToolsRegistry
 
     workspace = tmp_path_factory.mktemp("workspace")
     registry = MCPToolsRegistry(workspace=workspace)

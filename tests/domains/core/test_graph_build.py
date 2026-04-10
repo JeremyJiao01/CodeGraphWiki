@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def builder(tmp_path_factory):
     """Build the tinycc graph once for all tests in this module."""
-    from code_graph_builder.entrypoints.mcp.pipeline import build_graph
+    from terrain.entrypoints.mcp.pipeline import build_graph
 
     db_path = tmp_path_factory.mktemp("graph") / "graph.db"
     b = build_graph(

@@ -1,22 +1,22 @@
-# Repo-Local `.cgb/` Artifact Directory
+# Repo-Local `.terrain/` Artifact Directory
 
 **Date:** 2026-04-09
 **Status:** Approved
 
 ## Problem
 
-团队共享由 CGB 生成的数据库，DB 随代码提交到远程仓库。当前 CGB 只在 workspace（`~/.code-graph-builder/`）中查找 artifact，团队成员 clone 后无法直接使用仓库内的 DB。
+团队共享由 Terrain 生成的数据库，DB 随代码提交到远程仓库。当前 Terrain 只在 workspace（`~/.terrain-ai/`）中查找 artifact，团队成员 clone 后无法直接使用仓库内的 DB。
 
 ## Solution
 
-支持仓库根目录下的 `.cgb/` 目录作为优先 artifact 来源。优先级：`{repo_path}/.cgb/` > workspace `{name}_{hash}/`。
+支持仓库根目录下的 `.terrain/` 目录作为优先 artifact 来源。优先级：`{repo_path}/.terrain/` > workspace `{name}_{hash}/`。
 
-## `.cgb/` 目录结构
+## `.terrain/` 目录结构
 
 平铺，与 workspace 中 `{name}_{hash}/` 内容一致，去掉外层 hash 目录：
 
 ```
-{repo_root}/.cgb/
+{repo_root}/.terrain/
 ├── meta.json
 ├── graph.db
 ├── vectors.pkl
@@ -34,13 +34,13 @@
 
 ### 1. MCP 侧：`tools.py` `_try_auto_load()`
 
-从 workspace `active.txt` 读取 artifact_dir → 读 `meta.json` 获得 `repo_path` → **新增**：检查 `{repo_path}/.cgb/graph.db` 是否存在，存在则替换 artifact_dir 为 `{repo_path}/.cgb/`。
+从 workspace `active.txt` 读取 artifact_dir → 读 `meta.json` 获得 `repo_path` → **新增**：检查 `{repo_path}/.terrain/graph.db` 是否存在，存在则替换 artifact_dir 为 `{repo_path}/.terrain/`。
 
 ### 2. CLI 侧：路径解析
 
-CLI 命令（`cgb status` 等）解析 active artifact_dir 后，同样优先检测 `{repo_path}/.cgb/`。
+CLI 命令（`terrain status` 等）解析 active artifact_dir 后，同样优先检测 `{repo_path}/.terrain/`。
 
-### 3. CLI 侧：`cgb index` 输出目标选择
+### 3. CLI 侧：`terrain index` 输出目标选择
 
 索引完成后，使用 `_select_menu()`（与 `cgb config` 一致的 tree-style UI）让用户选择输出目标：
 
@@ -48,18 +48,18 @@ CLI 命令（`cgb status` 等）解析 active artifact_dir 后，同样优先检
   ● Output destination
   │  Use ↑↓ to navigate, Enter to confirm
   │
-  │  › .cgb/  (repo-local, shareable via git)
-  │    ~/.code-graph-builder/repo_abc123/  (workspace)
+  │  › .terrain/  (repo-local, shareable via git)
+  │    ~/.terrain-ai/repo_abc123/  (workspace)
 ```
 
-- 默认高亮 `.cgb/`
-- 选 `.cgb/`：产物直接写入 `{repo_root}/.cgb/`，workspace 中仅保留精简 `meta.json`（含 `repo_path`、`steps`），确保 `_try_auto_load()` 发现链正常工作
+- 默认高亮 `.terrain/`
+- 选 `.terrain/`：产物直接写入 `{repo_root}/.terrain/`，workspace 中仅保留精简 `meta.json`（含 `repo_path`、`steps`），确保 `_try_auto_load()` 发现链正常工作
 - 选 workspace：行为不变
 - 支持 `--output local` / `--output workspace` 参数跳过交互
 
 ### 4. `pipeline.py` 产物写入
 
-当选择 `.cgb/` 时，直接平铺写入 `{repo_root}/.cgb/`。
+当选择 `.terrain/` 时，直接平铺写入 `{repo_root}/.terrain/`。
 
 ## 不变的部分
 
@@ -71,7 +71,7 @@ CLI 命令（`cgb status` 等）解析 active artifact_dir 后，同样优先检
 ## Windows 兼容性
 
 - 统一使用 `pathlib.Path`，不硬编码路径分隔符
-- `.cgb/` 模式下产物直接写入，不涉及 symlink
+- `.terrain/` 模式下产物直接写入，不涉及 symlink
 - Windows 上 `.` 开头目录名合法，git 正常跟踪
 - `meta.json` 中路径使用 `as_posix()` 存储，与现有一致
 
@@ -79,6 +79,6 @@ CLI 命令（`cgb status` 等）解析 active artifact_dir 后，同样优先检
 
 | 文件 | 改动类型 |
 |------|----------|
-| `entrypoints/mcp/tools.py` | `_try_auto_load()` 新增 `.cgb/` 优先检测 |
-| `entrypoints/cli/cli.py` | CLI 路径解析新增 `.cgb/` 优先检测；`cgb index` 新增输出目标选择 |
-| `entrypoints/mcp/pipeline.py` | 产物写入支持 `.cgb/` 目标路径 |
+| `entrypoints/mcp/tools.py` | `_try_auto_load()` 新增 `.terrain/` 优先检测 |
+| `entrypoints/cli/cli.py` | CLI 路径解析新增 `.terrain/` 优先检测；`terrain index` 新增输出目标选择 |
+| `entrypoints/mcp/pipeline.py` | 产物写入支持 `.terrain/` 目标路径 |

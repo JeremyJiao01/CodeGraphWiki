@@ -1,10 +1,10 @@
 {
-  "name": "code-graph-builder-dev",
-  "version": "1.1.0",
+  "name": "terrain-dev",
+  "version": "2.0.0",
   "private": true,
-  "description": "Local development wrapper for code-graph-builder",
+  "description": "Local development wrapper for terrain",
   "bin": {
-    "code-graph-builder": "./npm-package/bin/cli.mjs"
+    "terrain": "./npm-package/bin/cli.mjs"
   },
   "scripts": {
     "postinstall": "node -e \"const g=require('fs').readdirSync('dist').find(f=>f.endsWith('.whl'));if(!g){console.error('No .whl found in dist/');process.exit(1)}const p=require('path').join('dist',g);require('child_process').execSync((process.platform==='win32'?'pip':'pip3')+' install --force-reinstall '+p,{stdio:'inherit'})\" && node ./npm-package/bin/cli.mjs",
@@ -19,6 +19,6 @@
     "url": "https://github.com/JeremyJiao01/CodeGraphWiki"
   },
   "dependencies": {
-    "code-graph-builder": "^0.43.0"
+    "terrain-ai": "^2.0.0"
   }
 }

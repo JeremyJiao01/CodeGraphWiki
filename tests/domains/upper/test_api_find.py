@@ -20,29 +20,29 @@ import pytest
 
 class TestSanitiseFilename:
     def test_forward_slash(self):
-        from code_graph_builder.domains.upper.apidoc.api_doc_generator import _sanitise_filename
+        from terrain.domains.upper.apidoc.api_doc_generator import _sanitise_filename
 
         assert _sanitise_filename("project/api/init") == "project_api_init"
 
     def test_backslash(self):
-        from code_graph_builder.domains.upper.apidoc.api_doc_generator import _sanitise_filename
+        from terrain.domains.upper.apidoc.api_doc_generator import _sanitise_filename
 
         assert _sanitise_filename("project\\api\\init") == "project_api_init"
 
     def test_no_separators(self):
-        from code_graph_builder.domains.upper.apidoc.api_doc_generator import _sanitise_filename
+        from terrain.domains.upper.apidoc.api_doc_generator import _sanitise_filename
 
         assert _sanitise_filename("simple_name") == "simple_name"
 
     def test_mixed_separators(self):
-        from code_graph_builder.domains.upper.apidoc.api_doc_generator import _sanitise_filename
+        from terrain.domains.upper.apidoc.api_doc_generator import _sanitise_filename
 
         assert _sanitise_filename("a/b\\c") == "a_b_c"
 
 
 class TestRenderFuncDetail:
     def test_basic_rendering(self):
-        from code_graph_builder.domains.upper.apidoc.api_doc_generator import _render_func_detail
+        from terrain.domains.upper.apidoc.api_doc_generator import _render_func_detail
 
         func = {
             "qn": "project.api.init",
@@ -67,7 +67,7 @@ class TestRenderFuncDetail:
         assert "*(无调用者)*" in content
 
     def test_with_callers_and_callees(self):
-        from code_graph_builder.domains.upper.apidoc.api_doc_generator import _render_func_detail
+        from terrain.domains.upper.apidoc.api_doc_generator import _render_func_detail
 
         func = {
             "qn": "mod.foo",
@@ -100,7 +100,7 @@ class TestRenderFuncDetail:
 
 class TestGenerateApiDocs:
     def test_generates_files(self, tmp_path: Path):
-        from code_graph_builder.domains.upper.apidoc.api_doc_generator import generate_api_docs
+        from terrain.domains.upper.apidoc.api_doc_generator import generate_api_docs
 
         func_rows = [
             {
@@ -143,7 +143,7 @@ class TestGenerateApiDocs:
         assert "Does stuff." in func_doc
 
     def test_call_graph_wiring(self, tmp_path: Path):
-        from code_graph_builder.domains.upper.apidoc.api_doc_generator import generate_api_docs
+        from terrain.domains.upper.apidoc.api_doc_generator import generate_api_docs
 
         func_rows = [
             {

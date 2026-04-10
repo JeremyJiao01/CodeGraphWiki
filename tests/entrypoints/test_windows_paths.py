@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from code_graph_builder.entrypoints.mcp.pipeline import artifact_dir_for
+from terrain.entrypoints.mcp.pipeline import artifact_dir_for
 
 
 # ---------------------------------------------------------------------------
@@ -74,10 +74,10 @@ class TestParseRepoPath:
 
     @pytest.fixture(autouse=True)
     def _import_func(self):
-        from code_graph_builder.entrypoints.cli.cli import _parse_repo_path
+        from terrain.entrypoints.cli.cli import _parse_repo_path
         self._parse = _parse_repo_path
 
-    @patch("code_graph_builder.entrypoints.cli.cli.platform")
+    @patch("terrain.entrypoints.cli.cli.platform")
     def test_windows_path_on_macos(self, mock_platform):
         """A Windows path on macOS returns (PureWindowsPath, True)."""
         mock_platform.system.return_value = "Darwin"
@@ -87,7 +87,7 @@ class TestParseRepoPath:
         assert isinstance(path, PureWindowsPath)
         assert path.name == "project"
 
-    @patch("code_graph_builder.entrypoints.cli.cli.platform")
+    @patch("terrain.entrypoints.cli.cli.platform")
     def test_windows_path_forward_slash_on_linux(self, mock_platform):
         """Windows path with forward slashes is also detected."""
         mock_platform.system.return_value = "Linux"
@@ -97,7 +97,7 @@ class TestParseRepoPath:
         assert isinstance(path, PureWindowsPath)
         assert path.name == "myrepo"
 
-    @patch("code_graph_builder.entrypoints.cli.cli.platform")
+    @patch("terrain.entrypoints.cli.cli.platform")
     def test_quoted_windows_path(self, mock_platform):
         """Surrounding quotes are stripped before parsing."""
         mock_platform.system.return_value = "Darwin"
@@ -106,7 +106,7 @@ class TestParseRepoPath:
         assert isinstance(path, PureWindowsPath)
         assert path.name == "project"
 
-    @patch("code_graph_builder.entrypoints.cli.cli.platform")
+    @patch("terrain.entrypoints.cli.cli.platform")
     def test_native_unix_path(self, mock_platform):
         """A native Unix path on macOS returns (Path, False)."""
         mock_platform.system.return_value = "Darwin"
@@ -115,7 +115,7 @@ class TestParseRepoPath:
         assert is_remote is False
         assert isinstance(path, Path)
 
-    @patch("code_graph_builder.entrypoints.cli.cli.platform")
+    @patch("terrain.entrypoints.cli.cli.platform")
     def test_whitespace_stripped(self, mock_platform):
         """Leading/trailing whitespace is removed."""
         mock_platform.system.return_value = "Darwin"
@@ -124,7 +124,7 @@ class TestParseRepoPath:
         assert is_remote is True
         assert isinstance(path, PureWindowsPath)
 
-    @patch("code_graph_builder.entrypoints.cli.cli.platform")
+    @patch("terrain.entrypoints.cli.cli.platform")
     def test_windows_path_on_windows(self, mock_platform):
         """On actual Windows, a Windows path returns (Path, False)."""
         mock_platform.system.return_value = "Windows"

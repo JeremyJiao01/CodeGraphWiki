@@ -1,4 +1,4 @@
-# code_graph_builder/tests/foundation/test_git_service.py
+# terrain/tests/foundation/test_git_service.py
 from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from code_graph_builder.foundation.services.git_service import GitChangeDetector
+from terrain.foundation.services.git_service import GitChangeDetector
 
 
 @pytest.fixture

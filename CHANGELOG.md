@@ -5,36 +5,28 @@
 ## [Unreleased]
 
 ### Added
-- `npx code-graph-builder --setup` wizard: new **Step 4 — Language Support** for selecting additional language parsers (Rust, Go, Java, Lua, Scala)
+- `npx terrain --setup` wizard: new **Step 4 — Language Support** for selecting additional language parsers (Rust, Go, Java, Lua, Scala)
   - Core languages (Python, JS, TS, C, C++) shown as pre-checked and locked (cannot be deselected)
   - Optional languages default to unchecked; user selects with Space, confirms with Enter
   - pip install command dynamically includes only selected packages
   - Setup complete summary lists installed parsers and reminds how to add more: re-run `--setup`
 - `cgb status` now shows a **parsers** line listing which tree-sitter language packages are installed, with a hint to run `--setup` for missing ones
-- **CLI LLM enhancement**: `cgb index`, `cgb rebuild`, `cgb index -u`, and `commands_cli init`/`api-doc-gen` now run LLM-powered description generation (`generate_descriptions_step`) and module summary enhancement (`enhance_api_docs_step`) after API docs — matching the MCP pipeline behavior
-- `--no-llm` flag on `cgb index`, `cgb rebuild`, and `commands_cli init`/`api-doc-gen` to skip LLM steps; gracefully skipped if no LLM is configured
 
 ### Changed
-- `npx code-graph-builder --server` (auto-install path) now installs `code-graph-builder[treesitter-full]` so all language parsers are available out of the box
-- **`find_api` context reduction (~55%)**: results now return a summarized API doc (header, metadata, call tree, callers) instead of the full L3 document; heavy sections (source code, usage examples, params, full description) are stripped; a hint directs the agent to `get_api_doc` for full details
-- Removed redundant `source_code` field from `find_api` results (already available via `get_api_doc`)
+- `npx terrain --server` (auto-install path) now installs `terrain[treesitter-full]` so all language parsers are available out of the box
 
 ---
 
 ### 新增
-- `npx code-graph-builder --setup` 向导新增 **Step 4 — Language Support** 语言支持选择步骤
+- `npx terrain --setup` 向导新增 **Step 4 — Language Support** 语言支持选择步骤
   - 核心语言（Python、JS、TS、C、C++）以灰色 [x] 锁定显示，无法取消
   - 可选语言（Rust、Go、Java、Lua、Scala）默认全部未选，空格切换，回车确认
   - pip 安装命令根据选择动态拼接，只安装用户勾选的语言包
   - 安装完成摘要显示已安装的 parser 列表，并提示通过重新运行 `--setup` 添加更多语言
 - `cgb status` 新增 **parsers** 行，显示当前已安装的 tree-sitter 语言包，缺失时给出修复提示
-- **CLI LLM 增强**：`cgb index`、`cgb rebuild`、`cgb index -u` 以及 `commands_cli init`/`api-doc-gen` 现在在 API 文档生成后自动运行 LLM 描述生成（`generate_descriptions_step`）和模块摘要增强（`enhance_api_docs_step`），与 MCP pipeline 行为一致
-- `--no-llm` 参数支持：可跳过 LLM 步骤；未配置 LLM 时自动优雅跳过
 
 ### 变更
-- `npx code-graph-builder --server`（自动安装路径）改为安装 `code-graph-builder[treesitter-full]`，开箱即支持全部语言解析器
-- **`find_api` 上下文瘦身（~55%）**：返回精简版 API 文档（标题、元数据、调用树、被调用列表），移除源码、使用示例、参数表格、完整描述等重量级段落；末尾提示 agent 通过 `get_api_doc` 获取完整信息
-- 移除 `find_api` 结果中冗余的 `source_code` 字段（可通过 `get_api_doc` 获取）
+- `npx terrain --server`（自动安装路径）改为安装 `terrain[treesitter-full]`，开箱即支持全部语言解析器
 
 ---
 
@@ -42,30 +34,30 @@
 
 ### Changed
 - `cgb index --incremental/-i` renamed to `cgb index --update/-u` for brevity
-- Remove `code-graph-builder` entry point from Python package to avoid conflict with npm CLI; use `cgb` instead
+- Remove `terrain` entry point from Python package to avoid conflict with npm CLI; use `cgb` instead
 
 ### Added
 - `cgb index` now supports repo-local `.cgb/` output: interactive menu or `--output .cgb` flag lets you store index alongside the repo instead of the global workspace
 - CLI `_load_repos` prefers repo-local `.cgb/` over global workspace when both exist
 - MCP `_try_auto_load` prefers repo-local `.cgb/` over global workspace when both exist
 - `cgb reload` command — hot-reload `.env` configuration and display changes
-- `python -m code_graph_builder` entry point (`__main__.py`) as fallback when `cgb` is not on PATH
-- Windows: `npx code-graph-builder --setup` now auto-adds Python Scripts directory to user PATH
+- `python -m terrain` entry point (`__main__.py`) as fallback when `cgb` is not on PATH
+- Windows: `npx terrain --setup` now auto-adds Python Scripts directory to user PATH
 - Python 3.10 compatibility: `StrEnum` polyfill for `enum` module
 
 ---
 
 ### 变更
 - `cgb index --incremental/-i` 重命名为 `cgb index --update/-u`，更简短
-- 移除 Python 包的 `code-graph-builder` 入口点，避免与 npm CLI 冲突；统一使用 `cgb`
+- 移除 Python 包的 `terrain` 入口点，避免与 npm CLI 冲突；统一使用 `cgb`
 
 ### 新增
 - `cgb index` 支持 repo-local `.cgb/` 输出：交互菜单或 `--output .cgb` 标志可将索引存储在仓库旁而非全局 workspace
 - CLI `_load_repos` 优先加载 repo-local `.cgb/`，其次才是全局 workspace
 - MCP `_try_auto_load` 优先加载 repo-local `.cgb/`，其次才是全局 workspace
 - `cgb reload` 命令 — 热重载 `.env` 配置并显示变更
-- `python -m code_graph_builder` 入口点（`__main__.py`），在 `cgb` 不在 PATH 时可作为备选
-- Windows：`npx code-graph-builder --setup` 现在自动将 Python Scripts 目录添加到用户 PATH
+- `python -m terrain` 入口点（`__main__.py`），在 `cgb` 不在 PATH 时可作为备选
+- Windows：`npx terrain --setup` 现在自动将 Python Scripts 目录添加到用户 PATH
 - Python 3.10 兼容性：为 `enum` 模块添加 `StrEnum` polyfill
 
 ---
@@ -603,11 +595,11 @@ Minor version bump, internal housekeeping.
 
 Initial release.
 
-- `code_graph_builder` library with code graph analysis and RAG support
+- `terrain` library with code graph analysis and RAG support
 - KuzuDB-backed code knowledge graph (functions, classes, types, macros, call edges)
 - Tree-sitter AST parsing for Python, JavaScript, TypeScript, C, C++
 - DeepWiki-style wiki generator with Mermaid diagram auto-fix
-- MCP server module (`cgb-mcp`) for AI-assisted code navigation
+- MCP server module (`terrain-mcp`) for AI-assisted code navigation
 - RAG pipeline with vector search over code graph nodes
 - Windows setup guide for Claude Code
 
@@ -615,10 +607,10 @@ Initial release.
 
 首次发布。
 
-- `code_graph_builder` 库，提供代码图分析与 RAG 支持
+- `terrain` 库，提供代码图分析与 RAG 支持
 - 基于 KuzuDB 的代码知识图谱（函数、类、类型、宏、调用边）
 - Tree-sitter AST 解析，支持 Python、JavaScript、TypeScript、C、C++
 - DeepWiki 风格的 wiki 生成器，自动修复 Mermaid 图表语法
-- MCP 服务器模块（`cgb-mcp`），支持 AI 辅助代码导航
+- MCP 服务器模块（`terrain-mcp`），支持 AI 辅助代码导航
 - 基于代码图节点的 RAG 流水线与向量检索
 - Claude Code 的 Windows 安装指南
