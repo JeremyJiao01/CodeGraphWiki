@@ -7,6 +7,7 @@
  *   npx terrain              # interactive setup (first run)
  *   npx terrain --server     # start MCP server (used by MCP clients)
  *   npx terrain --setup      # re-run setup wizard
+ *   npx terrain --move       # move workspace to a new location
  *   npx terrain --pip        # force python3 direct mode
  */
 
@@ -1262,6 +1263,154 @@ async function runUninstall() {
   log();
 }
 
+// ---------------------------------------------------------------------------
+// Move workspace
+// ---------------------------------------------------------------------------
+
+async function runMove() {
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+  const log = (msg = "") => process.stderr.write(msg + "\n");
+
+  log();
+  log(box("terrain  Move Workspace"));
+  log();
+
+  // --- Detect current workspace ---
+  const existing = loadEnvFile();
+  const currentWorkspace = existing.CGB_WORKSPACE || WORKSPACE_DIR;
+
+  if (!existsSync(currentWorkspace)) {
+    log(`  ${T.WARN} Current workspace does not exist: ${currentWorkspace}`);
+    log(`  Run ${IS_WIN ? "" : "npx "}terrain --setup first.\n`);
+    rl.close();
+    process.exit(1);
+  }
+
+  log(`  ${T.DOT} Current workspace`);
+  log(`  ${T.SIDE}`);
+  log(`  ${T.LAST} ${currentWorkspace}`);
+  log();
+
+  // --- Ask for new path ---
+  const newPath = (await ask("  New workspace path: ")).trim();
+
+  if (!newPath) {
+    log(`\n  ${T.WARN} No path entered. Aborted.\n`);
+    rl.close();
+    process.exit(0);
+  }
+
+  // Resolve to absolute path
+  const { resolve } = await import("node:path");
+  const newWorkspace = resolve(newPath.replace(/^~(?=\/|$)/, homedir()));
+
+  if (newWorkspace === currentWorkspace) {
+    log(`\n  ${T.WARN} New path is the same as the current workspace. Nothing to do.\n`);
+    rl.close();
+    process.exit(0);
+  }
+
+  if (existsSync(newWorkspace)) {
+    log(`\n  ${T.WARN} Target already exists: ${newWorkspace}`);
+    const overwrite = (await ask("  Merge into existing directory? [y/N]: ")).trim().toLowerCase();
+    if (overwrite !== "y" && overwrite !== "yes") {
+      log("\n  Aborted.\n");
+      rl.close();
+      process.exit(0);
+    }
+  }
+
+  // --- Confirm ---
+  log();
+  log(`  ${T.DOT} Plan`);
+  log(`  ${T.SIDE}`);
+  log(`  ${T.BRANCH} Copy  ${currentWorkspace}`);
+  log(`  ${T.BRANCH}    -> ${newWorkspace}`);
+  log(`  ${T.LAST} Delete ${currentWorkspace}`);
+  log();
+  const confirm = (await ask("  Proceed? [y/N]: ")).trim().toLowerCase();
+  rl.close();
+
+  if (confirm !== "y" && confirm !== "yes") {
+    log("\n  Aborted.\n");
+    process.exit(0);
+  }
+
+  log();
+  log(`  ${T.DOT} Moving workspace`);
+  log(`  ${T.SIDE}`);
+
+  // --- Step 1: Try rename first (fast, same-volume) ---
+  let moved = false;
+  if (!existsSync(newWorkspace)) {
+    try {
+      mkdirSync(dirname(newWorkspace), { recursive: true });
+      renameSync(currentWorkspace, newWorkspace);
+      moved = true;
+      log(`  ${T.BRANCH} ${T.OK} Renamed -> ${newWorkspace}`);
+    } catch {
+      // Cross-device or locked — fall through to copy
+    }
+  }
+
+  // --- Step 2: Fall back to copy + delete ---
+  if (!moved) {
+    // Copy
+    try {
+      mkdirSync(newWorkspace, { recursive: true });
+      cpSync(currentWorkspace, newWorkspace, { recursive: true });
+      moved = true;
+      log(`  ${T.BRANCH} ${T.OK} Copied -> ${newWorkspace}`);
+    } catch (err) {
+      log(`  ${T.BRANCH} ${T.WARN} Copy failed: ${err.message}`);
+      log(`\n  Migration aborted. Your original workspace is untouched.\n`);
+      process.exit(1);
+    }
+
+    // Delete old directory (best-effort)
+    try {
+      rmSync(currentWorkspace, { recursive: true, force: true });
+      log(`  ${T.BRANCH} ${T.OK} Deleted ${currentWorkspace}`);
+    } catch {
+      if (IS_WIN) {
+        try {
+          execSync(`rd /s /q "${currentWorkspace}"`, { stdio: "pipe", shell: true });
+          log(`  ${T.BRANCH} ${T.OK} Deleted ${currentWorkspace}`);
+        } catch { /* still locked */ }
+      }
+      if (existsSync(currentWorkspace)) {
+        log(`  ${T.BRANCH} ${T.WARN} Could not remove ${currentWorkspace} (may be locked). Please delete it manually.`);
+      }
+    }
+  }
+
+  // --- Step 3: Update .env ---
+  if (moved) {
+    // Re-read .env (it may now live inside newWorkspace if currentWorkspace == WORKSPACE_DIR)
+    // The canonical .env is always at WORKSPACE_DIR/.env
+    const envVars = loadEnvFile();
+    envVars.CGB_WORKSPACE = newWorkspace;
+
+    // If the old workspace WAS the default ~/.terrain, the .env was just moved
+    // along with it. We need to ensure ~/.terrain still exists for ENV_FILE.
+    if (currentWorkspace === WORKSPACE_DIR) {
+      // .env was moved to newWorkspace — copy it back to ~/.terrain
+      mkdirSync(WORKSPACE_DIR, { recursive: true });
+      const movedEnv = join(newWorkspace, ".env");
+      if (existsSync(movedEnv)) {
+        copyFileSync(movedEnv, ENV_FILE);
+      }
+    }
+
+    saveEnvFile(envVars);
+    log(`  ${T.BRANCH} ${T.OK} Updated config: CGB_WORKSPACE=${newWorkspace}`);
+  }
+
+  log(`  ${T.LAST} ${T.OK} Done`);
+  log();
+}
+
 function startServer(extraArgs = []) {
   // Ensure skills are installed (silent, no output on stdio — MCP uses it)
   installSkills(null);
@@ -1303,6 +1452,8 @@ if (mode === "--setup") {
   }
 } else if (mode === "--uninstall") {
   runUninstall();
+} else if (mode === "--move") {
+  runMove();
 } else if (mode === "--help" || mode === "-h") {
   const log = (msg) => process.stderr.write(msg + "\n");
   log("");
@@ -1313,6 +1464,7 @@ if (mode === "--setup") {
   log("    npx terrain              Interactive setup wizard");
   log("    npx terrain --server     Start MCP server");
   log("    npx terrain --setup      Re-run setup wizard");
+  log("    npx terrain --move       Move workspace to a new location");
   log("    npx terrain --uninstall  Completely uninstall");
   log("    npx terrain --help       Show this help");
   log("");
