@@ -4,17 +4,18 @@
  * terrain MCP server launcher & setup wizard
  *
  * Usage:
- *   npx terrain              # interactive setup (first run)
- *   npx terrain --server     # start MCP server (used by MCP clients)
- *   npx terrain --setup      # re-run setup wizard
- *   npx terrain --move       # move workspace to a new location
- *   npx terrain --pip        # force python3 direct mode
+ *   terrain              # interactive setup (first run)
+ *   terrain server       # start MCP server (used by MCP clients)
+ *   terrain setup        # re-run setup wizard
+ *   terrain update       # check & install updates
+ *   terrain move         # move workspace to a new location
+ *   terrain pip          # force python3 direct mode
  */
 
 import { spawn, execFileSync, execSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, copyFileSync, renameSync, cpSync } from "node:fs";
-import { homedir, platform } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, copyFileSync, renameSync, cpSync, unlinkSync } from "node:fs";
+import { homedir, platform, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,9 +23,15 @@ const PYTHON_PACKAGE = "terrain";
 const MODULE_PATH = "terrain.entrypoints.mcp.server";
 const WORKSPACE_DIR = join(homedir(), ".terrain");
 const ENV_FILE = join(WORKSPACE_DIR, ".env");
+const UPDATE_CHECK_FILE = join(WORKSPACE_DIR, ".last-update-check");
+const UPDATE_LOG_FILE = join(WORKSPACE_DIR, ".update-log");
+const UPDATE_PENDING_FILE = join(WORKSPACE_DIR, ".update-pending");
 const IS_WIN = platform() === "win32";
 // Removed hardcoded PyPI index — pip will use the user's configured source
 // (e.g. mirrors in pip.conf / pip.ini)
+
+// How often to check for updates (4 hours)
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Tree-style UI helpers
@@ -327,6 +334,319 @@ function getPackageVersion() {
     ], { stdio: "pipe" }).toString().trim();
   } catch {
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Version helpers for auto-update
+// ---------------------------------------------------------------------------
+
+/** Read the local npm package version from package.json */
+function getLocalNpmVersion() {
+  try {
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    return pkg.version || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the latest version from the npm registry (terrain-ai).
+ * Returns null on network error or timeout.
+ */
+function getLatestNpmVersion() {
+  try {
+    const out = execSync("npm view terrain-ai version", {
+      encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+    });
+    return out.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the latest version from PyPI for the terrain package.
+ * Uses the PyPI JSON API via a temp .py file (avoids cmd.exe quoting issues
+ * on Windows where nested single/double quotes break).
+ */
+function getLatestPypiVersion() {
+  if (!PYTHON_CMD) return null;
+  const tmpPy = join(tmpdir(), `terrain-pypi-${process.pid}.py`);
+  try {
+    writeFileSync(tmpPy, [
+      "import urllib.request, json",
+      "d = json.loads(urllib.request.urlopen('https://pypi.org/pypi/terrain-ai/json', timeout=5).read())",
+      "print(d['info']['version'])",
+    ].join("\n"), "utf-8");
+    const out = execFileSync(PYTHON_CMD, [tmpPy], {
+      encoding: "utf-8", stdio: "pipe", timeout: 10_000,
+    });
+    return out.trim() || null;
+  } catch {
+    return null;
+  } finally {
+    try { unlinkSync(tmpPy); } catch {}
+  }
+}
+
+/**
+ * Simple semver compare: returns 1 if a > b, -1 if a < b, 0 if equal.
+ * Only handles numeric x.y.z; treats missing segments as 0.
+ */
+function semverCompare(a, b) {
+  const pa = (a || "0").split(".").map(Number);
+  const pb = (b || "0").split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const va = pa[i] || 0, vb = pb[i] || 0;
+    if (va > vb) return 1;
+    if (va < vb) return -1;
+  }
+  return 0;
+}
+
+/** Check if auto-updater is disabled via env or .env config */
+function isAutoUpdateDisabled() {
+  if (process.env.DISABLE_AUTOUPDATER === "1") return true;
+  try {
+    const envVars = loadEnvFile();
+    if (envVars.DISABLE_AUTOUPDATER === "1") return true;
+  } catch { /* non-critical */ }
+  return false;
+}
+
+/** Check if enough time has passed since the last update check */
+function shouldCheckForUpdate() {
+  if (isAutoUpdateDisabled()) return false;
+  try {
+    if (!existsSync(UPDATE_CHECK_FILE)) return true;
+    const ts = parseInt(readFileSync(UPDATE_CHECK_FILE, "utf-8").trim(), 10);
+    return Date.now() - ts > UPDATE_CHECK_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+/** Record the current timestamp as last update check */
+function recordUpdateCheck() {
+  try {
+    mkdirSync(WORKSPACE_DIR, { recursive: true });
+    writeFileSync(UPDATE_CHECK_FILE, String(Date.now()), "utf-8");
+  } catch { /* non-critical */ }
+}
+
+/** Write a pending-update marker so next startup knows an update was applied */
+function writePendingMarker(info) {
+  try {
+    writeFileSync(UPDATE_PENDING_FILE, JSON.stringify(info), "utf-8");
+  } catch { /* non-critical */ }
+}
+
+/** Read & clear the pending-update marker. Returns info object or null. */
+function readAndClearPendingMarker() {
+  try {
+    if (!existsSync(UPDATE_PENDING_FILE)) return null;
+    const info = JSON.parse(readFileSync(UPDATE_PENDING_FILE, "utf-8"));
+    rmSync(UPDATE_PENDING_FILE, { force: true });
+    return info;
+  } catch {
+    try { rmSync(UPDATE_PENDING_FILE, { force: true }); } catch {}
+    return null;
+  }
+}
+
+/**
+ * Show a one-line notice if an update was applied in a previous background run.
+ * Called on every startup — very cheap (just reads a marker file).
+ */
+function showPendingUpdateNotice() {
+  const info = readAndClearPendingMarker();
+  if (!info) return;
+  const log = (msg) => process.stderr.write(msg + "\n");
+  log("");
+  log(`  ${T.OK} terrain updated in background — restart to use new version`);
+  if (info.npm) log(`    CLI:    ${info.npm.from} → ${info.npm.to}`);
+  if (info.py)  log(`    Python: ${info.py.from} → ${info.py.to}`);
+  log("");
+}
+
+/**
+ * Background auto-update — Claude Code style.
+ *
+ * 1. Checks once per UPDATE_CHECK_INTERVAL_MS (4h)
+ * 2. Writes a temp .js file, spawns it as a detached child process
+ * 3. Never blocks or interrupts the current server session
+ * 4. Writes a marker file so the NEXT startup shows "updated!" notice
+ * 5. Respects DISABLE_AUTOUPDATER=1
+ *
+ * Windows compatibility:
+ *   - Uses a temp file instead of `node -e` to avoid 8191-char cmd limit
+ *   - `windowsHide: true` prevents console window flash
+ *   - Python commands use helper .py temp files to avoid cmd.exe quote hell
+ *   - npm global install may require elevated permissions on Windows
+ */
+function backgroundAutoUpdate() {
+  if (!shouldCheckForUpdate()) return;
+  recordUpdateCheck();
+
+  // Write the updater as a temp .js file (avoids Windows command-line length
+  // limit of 8191 chars and cmd.exe quoting issues with `node -e`).
+  const updaterFile = join(tmpdir(), `terrain-update-${process.pid}.cjs`);
+
+  const updaterScript = `
+"use strict";
+const { execSync, execFileSync } = require("child_process");
+const fs = require("fs");
+
+const LOG     = ${JSON.stringify(UPDATE_LOG_FILE)};
+const PENDING = ${JSON.stringify(UPDATE_PENDING_FILE)};
+const PKG_JSON = ${JSON.stringify(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"))};
+const PYTHON  = ${JSON.stringify(PYTHON_CMD || "")};
+const IS_WIN  = process.platform === "win32";
+const SELF    = ${JSON.stringify(updaterFile)};
+
+function log(msg) {
+  try { fs.appendFileSync(LOG, new Date().toISOString() + " " + msg + "\\n"); } catch {}
+}
+
+function semverCmp(a, b) {
+  const pa = (a || "0").split(".").map(Number);
+  const pb = (b || "0").split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const va = pa[i] || 0, vb = pb[i] || 0;
+    if (va > vb) return 1;
+    if (va < vb) return -1;
+  }
+  return 0;
+}
+
+/** Run a Python snippet and return stdout. Uses a temp .py file to avoid
+ *  cmd.exe quoting issues on Windows (no nested single/double quote pain). */
+function pyEval(code) {
+  const tmp = require("os").tmpdir() + "/terrain-py-" + process.pid + ".py";
+  try {
+    fs.writeFileSync(tmp, code, "utf-8");
+    return execFileSync(PYTHON, [tmp], {
+      encoding: "utf-8", stdio: "pipe", timeout: 15000
+    }).trim();
+  } finally {
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
+function cleanup() {
+  try { fs.unlinkSync(SELF); } catch {}
+}
+
+try {
+  log("Update check started");
+  const info = {};
+
+  // --- Check npm ---
+  let localNpm = null, latestNpm = null;
+  try {
+    localNpm = JSON.parse(fs.readFileSync(PKG_JSON, "utf-8")).version || null;
+  } catch {}
+  try {
+    latestNpm = execSync("npm view terrain-ai version", {
+      encoding: "utf-8", stdio: "pipe", timeout: 15000, shell: true
+    }).trim();
+  } catch {}
+
+  if (localNpm && latestNpm && semverCmp(latestNpm, localNpm) > 0) {
+    log("CLI outdated: " + localNpm + " -> " + latestNpm);
+    try {
+      execSync("npm install -g terrain-ai@latest", {
+        stdio: "pipe", shell: true, timeout: 120000
+      });
+      info.npm = { from: localNpm, to: latestNpm };
+      log("CLI updated to " + latestNpm);
+    } catch (e) {
+      log("CLI update failed: " + e.message);
+    }
+  }
+
+  // --- Check Python ---
+  if (PYTHON) {
+    let localPy = null, latestPy = null;
+    try {
+      localPy = pyEval("import terrain; print(getattr(terrain, '__version__', ''))") || null;
+    } catch {}
+    try {
+      latestPy = pyEval(
+        "import urllib.request, json\\n" +
+        "d = json.loads(urllib.request.urlopen('https://pypi.org/pypi/terrain-ai/json', timeout=5).read())\\n" +
+        "print(d['info']['version'])"
+      ) || null;
+    } catch {}
+
+    if (localPy && latestPy && semverCmp(latestPy, localPy) > 0) {
+      log("Python outdated: " + localPy + " -> " + latestPy);
+
+      // Find pip — try common commands, then python -m pip
+      let pip = null;
+      const pips = IS_WIN ? ["pip", "pip3"] : ["pip3", "pip"];
+      for (const p of pips) {
+        try {
+          execSync(p + " --version", { stdio: "pipe", timeout: 5000, shell: true });
+          pip = [p]; break;
+        } catch {}
+      }
+      if (!pip) {
+        try {
+          execFileSync(PYTHON, ["-m", "pip", "--version"], { stdio: "pipe", timeout: 5000 });
+          pip = [PYTHON, "-m", "pip"];
+        } catch {}
+      }
+
+      if (pip) {
+        try {
+          const args = [...pip.slice(1), "install", "--upgrade", "--prefer-binary", "terrain-ai[treesitter-full]"];
+          execFileSync(pip[0], args, { stdio: "pipe", timeout: 300000 });
+          info.py = { from: localPy, to: latestPy };
+          log("Python updated to " + latestPy);
+        } catch (e) {
+          log("Python update failed: " + e.message);
+        }
+      } else {
+        log("pip not found, skipping Python update");
+      }
+    }
+  }
+
+  // --- Write pending marker if anything was updated ---
+  if (info.npm || info.py) {
+    fs.writeFileSync(PENDING, JSON.stringify(info), "utf-8");
+    log("Pending marker written");
+  } else {
+    log("Everything up to date");
+  }
+} catch (e) {
+  log("Update check error: " + (e.message || e));
+} finally {
+  cleanup();
+}
+`;
+
+  // Write temp script & spawn detached — fire and forget
+  try {
+    writeFileSync(updaterFile, updaterScript, "utf-8");
+    const child = spawn(
+      process.execPath,
+      [updaterFile],
+      {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,  // prevent console window flash on Windows
+        env: { ...process.env, DISABLE_AUTOUPDATER: "1" }, // prevent recursion
+      }
+    );
+    child.unref();
+  } catch {
+    // Cleanup temp file if spawn failed
+    try { unlinkSync(updaterFile); } catch {}
   }
 }
 
@@ -805,7 +1125,7 @@ async function runSetup() {
   // 1. Python
   if (!PYTHON_CMD) {
     log(`  ${T.BRANCH} ${T.FAIL} Python 3 not found`);
-    log(`  ${T.LAST}   Install Python 3.10+ and re-run: npx terrain-ai@latest --setup`);
+    log(`  ${T.LAST}   Install Python 3.10+ and re-run: terrain setup`);
     log();
     return;
   }
@@ -1001,7 +1321,7 @@ async function runSetup() {
 
   if (missingExtras.length > 0) {
     log(`  ${T.LAST} To add more languages (${missingExtras.join(", ")}), re-run:`);
-    log(`         npx terrain-ai@latest --setup`);
+    log(`         terrain setup`);
   } else {
     log(`  ${T.LAST} All language parsers installed`);
   }
@@ -1098,7 +1418,7 @@ function autoInstallAndStart(extraArgs) {
           ? `Python found (${PYTHON_CMD}) but pip is not available.\n\n`
           : `Python 3 not found on PATH.\n\n`) +
         `Please install Python 3.10+ first, then run:\n` +
-        `  npx terrain --server\n`
+        `  terrain server\n`
     );
     process.exit(1);
   }
@@ -1282,7 +1602,7 @@ async function runMove() {
 
   if (!existsSync(currentWorkspace)) {
     log(`  ${T.WARN} Current workspace does not exist: ${currentWorkspace}`);
-    log(`  Run ${IS_WIN ? "" : "npx "}terrain --setup first.\n`);
+    log(`  Run terrain setup first.\n`);
     rl.close();
     process.exit(1);
   }
@@ -1415,6 +1735,12 @@ function startServer(extraArgs = []) {
   // Ensure skills are installed (silent, no output on stdio — MCP uses it)
   installSkills(null);
 
+  // Show notice if a background update completed since last startup
+  showPendingUpdateNotice();
+
+  // Launch background auto-updater (detached, never blocks)
+  backgroundAutoUpdate();
+
   if (pythonPackageInstalled()) {
     runServer(PYTHON_CMD, ["-m", MODULE_PATH]);
   } else if (commandExists("uvx")) {
@@ -1429,16 +1755,106 @@ function startServer(extraArgs = []) {
 }
 
 // ---------------------------------------------------------------------------
+// Update
+// ---------------------------------------------------------------------------
+
+async function runUpdate() {
+  const log = (msg = "") => process.stderr.write(msg + "\n");
+
+  log();
+  log(box("terrain  Update"));
+  log();
+
+  if (isAutoUpdateDisabled()) {
+    log(`  ${T.WARN} Auto-updater is disabled (DISABLE_AUTOUPDATER=1)`);
+    log(`  ${T.LAST} Remove DISABLE_AUTOUPDATER from .env or environment to re-enable`);
+    log();
+  }
+
+  // ---- Gather version info ----
+  log(`  ${T.BRANCH} Checking for updates${T.WORK}`);
+
+  const localNpm  = getLocalNpmVersion();
+  const latestNpm = getLatestNpmVersion();
+  const localPy   = getPackageVersion();
+  const latestPy  = getLatestPypiVersion();
+
+  const npmOutdated = localNpm && latestNpm && semverCompare(latestNpm, localNpm) > 0;
+  const pyOutdated  = localPy  && latestPy  && semverCompare(latestPy, localPy) > 0;
+
+  log(`  ${T.BRANCH} CLI (npm):    ${localNpm || "not installed"} ${npmOutdated ? `→ ${latestNpm}` : latestNpm ? `${T.OK} latest` : ""}`);
+  log(`  ${T.BRANCH} Python (pip): ${localPy  || "not installed"} ${pyOutdated  ? `→ ${latestPy}`  : latestPy  ? `${T.OK} latest` : ""}`);
+
+  if (!npmOutdated && !pyOutdated) {
+    log();
+    log(`  ${T.LAST} ${T.OK} Everything is up to date!`);
+    log();
+    recordUpdateCheck();
+    return;
+  }
+
+  // ---- Update npm package ----
+  if (npmOutdated) {
+    log();
+    log(`  ${T.BRANCH} Updating CLI: ${localNpm} → ${latestNpm}${T.WORK}`);
+    try {
+      execSync("npm install -g terrain-ai@latest", {
+        stdio: "inherit", shell: true, timeout: 120_000,
+      });
+      log(`  ${T.PIPE} ${T.OK} CLI updated to ${latestNpm}`);
+    } catch {
+      log(`  ${T.PIPE} ${T.FAIL} CLI update failed. Try manually:`);
+      log(`  ${T.PIPE}   npm install -g terrain-ai@latest`);
+    }
+  }
+
+  // ---- Update Python package ----
+  if (pyOutdated) {
+    log();
+    log(`  ${T.BRANCH} Updating Python package: ${localPy} → ${latestPy}${T.WORK}`);
+    const pip = findPip();
+    if (pip) {
+      try {
+        const target = `${PYTHON_PACKAGE}[treesitter-full]`;
+        execSync(
+          [...pip, "install", "--upgrade", "--prefer-binary", target].map(s => `"${s}"`).join(" "),
+          { stdio: "inherit", shell: true, timeout: 300_000 }
+        );
+        const newVer = getPackageVersion();
+        log(`  ${T.PIPE} ${T.OK} Python package updated to ${newVer || latestPy}`);
+      } catch {
+        log(`  ${T.PIPE} ${T.FAIL} Python update failed. Try manually:`);
+        log(`  ${T.PIPE}   ${pip.join(" ")} install --upgrade terrain-ai`);
+      }
+    } else {
+      log(`  ${T.PIPE} ${T.WARN} pip not found — cannot update Python package`);
+      log(`  ${T.PIPE}   Install pip and run: pip install --upgrade terrain-ai`);
+    }
+  }
+
+  recordUpdateCheck();
+  // Clear any pending marker since we just did a manual update
+  try { rmSync(UPDATE_PENDING_FILE, { force: true }); } catch {}
+
+  log();
+  log(`  ${T.LAST} ${T.OK} Done`);
+  log();
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
 const mode = args[0];
 
-if (mode === "--setup") {
+// Normalise: accept both "--setup" and "setup" style
+const cmd = (mode || "").replace(/^--/, "");
+
+if (cmd === "setup") {
   runSetup();
-} else if (mode === "--server" || mode === "--pip" || mode === "--python") {
-  if (mode === "--pip" || mode === "--python") {
+} else if (cmd === "server" || cmd === "pip" || cmd === "python") {
+  if (cmd === "pip" || cmd === "python") {
     if (!PYTHON_CMD || !pythonPackageInstalled()) {
       process.stderr.write(
         `Error: Python package '${PYTHON_PACKAGE}' is not installed.\n` +
@@ -1450,25 +1866,33 @@ if (mode === "--setup") {
   } else {
     startServer(args.slice(1));
   }
-} else if (mode === "--uninstall") {
+} else if (cmd === "uninstall") {
   runUninstall();
-} else if (mode === "--move") {
+} else if (cmd === "move") {
   runMove();
-} else if (mode === "--help" || mode === "-h") {
+} else if (cmd === "update" || cmd === "upgrade") {
+  runUpdate();
+} else if (cmd === "help" || cmd === "h" || mode === "-h") {
   const log = (msg) => process.stderr.write(msg + "\n");
   log("");
   log(box("terrain"));
   log("");
   log("  Usage:");
   log("");
-  log("    npx terrain              Interactive setup wizard");
-  log("    npx terrain --server     Start MCP server");
-  log("    npx terrain --setup      Re-run setup wizard");
-  log("    npx terrain --move       Move workspace to a new location");
-  log("    npx terrain --uninstall  Completely uninstall");
-  log("    npx terrain --help       Show this help");
+  log("    terrain              Interactive setup wizard");
+  log("    terrain server       Start MCP server");
+  log("    terrain setup        Re-run setup wizard");
+  log("    terrain update       Check & install updates");
+  log("    terrain move         Move workspace to a new location");
+  log("    terrain uninstall    Completely uninstall");
+  log("    terrain help         Show this help");
   log("");
   log(`  Config: ${ENV_FILE}`);
+  log("");
+  log("  Auto-update:");
+  log("    Background updates run automatically every 4 hours.");
+  log("    Updates download silently and take effect on next startup.");
+  log("    To disable: set DISABLE_AUTOUPDATER=1 in .env or environment.");
   log("");
 } else {
   if (!existsSync(ENV_FILE)) {
