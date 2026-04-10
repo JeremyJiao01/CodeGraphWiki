@@ -752,10 +752,18 @@ async function runSetup() {
   if (commandExists("claude")) {
     log(`  ${T.DOT} Removing legacy MCP tool`);
     log(`  ${T.SIDE}`);
-    try {
-      execSync("claude mcp remove code-graph-builder", { stdio: "pipe", shell: true });
+    // Remove from every scope independently — without -s the CLI exits 1 when
+    // the server exists in multiple scopes and asks the user to disambiguate.
+    let removed = false;
+    for (const scope of ["user", "local", "project"]) {
+      try {
+        execSync(`claude mcp remove code-graph-builder -s ${scope}`, { stdio: "pipe", shell: true });
+        removed = true;
+      } catch { /* not registered in this scope */ }
+    }
+    if (removed) {
       log(`  ${T.LAST} ${T.OK} Removed code-graph-builder MCP tool`);
-    } catch {
+    } else {
       log(`  ${T.LAST} ${T.OK} No legacy MCP tool found (skipped)`);
     }
     log();
