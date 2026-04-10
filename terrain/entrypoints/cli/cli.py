@@ -2002,11 +2002,30 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
-    """Execute the setup command — add terrain Scripts dir to Windows user PATH."""
+    """Execute the setup wizard (configure API keys, workspace, MCP registration).
+
+    On Windows: also adds Python Scripts dir to user PATH.
+    On all platforms: delegates to the npm setup wizard via npx.
+    """
+    import shutil
+    import subprocess
+
+    npx = shutil.which("npx")
+    if npx:
+        result = subprocess.run(
+            [npx, "terrain-ai@latest", "setup"],
+            shell=False,
+        )
+        return result.returncode
+
+    # npx not available — fall back to Windows PATH fix if applicable
     if platform.system() != "Windows":
-        print("This command is only needed on Windows.")
-        print("On Linux/macOS, terrain is available in PATH automatically after pip install.")
-        return 0
+        print("terrain setup requires Node.js / npx to run the setup wizard.")
+        print("Install Node.js (https://nodejs.org) and re-run: terrain setup")
+        print()
+        print("Alternatively, run the wizard directly:")
+        print("  npx terrain-ai@latest setup")
+        return 1
 
     scripts_dir = Path(sys.executable).parent / "Scripts"
     if not (scripts_dir / "terrain.exe").exists():
@@ -2115,7 +2134,7 @@ Low-level commands:
 Run 'terrain <command> --help' for details on any command.
 
 Windows:
-  terrain setup                     add terrain to user PATH (run once after install)
+  terrain setup                     run setup wizard (API keys, workspace, MCP registration)
         """,
         add_help=False,
     )
@@ -2493,11 +2512,11 @@ Windows:
     )
     stats_parser.set_defaults(func=cmd_stats)
 
-    # setup command (Windows PATH helper)
+    # setup command — runs the npm setup wizard (all platforms)
     setup_parser = subparsers.add_parser(
         "setup",
-        help="Add terrain to the system PATH (Windows only)",
-        description="Add the terrain executable directory to the current user's PATH on Windows.",
+        help="Run the setup wizard (configure API keys, workspace, MCP registration)",
+        description="Launch the terrain setup wizard via npx. Configures API keys, workspace, and registers the MCP server with Claude.",
     )
     setup_parser.set_defaults(func=cmd_setup)
 
