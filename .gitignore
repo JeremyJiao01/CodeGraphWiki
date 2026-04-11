@@ -62,6 +62,9 @@ extracted_prompts/
 
 # Generated HTML documentation (build artifacts)
 docs/*.html
+docs/cgb-course/
+docs/superpowers/
+docs/*.md
 
 # Review reports and temporary analysis files
 **/review_report.md
