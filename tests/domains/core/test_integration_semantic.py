@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 if TYPE_CHECKING:
-    from ..embeddings.qwen3_embedder import BaseEmbedder
-    from ..embeddings.vector_store import VectorStore
+    from terrain.domains.core.embedding.qwen3_embedder import BaseEmbedder
+    from terrain.domains.core.embedding.vector_store import VectorStore
 
 
 # =============================================================================
@@ -90,8 +90,8 @@ class TestGraphUpdaterEmbeddingIntegration:
         mock_vector_store: MagicMock,
     ) -> None:
         """Test that GraphUpdater can be initialized with embedding config."""
-        from ..graph_updater import GraphUpdater
-        from ..services.memory_service import MemoryIngestor
+        from terrain.domains.core.graph.graph_updater import GraphUpdater
+        from terrain.foundation.services.memory_service import MemoryIngestor
 
         ingestor = MemoryIngestor()
         embedding_config = {
@@ -120,8 +120,8 @@ class TestGraphUpdaterEmbeddingIntegration:
         mock_vector_store: MagicMock,
     ) -> None:
         """Test that GraphUpdater skips embeddings when disabled."""
-        from ..graph_updater import GraphUpdater
-        from ..services.memory_service import MemoryIngestor
+        from terrain.domains.core.graph.graph_updater import GraphUpdater
+        from terrain.foundation.services.memory_service import MemoryIngestor
 
         ingestor = MemoryIngestor()
 
@@ -152,8 +152,8 @@ class TestSemanticSearchService:
         mock_embedder: MagicMock,
     ) -> None:
         """Test semantic search with mock embedder."""
-        from ..tools.semantic_search import SemanticSearchService
-        from ..embeddings.vector_store import MemoryVectorStore
+        from terrain.domains.core.search.semantic_search import SemanticSearchService
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         # Create vector store with test data
         vector_store = MemoryVectorStore(dimension=1536)
@@ -179,8 +179,8 @@ class TestSemanticSearchService:
         mock_embedder: MagicMock,
     ) -> None:
         """Test that search results have correct structure."""
-        from ..tools.semantic_search import SemanticSearchService, SemanticSearchResult
-        from ..embeddings.vector_store import MemoryVectorStore
+        from terrain.domains.core.search.semantic_search import SemanticSearchService, SemanticSearchResult
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         vector_store = MemoryVectorStore(dimension=1536)
         vector_store.store_embedding(
@@ -211,8 +211,8 @@ class TestSemanticSearchConvenienceFunctions:
 
     def test_semantic_code_search_function(self, mock_embedder: MagicMock) -> None:
         """Test semantic_code_search convenience function."""
-        from ..tools.semantic_search import semantic_code_search
-        from ..embeddings.vector_store import MemoryVectorStore
+        from terrain.domains.core.search.semantic_search import semantic_code_search
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
 
         vector_store = MemoryVectorStore(dimension=1536)
 
@@ -236,7 +236,7 @@ class TestGraphQueryService:
 
     def test_graph_query_service_initialization(self) -> None:
         """Test GraphQueryService initialization."""
-        from ..tools.graph_query import GraphQueryService
+        from terrain.domains.core.search.graph_query import GraphQueryService
 
         mock_service = MagicMock()
         service = GraphQueryService(mock_service, backend="memgraph")
@@ -246,7 +246,7 @@ class TestGraphQueryService:
 
     def test_graph_query_service_kuzu_backend(self) -> None:
         """Test GraphQueryService with Kuzu backend."""
-        from ..tools.graph_query import GraphQueryService
+        from terrain.domains.core.search.graph_query import GraphQueryService
 
         mock_service = MagicMock()
         service = GraphQueryService(mock_service, backend="kuzu")
@@ -255,7 +255,7 @@ class TestGraphQueryService:
 
     def test_fetch_nodes_by_ids_empty_list(self) -> None:
         """Test fetch_nodes_by_ids with empty list returns empty."""
-        from ..tools.graph_query import GraphQueryService
+        from terrain.domains.core.search.graph_query import GraphQueryService
 
         mock_service = MagicMock()
         service = GraphQueryService(mock_service)
@@ -265,7 +265,7 @@ class TestGraphQueryService:
 
     def test_fetch_nodes_by_ids_with_results(self) -> None:
         """Test fetch_nodes_by_ids returns parsed nodes."""
-        from ..tools.graph_query import GraphQueryService, GraphNode
+        from terrain.domains.core.search.graph_query import GraphQueryService, GraphNode
 
         mock_service = MagicMock()
         mock_service.fetch_all.return_value = [
@@ -290,7 +290,7 @@ class TestGraphQueryService:
 
     def test_fetch_node_by_qualified_name(self) -> None:
         """Test fetching node by qualified name."""
-        from ..tools.graph_query import GraphQueryService, GraphNode
+        from terrain.domains.core.search.graph_query import GraphQueryService, GraphNode
 
         mock_service = MagicMock()
         mock_service.fetch_all.return_value = [
@@ -315,8 +315,8 @@ class TestGraphQueryWithVectorResults:
 
     def test_query_nodes_by_vector_results(self) -> None:
         """Test querying graph nodes from vector search results."""
-        from ..tools.graph_query import query_nodes_by_vector_results
-        from ..embeddings.vector_store import SearchResult
+        from terrain.domains.core.search.graph_query import query_nodes_by_vector_results
+        from terrain.domains.core.embedding.vector_store import SearchResult
 
         # Create mock vector results
         vector_results = [
@@ -346,7 +346,7 @@ class TestBackendCompatibility:
 
     def test_cypher_query_compatibility_memgraph(self) -> None:
         """Test Cypher query format for Memgraph."""
-        from ..tools.graph_query import GraphQueryService
+        from terrain.domains.core.search.graph_query import GraphQueryService
 
         mock_service = MagicMock()
         service = GraphQueryService(mock_service, backend="memgraph")
@@ -359,7 +359,7 @@ class TestBackendCompatibility:
 
     def test_cypher_query_compatibility_kuzu(self) -> None:
         """Test Cypher query format for Kuzu."""
-        from ..tools.graph_query import GraphQueryService
+        from terrain.domains.core.search.graph_query import GraphQueryService
 
         mock_service = MagicMock()
         service = GraphQueryService(mock_service, backend="kuzu")
@@ -372,7 +372,7 @@ class TestBackendCompatibility:
 
     def test_node_id_extraction_various_formats(self) -> None:
         """Test node ID extraction from various result formats."""
-        from ..tools.graph_query import GraphQueryService
+        from terrain.domains.core.search.graph_query import GraphQueryService
 
         service = GraphQueryService(MagicMock())
 
@@ -397,11 +397,11 @@ class TestEndToEndIntegration:
         sample_repo: Path,
     ) -> None:
         """Test full workflow with memory backend."""
-        from ..graph_updater import GraphUpdater
-        from ..services.memory_service import MemoryIngestor
-        from ..embeddings.qwen3_embedder import DummyEmbedder
-        from ..embeddings.vector_store import MemoryVectorStore
-        from ..tools.semantic_search import SemanticSearchService
+        from terrain.domains.core.graph.graph_updater import GraphUpdater
+        from terrain.foundation.services.memory_service import MemoryIngestor
+        from terrain.domains.core.embedding.qwen3_embedder import DummyEmbedder
+        from terrain.domains.core.embedding.vector_store import MemoryVectorStore
+        from terrain.domains.core.search.semantic_search import SemanticSearchService
 
         # Setup
         ingestor = MemoryIngestor()

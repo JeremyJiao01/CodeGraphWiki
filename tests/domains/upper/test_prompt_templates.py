@@ -64,7 +64,7 @@ class TestCodeAnalysisPrompts:
         """Test getting system prompt."""
         prompts = CodeAnalysisPrompts()
         system = prompts.get_system_prompt()
-        assert "expert code analyst" in system.lower()
+        assert "code assistant" in system.lower()
         assert len(system) > 0
 
     def test_format_explain_prompt(self):

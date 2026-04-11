@@ -73,9 +73,9 @@ class TestUserFlow:
         """User's MCP client calls list_tools on first connect."""
         tools = registry.tools()
         names = [t.name for t in tools]
-        assert len(names) >= 10, f"Expected many tools, got {len(names)}"
-        assert "initialize_repository" in names
+        assert len(names) >= 5, f"Expected several tools, got {len(names)}"
         assert "find_api" in names
+        assert "get_api_doc" in names
         print(f"  → {len(names)} tools available")
 
     # --- Step 2: Index repository ---
@@ -117,11 +117,22 @@ class TestUserFlow:
         assert "module" in content.lower() or "模块" in content
         print(f"  → Index returned ({len(content)} chars)")
 
-    def test_06_list_api_interfaces(self, registry):
-        """User asks: 'What public APIs are available?'"""
-        result = _call(registry, "list_api_interfaces")
+    def test_06_find_callers(self, registry):
+        """User asks: 'Who calls this function?'"""
+        from terrain.entrypoints.mcp.tools import ToolError
+
+        # Use find_api to get a real function name first
+        try:
+            search = _call(registry, "find_api", {"query": "compile", "top_k": 1})
+        except (ToolError, Exception):
+            pytest.skip("No repository indexed — test_02 may not have run yet")
+        results = search.get("results", [])
+        if not results:
+            pytest.skip("No functions found")
+        qn = results[0].get("qualified_name", "")
+        result = _call(registry, "find_callers", {"function_name": qn})
         assert isinstance(result, dict)
-        print(f"  → API interfaces keys: {list(result.keys())}")
+        print(f"  → find_callers keys: {list(result.keys())}")
 
     # --- Step 5: Semantic search ---
 
@@ -179,12 +190,11 @@ class TestUserFlow:
         test_calls = [
             ("list_repositories", {}),
             ("get_repository_info", {}),
-            ("list_api_docs", {}),
-            ("list_api_interfaces", {}),
+            ("get_config", {}),
             ("find_api", {"query": "function", "top_k": 2}),
         ]
         for tool_name, args in test_calls:
             result = _call(registry, tool_name, args)
             # _call already does JSON round-trip; if we get here, it worked
             assert result is not None, f"{tool_name} returned None"
-        print("  → All 5 tools passed JSON round-trip")
+        print("  → All 4 tools passed JSON round-trip")

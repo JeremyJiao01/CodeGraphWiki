@@ -6,6 +6,17 @@ All paths below are relative to `terrain/`.
 
 ---
 
+## Before You Start (必读)
+
+1. **场景先行**：写出一个具体的用户操作序列（3-5步），证明这个功能有明确的使用场景。
+2. **Grep优先**：在现有代码里搜索相关逻辑——大概率有人已经做了一部分。
+3. **最小验证**：写一个不超过50行的独立脚本，证明核心逻辑可行。
+4. **单层起步**：如果功能跨3个layer以上，先拆——每个PR最多跨2个layer。
+5. **脆弱点测试**：除了happy path，必须写出「这个功能最容易在哪翻车」的测试。
+6. **AI-first接口设计**：MCP tool返回的数据必须self-contained，agent一次调用解决问题。
+
+---
+
 ## Adding a New Parser (L1)
 
 1. `foundation/types/constants.py` -- add language to `SupportedLanguage` enum.

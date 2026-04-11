@@ -1,6 +1,6 @@
 {
   "name": "terrain-ai",
-  "version": "2.1.2",
+  "version": "2.1.5",
   "description": "Give your AI a complete map of any codebase — function signatures, call graphs, and semantic search",
   "license": "MIT",
   "bin": {
@@ -26,8 +26,5 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/JeremyJiao01/CodeGraphWiki"
-  },
-  "dependencies": {
-    "terrain-ai": "^2.1.2"
   }
 }

@@ -386,8 +386,25 @@ class KuzuIngestor:
             return f"[{', '.join(items)}]"
         return self._value_to_cypher(str(value))
 
+    @staticmethod
+    def _coerce_node_props(props: PropertyDict) -> dict[str, Any]:
+        """Coerce raw node properties to the types expected by the Kuzu schema."""
+        return {
+            "qualified_name": props.get("qualified_name", props.get("name", "")),
+            "name": props.get("name", ""),
+            "path": props.get("path", ""),
+            "start_line": int(props.get("start_line") or 0),
+            "end_line": int(props.get("end_line") or 0),
+            "docstring": props.get("docstring", "") or "",
+            "return_type": props.get("return_type", "") or "",
+            "signature": props.get("signature", "") or "",
+            "visibility": props.get("visibility", "") or "",
+            "parameters": props.get("parameters") or [],
+            "kind": props.get("kind", "") or "",
+        }
+
     def flush_nodes(self) -> None:
-        """Flush node buffer to database."""
+        """Flush node buffer to database using UNWIND batch parameterized queries."""
         if not self.node_buffer or not self._conn:
             return
 
@@ -398,67 +415,47 @@ class KuzuIngestor:
                 by_label[label] = []
             by_label[label].append(props)
 
+        _SET_CLAUSE = (
+            "n.name = row.name, "
+            "n.path = row.path, "
+            "n.start_line = row.start_line, "
+            "n.end_line = row.end_line, "
+            "n.docstring = row.docstring, "
+            "n.return_type = row.return_type, "
+            "n.signature = row.signature, "
+            "n.visibility = row.visibility, "
+            "n.parameters = row.parameters, "
+            "n.kind = row.kind"
+        )
+
         for label, nodes in by_label.items():
             self._ensure_schema(label)
-
-            for props in nodes:
-                # Build CREATE statement with safe type coercion
-                qualified_name = props.get("qualified_name", props.get("name", ""))
-                name = props.get("name", "")
-                path = props.get("path", "")
-                start_line = int(props.get("start_line") or 0)
-                end_line = int(props.get("end_line") or 0)
-                docstring = props.get("docstring", "") or ""
-                return_type = props.get("return_type", "") or ""
-                signature = props.get("signature", "") or ""
-                visibility = props.get("visibility", "") or ""
-                parameters = props.get("parameters")
-                kind = props.get("kind", "") or ""
-
+            cypher = (
+                "UNWIND $batch AS row "
+                f"MERGE (n:{label} {{qualified_name: row.qualified_name}}) "
+                f"ON CREATE SET {_SET_CLAUSE} "
+                f"ON MATCH SET {_SET_CLAUSE}"
+            )
+            # Process in chunks of batch_size
+            for i in range(0, len(nodes), self.batch_size):
+                chunk = [self._coerce_node_props(p) for p in nodes[i : i + self.batch_size]]
                 try:
-                    cypher = f"""
-                        MERGE (n:{label} {{
-                            qualified_name: {self._value_to_cypher(qualified_name)}
-                        }})
-                        ON CREATE SET
-                            n.name = {self._value_to_cypher(name)},
-                            n.path = {self._value_to_cypher(path)},
-                            n.start_line = {start_line},
-                            n.end_line = {end_line},
-                            n.docstring = {self._value_to_cypher(docstring)},
-                            n.return_type = {self._value_to_cypher(return_type)},
-                            n.signature = {self._value_to_cypher(signature)},
-                            n.visibility = {self._value_to_cypher(visibility)},
-                            n.parameters = {self._value_to_cypher(parameters if parameters else [])},
-                            n.kind = {self._value_to_cypher(kind)}
-                        ON MATCH SET
-                            n.name = {self._value_to_cypher(name)},
-                            n.path = {self._value_to_cypher(path)},
-                            n.start_line = {start_line},
-                            n.end_line = {end_line},
-                            n.docstring = {self._value_to_cypher(docstring)},
-                            n.return_type = {self._value_to_cypher(return_type)},
-                            n.signature = {self._value_to_cypher(signature)},
-                            n.visibility = {self._value_to_cypher(visibility)},
-                            n.parameters = {self._value_to_cypher(parameters if parameters else [])},
-                            n.kind = {self._value_to_cypher(kind)}
-                    """
-                    self._execute_with_retry(cypher)
+                    self._execute_with_retry(cypher, {"batch": chunk})
                 except Exception as e:
-                    logger.error(
-                        f"Failed to create {label} node "
-                        f"(qn={qualified_name!r}, name={name!r}): {e}"
-                    )
+                    logger.error(f"Failed to batch-insert {label} nodes (chunk {i}): {e}")
 
         logger.info(f"Flushed {len(self.node_buffer)} nodes")
         self.node_buffer = []
 
     def flush_relationships(self) -> None:
-        """Flush relationship buffer to database."""
+        """Flush relationship buffer to database using UNWIND batch parameterized queries."""
         if not self.relationship_buffer or not self._conn:
             return
 
+        # Deduplicate and group by (rel_type, from_label, to_label)
         seen: set[tuple] = set()
+        grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = {}
+
         for source, rel_type, target, _props in self.relationship_buffer:
             from_label, from_key, from_val = source
             to_label, to_key, to_val = target
@@ -468,6 +465,12 @@ class KuzuIngestor:
                 continue
             seen.add(dedup_key)
 
+            group_key = (rel_type, from_label, from_key, to_label, to_key)
+            if group_key not in grouped:
+                grouped[group_key] = []
+            grouped[group_key].append({"from_val": from_val, "to_val": to_val})
+
+        for (rel_type, from_label, from_key, to_label, to_key), rels in grouped.items():
             self._ensure_rel_schema(rel_type, from_label, to_label)
 
             # Use override table name if one was created for this label pair
@@ -477,18 +480,22 @@ class KuzuIngestor:
             if override_key in overrides:
                 actual_rel = overrides[override_key]
 
-            try:
-                cypher = f"""
-                    MATCH (a:{from_label} {{{from_key}: {self._value_to_cypher(from_val)}}}),
-                          (b:{to_label} {{{to_key}: {self._value_to_cypher(to_val)}}})
-                    CREATE (a)-[:{actual_rel}]->(b)
-                """
-                self._execute_with_retry(cypher)
-            except Exception as e:
-                logger.warning(
-                    f"Failed to create relationship {actual_rel}: "
-                    f"{from_label}({from_val!r}) -> {to_label}({to_val!r}): {e}"
-                )
+            cypher = (
+                f"UNWIND $batch AS row "
+                f"MATCH (a:{from_label} {{{from_key}: row.from_val}}), "
+                f"      (b:{to_label} {{{to_key}: row.to_val}}) "
+                f"CREATE (a)-[:{actual_rel}]->(b)"
+            )
+
+            for i in range(0, len(rels), self.batch_size):
+                chunk = rels[i : i + self.batch_size]
+                try:
+                    self._execute_with_retry(cypher, {"batch": chunk})
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to batch-insert {actual_rel} relationships "
+                        f"(chunk {i}, {len(chunk)} rels): {e}"
+                    )
 
         logger.debug(f"Flushed {len(self.relationship_buffer)} relationships")
         self.relationship_buffer = []

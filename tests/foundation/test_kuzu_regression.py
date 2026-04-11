@@ -22,6 +22,7 @@ def ingestor():
     ing = KuzuIngestor.__new__(KuzuIngestor)
     ing._conn = MagicMock()
     ing._db = MagicMock()
+    ing.batch_size = 1000
     ing.node_buffer = []
     ing.relationship_buffer = []
     ing._schema_cache = set()

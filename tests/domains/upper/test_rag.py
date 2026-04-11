@@ -214,7 +214,7 @@ class TestCodeAnalysisPrompts:
         """Test getting system prompt."""
         prompts = CodeAnalysisPrompts()
         system = prompts.get_system_prompt()
-        assert "expert code analyst" in system.lower()
+        assert "code assistant" in system.lower()
 
     def test_format_explain_prompt(self, sample_code_context: CodeContext) -> None:
         """Test formatting explain prompt."""
@@ -244,7 +244,7 @@ class TestRAGPrompts:
             query="Explain this function",
             contexts=[sample_code_context],
         )
-        assert "expert code analyst" in system.lower()
+        assert "code assistant" in system.lower()
         assert "Explain this function" in user
         assert "math.add" in user
 

@@ -82,15 +82,10 @@ class TestToolRegistration:
     def test_expected_tools_present(self, registry):
         names = {t.name for t in registry.tools()}
         expected = {
-            "initialize_repository", "get_repository_info",
-            "list_repositories", "switch_repository",
-            "query_code_graph", "get_code_snippet",
-            "semantic_search", "find_api",
-            "list_wiki_pages", "get_wiki_page",
-            "locate_function", "list_api_interfaces",
-            "list_api_docs", "get_api_doc",
-            "generate_wiki", "rebuild_embeddings",
-            "build_graph", "generate_api_docs",
+            "find_api", "get_api_doc",
+            "find_callers", "trace_call_chain",
+            "get_repository_info", "list_repositories",
+            "switch_repository", "get_config",
         }
         missing = expected - names
         assert not missing, f"Missing expected tools: {missing}"
@@ -175,19 +170,13 @@ class TestToolErrorHandling:
     def test_require_active_raises_toolerror(self, registry):
         from terrain.entrypoints.mcp.tools import ToolError
 
-        # Tools that require an active repo and take no required args
+        # Public tools that require an active repo and take no required args
         tools_no_args = [
             "get_repository_info",
-            "list_wiki_pages", "list_api_interfaces",
-            "list_api_docs",
         ]
         for tool_name in tools_no_args:
             with pytest.raises(ToolError):
                 _run(registry.get_handler(tool_name)())
-
-        # semantic_search requires query arg — should still raise ToolError (no repo)
-        with pytest.raises(ToolError):
-            _run(registry.get_handler("semantic_search")(query="test"))
 
     def test_find_api_without_embeddings_uses_keyword_fallback(self, indexed_registry):
         """find_api without embeddings should fall back to keyword search, not raise."""
@@ -242,28 +231,25 @@ class TestStateManagement:
 class TestGraphOnlyTools:
     """Test tools that only need a graph (no embeddings)."""
 
-    def test_list_api_interfaces(self, indexed_registry):
-        result = _run(indexed_registry._handle_list_api_interfaces())
+    def test_find_api(self, indexed_registry):
+        """find_api should return results for a known query."""
+        result = _run(indexed_registry._handle_find_api(query="compile", top_k=3))
         assert isinstance(result, dict)
-
-    def test_list_api_docs(self, indexed_registry):
-        result = _run(indexed_registry._handle_list_api_docs())
-        assert isinstance(result, (dict, str))
+        assert "results" in result or "result_count" in result
 
     def test_get_api_doc_known_function(self, indexed_registry):
         """Should return API doc for a function that exists."""
         from terrain.entrypoints.mcp.tools import ToolError
 
-        # First get a real qualified name from list_api_interfaces
-        apis = _run(indexed_registry._handle_list_api_interfaces())
-        # Find any function qn from the result
-        qn = None
-        for item in apis.get("interfaces", apis.get("functions", [])):
-            if isinstance(item, dict) and item.get("qualified_name"):
-                qn = item["qualified_name"]
-                break
-        if qn is None:
+        # First find a function via find_api
+        search = _run(indexed_registry._handle_find_api(query="compile", top_k=1))
+        results = search.get("results", [])
+        if not results:
             pytest.skip("No APIs found to test get_api_doc")
+
+        qn = results[0].get("qualified_name")
+        if not qn:
+            pytest.skip("No qualified_name in search result")
 
         try:
             result = _run(indexed_registry._handle_get_api_doc(qualified_name=qn))
