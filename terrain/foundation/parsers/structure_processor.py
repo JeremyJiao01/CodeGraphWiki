@@ -5,9 +5,8 @@ from pathlib import Path
 from loguru import logger
 
 from terrain.foundation.types import constants as cs
-from terrain.foundation.services import IngestorProtocol
-from terrain.foundation.types.types import LanguageQueries, NodeIdentifier
-from terrain.foundation.utils.path_utils import should_skip_path
+from terrain.foundation.types.path_utils import should_skip_path
+from terrain.foundation.types.types import IngestorProtocol, LanguageQueries, NodeIdentifier
 
 
 class StructureProcessor:

@@ -14,8 +14,7 @@ from terrain.foundation.types.types import ASTNode, LanguageQueries, NodeType, P
 
 if TYPE_CHECKING:
     from .language_spec import LanguageSpec
-    from terrain.foundation.services import IngestorProtocol
-    from terrain.foundation.types.types import FunctionRegistryTrieProtocol
+    from terrain.foundation.types.types import FunctionRegistryTrieProtocol, IngestorProtocol
 
 
 class FunctionCapturesResult(NamedTuple):

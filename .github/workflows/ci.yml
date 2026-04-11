@@ -31,7 +31,14 @@ jobs:
           pip install pytest
 
       - name: Run layer dependency check
-        run: python tools/dep_check.py || true  # warn-only until pre-existing violations are resolved
+        run: |
+          output=$(python tools/dep_check.py 2>&1 || true)
+          echo "$output"
+          # L1 violations must be zero; L2/L4 cross-domain violations are tracked separately
+          if echo "$output" | grep -q "^VIOLATION:.*: L1 "; then
+            echo "ERROR: L1 layer violations found — fix before merging"
+            exit 1
+          fi
 
       - name: Run tests (unit tests — no LLM/embedding required)
         run: |

@@ -51,5 +51,11 @@ Changelog = "https://github.com/JeremyJiao01/Terrain-AI/blob/main/CHANGELOG.md"
 terrain = "terrain.entrypoints.cli.cli:main"
 terrain-mcp = "terrain.entrypoints.mcp:main"
 
+[tool.pytest.ini_options]
+markers = [
+    "performance: marks tests as performance benchmarks",
+    "accuracy: marks tests as accuracy measurements",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["terrain"]

@@ -3,8 +3,8 @@
 from pathlib import Path
 
 from terrain.foundation.types.constants import SupportedLanguage
-from terrain.foundation.services import IngestorProtocol
 from terrain.foundation.types.types import (
+    IngestorProtocol,
     ASTCacheProtocol,
     FunctionRegistryTrieProtocol,
     LanguageQueries,

@@ -1,36 +1,8 @@
 """Terrain - Services."""
 
-from typing import Protocol, runtime_checkable
-
-from terrain.foundation.types.types import PropertyDict, PropertyValue, ResultRow
-
-
-@runtime_checkable
-class IngestorProtocol(Protocol):
-    """Protocol for graph data ingestors."""
-
-    def ensure_node_batch(self, label: str, properties: PropertyDict) -> None: ...
-
-    def ensure_relationship_batch(
-        self,
-        from_spec: tuple[str, str, PropertyValue],
-        rel_type: str,
-        to_spec: tuple[str, str, PropertyValue],
-        properties: PropertyDict | None = None,
-    ) -> None: ...
-
-    def flush_all(self) -> None: ...
-
-
-@runtime_checkable
-class QueryProtocol(Protocol):
-    """Protocol for graph query operations."""
-
-    def fetch_all(
-        self, query: str, params: PropertyDict | None = None
-    ) -> list[ResultRow]: ...
-
-    def execute_write(self, query: str, params: PropertyDict | None = None) -> None: ...
+# Re-export protocols from the types layer (L0) for backward compatibility.
+# The canonical definitions live in terrain.foundation.types.types.
+from terrain.foundation.types.types import IngestorProtocol, QueryProtocol
 
 
 # Import implementation

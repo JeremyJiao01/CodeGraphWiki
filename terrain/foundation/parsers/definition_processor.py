@@ -9,9 +9,8 @@ from loguru import logger
 from tree_sitter import Node, QueryCursor
 
 from terrain.foundation.types import constants as cs
-from terrain.foundation.services import IngestorProtocol
-from terrain.foundation.types.types import LanguageQueries, NodeType, PropertyDict, SimpleNameLookup
-from terrain.foundation.utils.encoding import normalize_to_utf8_bytes
+from terrain.foundation.types.encoding import normalize_to_utf8_bytes
+from terrain.foundation.types.types import IngestorProtocol, LanguageQueries, NodeType, PropertyDict, SimpleNameLookup
 from .utils import safe_decode_text
 
 if TYPE_CHECKING:

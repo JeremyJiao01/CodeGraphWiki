@@ -260,6 +260,32 @@ class SemanticSearchResult:
 
 
 # Graph service protocol
+class IngestorProtocol(Protocol):
+    """Protocol for graph data ingestors."""
+
+    def ensure_node_batch(self, label: str, properties: PropertyDict) -> None: ...
+
+    def ensure_relationship_batch(
+        self,
+        from_spec: tuple[str, str, PropertyValue],
+        rel_type: str,
+        to_spec: tuple[str, str, PropertyValue],
+        properties: PropertyDict | None = None,
+    ) -> None: ...
+
+    def flush_all(self) -> None: ...
+
+
+class QueryProtocol(Protocol):
+    """Protocol for graph query operations."""
+
+    def fetch_all(
+        self, query: str, params: PropertyDict | None = None
+    ) -> list[ResultRow]: ...
+
+    def execute_write(self, query: str, params: PropertyDict | None = None) -> None: ...
+
+
 class GraphServiceProtocol(Protocol):
     """Protocol for graph database services."""
 
