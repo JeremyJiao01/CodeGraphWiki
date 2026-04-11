@@ -2,7 +2,7 @@
   "name": "terrain-ai",
   "version": "2.1.5",
   "description": "Give your AI a complete map of any codebase — function signatures, call graphs, and semantic search",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "bin": {
     "terrain": "./bin/cli.mjs"
   },
