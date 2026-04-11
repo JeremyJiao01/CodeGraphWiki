@@ -9,9 +9,8 @@ from loguru import logger
 from tree_sitter import Node, QueryCursor
 
 from terrain.foundation.types import constants as cs
+from terrain.foundation.types.types import FunctionRegistryTrieProtocol, IngestorProtocol
 from .utils import safe_decode_text
-from terrain.foundation.services import IngestorProtocol
-from terrain.foundation.types.types import FunctionRegistryTrieProtocol
 
 if TYPE_CHECKING:
     from terrain.foundation.types.types import LanguageQueries

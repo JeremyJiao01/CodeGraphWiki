@@ -1,30 +1,9 @@
-"""Path utilities for code graph builder."""
+"""Path utilities for code graph builder.
 
-from pathlib import Path
+The canonical implementation lives in terrain.foundation.types.path_utils (L0).
+This module re-exports it for backward compatibility.
+"""
 
-from terrain.foundation.types import constants as cs
+from terrain.foundation.types.path_utils import should_skip_path
 
-
-def should_skip_path(
-    path: Path,
-    repo_path: Path,
-    exclude_paths: frozenset[str] | None = None,
-    unignore_paths: frozenset[str] | None = None,
-) -> bool:
-    """Check if a path should be skipped during analysis."""
-    if path.is_file() and path.suffix in cs.IGNORE_SUFFIXES:
-        return True
-    rel_path = path.relative_to(repo_path)
-    rel_path_str = rel_path.as_posix()
-    dir_parts = rel_path.parent.parts if path.is_file() else rel_path.parts
-    if exclude_paths and (
-        not exclude_paths.isdisjoint(dir_parts)
-        or rel_path_str in exclude_paths
-        or any(rel_path_str.startswith(f"{p}/") for p in exclude_paths)
-    ):
-        return True
-    if unignore_paths and any(
-        rel_path_str == p or rel_path_str.startswith(f"{p}/") for p in unignore_paths
-    ):
-        return False
-    return not cs.IGNORE_PATTERNS.isdisjoint(dir_parts)
+__all__ = ["should_skip_path"]
