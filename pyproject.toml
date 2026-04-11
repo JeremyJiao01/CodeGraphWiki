@@ -41,6 +41,12 @@ treesitter-c = []
 semantic = []
 rag = []
 
+[project.urls]
+Homepage = "https://github.com/JeremyJiao01/Terrain-AI"
+Repository = "https://github.com/JeremyJiao01/Terrain-AI"
+Issues = "https://github.com/JeremyJiao01/Terrain-AI/issues"
+Changelog = "https://github.com/JeremyJiao01/Terrain-AI/blob/main/CHANGELOG.md"
+
 [project.scripts]
 terrain = "terrain.entrypoints.cli.cli:main"
 terrain-mcp = "terrain.entrypoints.mcp:main"

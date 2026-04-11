@@ -1,10 +1,10 @@
-# CodeGraphWiki - Product Website Design System
+# Terrain AI - Product Website Design System
 
 > Status: Active
 > Last Updated: 2026-04-05
 > Inspiration: [Trifecta](https://www.trifecta.xyz/) & SoulRich 2.0
 
-This document outlines the current design specifications, color palette, typography, and interactive elements used for the CodeGraphWiki landing page (`docs/site/`). It reflects a transition from a cold, purely functional aesthetic to a **lively, elegant, and artistic** "Light" theme.
+This document outlines the current design specifications, color palette, typography, and interactive elements used for the Terrain AI landing page (`docs/site/`). It reflects a transition from a cold, purely functional aesthetic to a **lively, elegant, and artistic** "Light" theme.
 
 ## 1. Design Philosophy
 

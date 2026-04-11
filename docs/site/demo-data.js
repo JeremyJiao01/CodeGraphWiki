@@ -1,5 +1,5 @@
 /**
- * CodeGraphWiki Demo Data
+ * Terrain AI Demo Data
  * Pre-loaded data for the interactive product website.
  * No API calls required. Now reflecting the actual terrain repo!
  */
