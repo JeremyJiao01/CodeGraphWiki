@@ -42,7 +42,7 @@ def test_resolve_call_fallback_to_func_ptr():
 
 import tree_sitter_c as tsc
 from pathlib import Path
-from tree_sitter import Language, Parser
+from tree_sitter import Language, Parser, Query
 from unittest.mock import MagicMock
 
 from terrain.foundation.parsers.call_processor import CallProcessor
@@ -83,7 +83,8 @@ def _make_call_processor(registry_entries: set[str] | None = None):
 
 def _make_func_ptr_queries(lang):
     """Build the func_ptr_assign query dict for tests."""
-    query = lang.query(
+    query = Query(
+        lang,
         '(assignment_expression '
         '  left: (field_expression field: (field_identifier) @field) '
         '  right: (identifier) @rhs) @assign'
