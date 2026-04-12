@@ -79,3 +79,69 @@ class GitChangeDetector:
         except (subprocess.SubprocessError, OSError) as e:
             logger.warning("git diff failed: {}", e)
             return None, current_head
+
+    def get_merge_commits(self, repo_path: Path, limit: int = 2) -> list[str]:
+        """Return the last *limit* merge commit SHAs (most recent first).
+
+        Returns an empty list if the repo has no merge commits or is not a
+        git repository.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "log", "--merges", f"-{limit}", "--format=%H"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                logger.debug("git log --merges failed: {}", result.stderr.strip())
+                return []
+            return [sha.strip() for sha in result.stdout.strip().splitlines() if sha.strip()]
+        except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+            logger.debug("get_merge_commits failed: {}", e)
+            return []
+
+    def get_changed_files_between(
+        self,
+        repo_path: Path,
+        from_commit: str,
+        to_commit: str,
+    ) -> list[Path] | None:
+        """Return files changed between *from_commit* and *to_commit*.
+
+        Returns:
+            - list of changed absolute :class:`Path` objects (may be empty)
+            - ``None`` if either commit is not in git history or the diff fails
+        """
+        try:
+            result = subprocess.run(
+                ["git", "diff", from_commit, to_commit, "--name-only"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode != 0:
+                logger.warning(
+                    "git diff {} {} failed (exit {}): {}",
+                    from_commit[:8],
+                    to_commit[:8],
+                    result.returncode,
+                    result.stderr.strip(),
+                )
+                return None
+
+            changed: list[Path] = []
+            for line in result.stdout.strip().splitlines():
+                line = line.strip()
+                if line:
+                    changed.append(repo_path / line)
+            return changed
+
+        except subprocess.TimeoutExpired as e:
+            logger.warning("git diff timed out: {}", e)
+            return None
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.warning("git diff failed: {}", e)
+            return None
