@@ -105,3 +105,127 @@ class TestMaybeIncrementalSync:
             await srv._maybe_incremental_sync(registry)
         # _cached_head stays None (no git = no-op)
         assert srv._cached_head is None
+
+    @pytest.mark.asyncio
+    async def test_load_services_called_after_vector_rebuild(self, tmp_path):
+        """After a successful vector rebuild, registry._load_services must be called
+        so that _semantic_service reflects the new vectors.pkl — not stale data."""
+        from terrain.entrypoints.mcp import server as srv
+
+        registry = self._make_registry(tmp_path, last_commit="old123")
+        srv._cached_head = None
+
+        # Create vectors.pkl so the rebuild branch is entered
+        vectors_path = tmp_path / "artifacts" / "vectors.pkl"
+        vectors_path.write_bytes(b"fake")
+
+        mock_result = MagicMock(files_reindexed=1, callers_reindexed=0, duration_ms=30.0)
+
+        def fake_get_changed_files(self_inner, repo_path, last_commit):
+            fake_file = tmp_path / "repo" / "bar.py"
+            fake_file.parent.mkdir(exist_ok=True)
+            fake_file.write_text("x = 1")
+            return [fake_file], "new789"
+
+        with (
+            patch(
+                "terrain.foundation.services.git_service.GitChangeDetector.get_current_head",
+                return_value="new789",
+            ),
+            patch(
+                "terrain.foundation.services.git_service.GitChangeDetector.get_changed_files",
+                fake_get_changed_files,
+            ),
+            patch(
+                "terrain.domains.core.graph.incremental_updater.IncrementalUpdater.run",
+                return_value=mock_result,
+            ),
+            patch(
+                "terrain.entrypoints.mcp.pipeline.build_vector_index",
+            ),
+        ):
+            await srv._maybe_incremental_sync(registry)
+
+        # _load_services must have been called with artifact_dir so that the
+        # in-memory semantic service is refreshed to point at the new vectors.
+        registry._load_services.assert_called_once_with(tmp_path / "artifacts")
+
+    @pytest.mark.asyncio
+    async def test_load_services_not_called_when_vector_rebuild_fails(self, tmp_path):
+        """If the vector rebuild throws, _load_services must NOT be called — the old
+        semantic index should remain intact (graceful degradation)."""
+        from terrain.entrypoints.mcp import server as srv
+
+        registry = self._make_registry(tmp_path, last_commit="old123")
+        srv._cached_head = None
+
+        vectors_path = tmp_path / "artifacts" / "vectors.pkl"
+        vectors_path.write_bytes(b"fake")
+
+        mock_result = MagicMock(files_reindexed=1, callers_reindexed=0, duration_ms=30.0)
+
+        def fake_get_changed_files(self_inner, repo_path, last_commit):
+            fake_file = tmp_path / "repo" / "baz.py"
+            fake_file.parent.mkdir(exist_ok=True)
+            fake_file.write_text("y = 2")
+            return [fake_file], "new999"
+
+        with (
+            patch(
+                "terrain.foundation.services.git_service.GitChangeDetector.get_current_head",
+                return_value="new999",
+            ),
+            patch(
+                "terrain.foundation.services.git_service.GitChangeDetector.get_changed_files",
+                fake_get_changed_files,
+            ),
+            patch(
+                "terrain.domains.core.graph.incremental_updater.IncrementalUpdater.run",
+                return_value=mock_result,
+            ),
+            patch(
+                "terrain.entrypoints.mcp.pipeline.build_vector_index",
+                side_effect=RuntimeError("embed failed"),
+            ),
+        ):
+            await srv._maybe_incremental_sync(registry)
+
+        registry._load_services.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_load_services_not_called_when_vectors_absent(self, tmp_path):
+        """If vectors.pkl doesn't exist (embedding disabled), _load_services is still
+        called after a successful incremental update so other services refresh."""
+        from terrain.entrypoints.mcp import server as srv
+
+        registry = self._make_registry(tmp_path, last_commit="old123")
+        srv._cached_head = None
+        # No vectors.pkl — embedding is disabled
+
+        mock_result = MagicMock(files_reindexed=1, callers_reindexed=0, duration_ms=10.0)
+
+        def fake_get_changed_files(self_inner, repo_path, last_commit):
+            fake_file = tmp_path / "repo" / "qux.py"
+            fake_file.parent.mkdir(exist_ok=True)
+            fake_file.write_text("z = 3")
+            return [fake_file], "newAAA"
+
+        with (
+            patch(
+                "terrain.foundation.services.git_service.GitChangeDetector.get_current_head",
+                return_value="newAAA",
+            ),
+            patch(
+                "terrain.foundation.services.git_service.GitChangeDetector.get_changed_files",
+                fake_get_changed_files,
+            ),
+            patch(
+                "terrain.domains.core.graph.incremental_updater.IncrementalUpdater.run",
+                return_value=mock_result,
+            ),
+        ):
+            await srv._maybe_incremental_sync(registry)
+
+        # When there are no vectors, _load_services should NOT be called
+        # (nothing new to reload for semantic search).
+        registry._load_services.assert_not_called()
