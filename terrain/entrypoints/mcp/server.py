@@ -237,6 +237,13 @@ async def _maybe_incremental_sync(registry: "MCPToolsRegistry") -> None:
                     build_vector_index, None, repo_path, vectors_path,
                     rebuild=True
                 )
+                # Refresh the in-memory semantic service so it points at the
+                # newly written vectors.pkl instead of the pre-sync index.
+                try:
+                    registry._load_services(artifact_dir)
+                    logger.info("Semantic service refreshed after vector rebuild")
+                except Exception as e:
+                    logger.warning("Semantic service reload failed (old index kept): {}", e)
             except Exception as e:
                 logger.warning("Vector index rebuild failed: {}", e)
 

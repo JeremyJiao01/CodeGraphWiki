@@ -595,6 +595,40 @@ class MCPToolsRegistry:
                     "required": ["target_function"],
                 },
             ),
+            # -----------------------------------------------------------------
+            # get_merge_diff: functions changed between two merge commits
+            # -----------------------------------------------------------------
+            ToolDefinition(
+                name="get_merge_diff",
+                description=(
+                    "Find which functions changed between two merge commits.\n\n"
+                    "Useful for understanding what a feature branch introduced or "
+                    "for reviewing the scope of a release.\n\n"
+                    "When called with no arguments, automatically uses the two most "
+                    "recent merge commits in the repository history. You may also "
+                    "supply explicit commit SHAs."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "from_merge": {
+                            "type": "string",
+                            "description": (
+                                "Starting merge commit SHA (exclusive). "
+                                "Defaults to the second-most-recent merge commit."
+                            ),
+                        },
+                        "to_merge": {
+                            "type": "string",
+                            "description": (
+                                "Ending merge commit SHA (inclusive). "
+                                "Defaults to the most-recent merge commit."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            ),
             # rebuild_embeddings: handler preserved, use `terrain index` instead.
             # -----------------------------------------------------------------
             # Hidden tools — handlers preserved, not exposed to MCP clients.
@@ -634,6 +668,7 @@ class MCPToolsRegistry:
             "get_config": self._handle_get_config,
             "reload_config": self._handle_reload_config,
             "trace_call_chain": self._handle_trace_call_chain,
+            "get_merge_diff": self._handle_get_merge_diff,
         }
         return handlers.get(name)
 
@@ -2458,3 +2493,76 @@ class MCPToolsRegistry:
             )
 
         return output
+
+    # -------------------------------------------------------------------------
+    # get_merge_diff — functions changed between two merge commits
+    # -------------------------------------------------------------------------
+
+    async def _handle_get_merge_diff(
+        self,
+        from_merge: str | None = None,
+        to_merge: str | None = None,
+    ) -> dict[str, Any]:
+        """Return functions that changed between two merge commits."""
+        self._require_active()
+
+        repo_path, artifact_dir = self._active_repo_path, self._active_artifact_dir
+
+        detector = _GCD()
+
+        # Auto-discover merge commits when not supplied
+        if from_merge is None or to_merge is None:
+            merges = await asyncio.to_thread(
+                detector.get_merge_commits, repo_path, 2
+            )
+            if len(merges) < 2:
+                raise ToolError(
+                    "Less than 2 merge commits found in history. "
+                    "Supply explicit from_merge and to_merge SHAs, or make sure "
+                    "the repository has at least two merge commits."
+                )
+            to_merge = to_merge or merges[0]
+            from_merge = from_merge or merges[1]
+
+        # Compute changed files
+        changed_files = await asyncio.to_thread(
+            detector.get_changed_files_between, repo_path, from_merge, to_merge
+        )
+        if changed_files is None:
+            raise ToolError(
+                f"One or both commits not in git history: '{from_merge[:12]}' / '{to_merge[:12]}'. "
+                "Make sure the SHAs exist in this repository."
+            )
+
+        # Convert absolute paths → relative paths for kuzu query
+        rel_paths: list[str] = []
+        for f in changed_files:
+            try:
+                rel_paths.append(str(f.relative_to(repo_path)))
+            except ValueError:
+                rel_paths.append(str(f))
+
+        functions: list[dict[str, Any]] = []
+        if rel_paths:
+            cypher = (
+                "MATCH (f:Function) WHERE f.path IN $paths "
+                "RETURN f.qualified_name AS qn, f.name AS fname, "
+                "f.path AS fpath, f.start_line AS start"
+            )
+            with self._temporary_ingestor() as ingestor:
+                rows = ingestor.query(cypher, {"paths": rel_paths})
+
+            for row in rows:
+                functions.append({
+                    "qualified_name": row.get("qn", ""),
+                    "name": row.get("fname", ""),
+                    "file_path": row.get("fpath", ""),
+                    "start_line": row.get("start"),
+                })
+
+        return {
+            "from_merge": from_merge,
+            "to_merge": to_merge,
+            "changed_files": len(rel_paths),
+            "functions": functions,
+        }
