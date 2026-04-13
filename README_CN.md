@@ -97,30 +97,10 @@ npx terrain-ai@latest --uninstall
 
 ### MCP 客户端配置
 
-添加到你的 MCP 客户端配置（Claude Code、Cursor、Windsurf 等）：
+复制以下内容发送给 Claude Code，agent 会自动完成安装：
 
-```json
-{
-  "mcpServers": {
-    "terrain": {
-      "command": "npx",
-      "args": ["-y", "terrain-ai@latest", "--server"]
-    }
-  }
-}
 ```
-
-Windows 平台：
-
-```json
-{
-  "mcpServers": {
-    "terrain": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "terrain-ai@latest", "--server"]
-    }
-  }
-}
+帮我安装 Terrain（一个代码索引 MCP 服务器）。请按以下步骤操作：1) 检查 Python >= 3.11 和 Node.js >= 18 是否已安装，如果没有请告诉我怎么安装。2) 运行 `npm install -g terrain-ai@latest` 安装 CLI。3) 运行 `pip install terrain-ai` 安装 Python 核心包。4) 运行 `claude mcp add terrain -- npx -y terrain-ai@latest --server` 注册 MCP 服务器。5) 运行 `terrain --version` 验证安装。
 ```
 
 ### 命令行工具 (`terrain`)

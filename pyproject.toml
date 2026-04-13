@@ -8,7 +8,7 @@ version = "2.1.9"
 description = "Give your AI a complete map of any codebase — function signatures, call graphs, and semantic search"
 readme = "README.md"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "loguru>=0.7",
     "tree-sitter>=0.22",

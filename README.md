@@ -7,6 +7,7 @@ English | [Chinese / CN](README_CN.md)
 [![npm](https://img.shields.io/npm/v/terrain-ai)](https://www.npmjs.com/package/terrain-ai)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org)
+[![Node](https://img.shields.io/badge/node-18+-green)](https://nodejs.org)
 
 Give your AI coding assistant a complete map of any codebase — function signatures, call graphs, and semantic search across every line of code.
 
@@ -36,6 +37,126 @@ find_api("authentication token refresh")
 ```
 
 Precise. Complete. Instant.
+
+---
+
+## Prerequisites
+
+Before installing Terrain, ensure you have the following:
+
+| Requirement | Minimum Version | Check Command |
+|---|---|---|
+| Python | 3.11+ | `python3 --version` |
+| pip | 20.0+ | `pip3 --version` |
+| Node.js | 18+ | `node --version` |
+| npm | 8+ | `npm --version` |
+| Git | 2.0+ | `git --version` |
+
+---
+
+## Full Installation
+
+### Step 1: Install the npm package
+
+The npm package provides the CLI wrapper and MCP server launcher:
+
+```bash
+npm install -g terrain-ai@latest
+```
+
+Verify installation:
+
+```bash
+npx terrain-ai@latest --version
+```
+
+### Step 2: Install the Python package (PyPI)
+
+The Python package provides the core indexing engine, graph database, and all language parsers.
+
+**Core installation** (includes C/C++, Python, JavaScript/TypeScript grammars):
+
+```bash
+pip install terrain-ai
+```
+
+**Full installation** (adds Rust, Go, Java, Scala, Lua grammars):
+
+```bash
+pip install "terrain-ai[treesitter-full]"
+```
+
+Verify installation:
+
+```bash
+terrain --version
+```
+
+### Step 3: Configure MCP server
+
+Register Terrain as a global MCP server for your AI coding assistant.
+
+**Option A: Automatic setup (recommended)**
+
+```bash
+npx terrain-ai@latest --setup
+```
+
+The setup wizard will:
+- Verify the Python package is installed (installs if missing)
+- Configure your LLM and embedding provider
+- Register Terrain as a global MCP server for Claude Code
+
+**Option B: Paste this into Claude Code**
+
+Copy the following text and send it to Claude Code, the agent will handle the rest:
+
+```
+Help me install Terrain (a code indexing MCP server). Please do the following: 1) Check that Python >= 3.11 and Node.js >= 18 are installed, if not tell me how to install them. 2) Run `npm install -g terrain-ai@latest` to install the CLI. 3) Run `pip install terrain-ai` to install the Python core. 4) Run `claude mcp add terrain -- npx -y terrain-ai@latest --server` to register the MCP server. 5) Verify with `terrain --version`.
+```
+
+### Step 4: Configure environment variables
+
+Copy the example environment file and fill in your API keys:
+
+```bash
+cp .env.example ~/.terrain/.env
+```
+
+Edit `~/.terrain/.env`:
+
+```bash
+# LLM Configuration (for API doc generation, description enhancement)
+# Priority: LLM_API_KEY > OPENAI_API_KEY > MOONSHOT_API_KEY (first match wins)
+LLM_API_KEY=sk-your-key-here
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o
+
+# Embedding (for semantic search - Alibaba Cloud DashScope / Qwen3)
+DASHSCOPE_API_KEY=sk-your-key-here
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/api/v1
+```
+
+Or run the interactive configuration wizard:
+
+```bash
+terrain config
+```
+
+### Step 5: Verify everything works
+
+```bash
+# Check version
+terrain --version
+
+# Check status (shows LLM, embedding, workspace info)
+terrain status
+
+# Start MCP server (test mode)
+terrain-mcp
+```
+
+---
 
 ## Quick Start
 
@@ -76,17 +197,6 @@ C/C++, Python, JavaScript/TypeScript, Rust, Go, Java, Scala, C#, PHP, Lua
 
 ## Reference
 
-### Install
-
-```bash
-# Recommended
-npx terrain-ai@latest --setup
-
-# Or via pip
-pip install terrain-ai
-terrain-mcp  # Start MCP server
-```
-
 ### Uninstall
 
 ```bash
@@ -95,35 +205,7 @@ npx terrain-ai@latest --uninstall
 
 Removes: Claude MCP registration, Python package, workspace data.
 
-### MCP Client Configuration
-
-Add to your MCP client config (Claude Code, Cursor, Windsurf, etc.):
-
-```json
-{
-  "mcpServers": {
-    "terrain": {
-      "command": "npx",
-      "args": ["-y", "terrain-ai@latest", "--server"]
-    }
-  }
-}
-```
-
-On Windows:
-
-```json
-{
-  "mcpServers": {
-    "terrain": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "terrain-ai@latest", "--server"]
-    }
-  }
-}
-```
-
-### CLI Tool (\`terrain\`)
+### CLI Tool (`terrain`)
 
 #### Workspace
 
@@ -357,6 +439,16 @@ pip install terrain-ai
 
 # With all language grammars (Rust, Go, Java, Scala, Lua)
 pip install "terrain-ai[treesitter-full]"
+```
+
+#### Install from npm
+
+```bash
+# Global install (recommended for CLI usage)
+npm install -g terrain-ai@latest
+
+# Or run directly with npx (no install needed)
+npx terrain-ai@latest --version
 ```
 
 #### Install from local source
