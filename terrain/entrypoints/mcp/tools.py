@@ -2551,23 +2551,28 @@ class MCPToolsRegistry:
             except ValueError:
                 rel_paths.append(str(f))
 
+        _SYMBOL_LABELS = [
+            "Function", "Method", "Class", "Interface", "Enum", "Type", "Union"
+        ]
+
         functions: list[dict[str, Any]] = []
         if rel_paths:
-            cypher = (
-                "MATCH (f:Function) WHERE f.path IN $paths "
-                "RETURN f.qualified_name AS qn, f.name AS fname, "
-                "f.path AS fpath, f.start_line AS start"
-            )
             with self._temporary_ingestor() as ingestor:
-                rows = ingestor.query(cypher, {"paths": rel_paths})
-
-            for row in rows:
-                functions.append({
-                    "qualified_name": row.get("qn", ""),
-                    "name": row.get("fname", ""),
-                    "file_path": row.get("fpath", ""),
-                    "start_line": row.get("start"),
-                })
+                for label in _SYMBOL_LABELS:
+                    cypher = (
+                        f"MATCH (f:{label}) WHERE f.path IN $paths "
+                        "RETURN f.qualified_name AS qn, f.name AS fname, "
+                        "f.path AS fpath, f.start_line AS start"
+                    )
+                    rows = ingestor.query(cypher, {"paths": rel_paths})
+                    for row in rows:
+                        functions.append({
+                            "qualified_name": row.get("qn", ""),
+                            "name": row.get("fname", ""),
+                            "file_path": row.get("fpath", ""),
+                            "start_line": row.get("start"),
+                            "node_type": label,
+                        })
 
         return {
             "from_merge": from_merge,

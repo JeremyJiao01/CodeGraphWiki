@@ -336,3 +336,154 @@ class TestHandleGetMergeDiff:
 
         # Verify branch was passed through to get_merge_commits
         mock_gmc.assert_called_once_with(repo_path, 2, "origin/main")
+
+    def test_method_nodes_included_in_results(self, tmp_path):
+        """Method nodes in changed files must appear in the returned symbols."""
+        from terrain.entrypoints.mcp.tools import MCPToolsRegistry
+
+        registry = self._make_registry(tmp_path)
+        repo_path = registry._active_repo_path
+
+        merge1 = "g" * 40
+        merge2 = "h" * 40
+        fake_changed = [repo_path / "src" / "models.py"]
+
+        def fake_query(cypher, params=None):
+            if "Method" in cypher:
+                return [
+                    {
+                        "qn": "src.models.MyClass.my_method",
+                        "fname": "my_method",
+                        "fpath": "src/models.py",
+                        "start": 20,
+                    }
+                ]
+            return []
+
+        with (
+            patch("terrain.entrypoints.mcp.tools._GCD.get_merge_commits", return_value=[merge2, merge1]),
+            patch("terrain.entrypoints.mcp.tools._GCD.get_changed_files_between", return_value=fake_changed),
+            patch.object(registry, "_temporary_ingestor") as mock_ctx,
+        ):
+            mock_ingestor = MagicMock()
+            mock_ingestor.query.side_effect = fake_query
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ingestor)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = asyncio.run(registry._handle_get_merge_diff())
+
+        symbols = result["functions"]
+        method_names = [s["name"] for s in symbols]
+        assert "my_method" in method_names, f"Method not in symbols: {symbols}"
+
+    def test_class_nodes_included_in_results(self, tmp_path):
+        """Class nodes in changed files must appear in the returned symbols."""
+        from terrain.entrypoints.mcp.tools import MCPToolsRegistry
+
+        registry = self._make_registry(tmp_path)
+        repo_path = registry._active_repo_path
+
+        merge1 = "i" * 40
+        merge2 = "j" * 40
+        fake_changed = [repo_path / "src" / "models.py"]
+
+        def fake_query(cypher, params=None):
+            if "Class" in cypher:
+                return [
+                    {
+                        "qn": "src.models.MyClass",
+                        "fname": "MyClass",
+                        "fpath": "src/models.py",
+                        "start": 5,
+                    }
+                ]
+            return []
+
+        with (
+            patch("terrain.entrypoints.mcp.tools._GCD.get_merge_commits", return_value=[merge2, merge1]),
+            patch("terrain.entrypoints.mcp.tools._GCD.get_changed_files_between", return_value=fake_changed),
+            patch.object(registry, "_temporary_ingestor") as mock_ctx,
+        ):
+            mock_ingestor = MagicMock()
+            mock_ingestor.query.side_effect = fake_query
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ingestor)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = asyncio.run(registry._handle_get_merge_diff())
+
+        symbols = result["functions"]
+        class_names = [s["name"] for s in symbols]
+        assert "MyClass" in class_names, f"Class not in symbols: {symbols}"
+
+    def test_node_type_field_present_in_results(self, tmp_path):
+        """Each symbol in results must include a node_type field."""
+        from terrain.entrypoints.mcp.tools import MCPToolsRegistry
+
+        registry = self._make_registry(tmp_path)
+        repo_path = registry._active_repo_path
+
+        merge1 = "k" * 40
+        merge2 = "l" * 40
+        fake_changed = [repo_path / "src" / "foo.py"]
+
+        def fake_query(cypher, params=None):
+            if "Function" in cypher:
+                return [{"qn": "src.foo.bar", "fname": "bar", "fpath": "src/foo.py", "start": 10}]
+            return []
+
+        with (
+            patch("terrain.entrypoints.mcp.tools._GCD.get_merge_commits", return_value=[merge2, merge1]),
+            patch("terrain.entrypoints.mcp.tools._GCD.get_changed_files_between", return_value=fake_changed),
+            patch.object(registry, "_temporary_ingestor") as mock_ctx,
+        ):
+            mock_ingestor = MagicMock()
+            mock_ingestor.query.side_effect = fake_query
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ingestor)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = asyncio.run(registry._handle_get_merge_diff())
+
+        for symbol in result["functions"]:
+            assert "node_type" in symbol, f"node_type missing from symbol: {symbol}"
+
+    def test_mixed_node_types_all_returned(self, tmp_path):
+        """Function, Method, and Class nodes from changed files all appear in results."""
+        from terrain.entrypoints.mcp.tools import MCPToolsRegistry
+
+        registry = self._make_registry(tmp_path)
+        repo_path = registry._active_repo_path
+
+        merge1 = "m" * 40
+        merge2 = "n" * 40
+        fake_changed = [repo_path / "src" / "mixed.py"]
+
+        def fake_query(cypher, params=None):
+            if "Function" in cypher:
+                return [{"qn": "src.mixed.my_func", "fname": "my_func", "fpath": "src/mixed.py", "start": 1}]
+            if "Method" in cypher:
+                return [{"qn": "src.mixed.MyClass.my_method", "fname": "my_method", "fpath": "src/mixed.py", "start": 10}]
+            if "Class" in cypher:
+                return [{"qn": "src.mixed.MyClass", "fname": "MyClass", "fpath": "src/mixed.py", "start": 5}]
+            return []
+
+        with (
+            patch("terrain.entrypoints.mcp.tools._GCD.get_merge_commits", return_value=[merge2, merge1]),
+            patch("terrain.entrypoints.mcp.tools._GCD.get_changed_files_between", return_value=fake_changed),
+            patch.object(registry, "_temporary_ingestor") as mock_ctx,
+        ):
+            mock_ingestor = MagicMock()
+            mock_ingestor.query.side_effect = fake_query
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ingestor)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = asyncio.run(registry._handle_get_merge_diff())
+
+        symbols = result["functions"]
+        names = {s["name"] for s in symbols}
+        assert "my_func" in names
+        assert "my_method" in names
+        assert "MyClass" in names
+        node_types = {s["node_type"] for s in symbols}
+        assert "Function" in node_types
+        assert "Method" in node_types
+        assert "Class" in node_types
