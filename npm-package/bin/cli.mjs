@@ -1626,7 +1626,7 @@ async function runUninstall() {
   } catch { /* claude CLI not available */ }
 
   // Detect installed skill files
-  const SKILL_NAMES = ["ask.md", "code-gen.md", "trace.md"];
+  const SKILL_NAMES = ["ask.md", "code-gen.md", "research.md", "trace.md"];
   const skillDir = join(homedir(), ".claude", "commands");
   const installedSkills = SKILL_NAMES.filter(f => existsSync(join(skillDir, f)));
 
