@@ -28,9 +28,12 @@
 **策略（按优先级）：**
 
 1. 如果问题明确提到了仓库名 → 调用 `switch_repository(repo_name="<名称>")`
-2. 如果未指定 → 调用 `get_repository_info()` 检查是否有活跃仓库
+2. **自动检测当前目录** → 调用 `list_repositories()` 获取已索引仓库列表，检查用户当前工作目录（CWD）是否匹配某个已索引仓库的 `repo_path`：
+   - 匹配到 → 调用 `switch_repository(repo_name="<匹配的仓库名>")` 自动切换
+   - 未匹配 → 进入下一步
+3. 如果未指定且 CWD 未匹配 → 调用 `get_repository_info()` 检查是否有活跃仓库
    - 有活跃仓库 → 默认针对该仓库回答
-   - 无活跃仓库 → 调用 `list_repositories()` 展示列表，请用户选择，然后停止
+   - 无活跃仓库 → 展示 `list_repositories()` 的结果，请用户选择，然后停止
 
 定位完成后，调用 `get_repository_info()` 确认服务状态，简要说明：
 
