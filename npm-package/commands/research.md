@@ -65,7 +65,8 @@
 3. 从研究主题中提取关键词（函数名、变量名、模块名、概念词）
 4. 逐行匹配 `index.md` 中的关键词字段（`|` 后面的部分）
    - 命中类型为 `[research]` 的条目 → 读取对应文件
-   - 命中普通知识条目 → 也读取，作为研究的起点信息
+   - 命中类型为 `[trace]` 的条目 → 也读取，调用链分析是研究的重要起点信息
+   - 命中普通知识条目（`/ask` 保存的）→ 也读取，作为研究的起点信息
 5. 命中研究报告 → 展示并询问用户：
 
 > *"📚 找到了之前对该主题的研究报告——"*
@@ -290,9 +291,11 @@ trace_call_chain(target_function="<qn>", max_depth=10)
 
 ---
 
-## 阶段 5：输出研究报告
+## 阶段 5：输出研究报告并生成 MD 文件
 
-将所有发现综合为以下格式：
+将所有发现综合为以下格式，**同时写入本地 MD 文件**：
+
+### 5.1 组织报告内容
 
 ```markdown
 # 研究报告：{研究主题}
@@ -339,6 +342,20 @@ A → B → C → D
 - `/code-gen <design>` — {基于本研究结果规划改动}
 ```
 
+### 5.2 生成本地 MD 文件
+
+**展示报告的同时，将完整报告写入本地文件——不需要用户确认。**
+
+1. 通过 `get_repository_info()` 获取 `artifact_dir`
+2. 确保 `{artifact_dir}/wiki/research/` 目录存在
+3. 将完整研究报告写入文件：
+   - 文件路径：`{artifact_dir}/wiki/research/research-{主题简称}.md`
+   - 主题简称：从研究主题中提取，使用小写英文 + 连字符（如 `vtop-assignments`、`error-handling`、`memory-lifecycle`）
+   - 如果同名文件已存在，覆盖
+4. 向用户展示文件路径：
+
+> *"📄 完整研究报告已保存到 `{artifact_dir}/wiki/research/research-{主题简称}.md`——你可以随时查阅或分享给团队。"*
+
 **展示报告后：**
 
 > *"本研究基于 N 次工具调用完成——覆盖了 M 个函数、K 个模块。*
@@ -346,24 +363,21 @@ A → B → C → D
 
 ---
 
-## 阶段 6：研究沉淀（报告保存到 workspace）
+## 阶段 6：研究沉淀（知识库索引更新）
 
-**展示报告后立即执行，不需要用户确认。**
+**阶段 5 已将报告写入 `{artifact_dir}/wiki/research/` 目录。本阶段负责更新知识库索引，不需要用户确认。**
 
-### 6.1 保存完整研究报告
+### 6.1 更新知识库索引
 
 1. 通过 `get_repository_info()` 获取 `artifact_dir`
 2. 确保 `{artifact_dir}/kb/` 目录存在
-3. 将阶段 5 的完整研究报告写入文件：
-   - 文件名：`research_{主题简称}.md`（如 `research_vtop_assignments.md`、`research_error_handling.md`）
-   - 路径：`{artifact_dir}/kb/research_{主题简称}.md`
-4. 在 `{artifact_dir}/kb/index.md` 中追加或更新一行：
+3. 在 `{artifact_dir}/kb/index.md` 中追加或更新一行：
    ```
-   - [research] [研究报告：{主题}](research_{主题简称}.md) | 关键词1, 关键词2, ...
+   - [research] [研究报告：{主题}](../wiki/research/research-{主题简称}.md) | 关键词1, 关键词2, ...
    ```
    - 关键词应覆盖：研究主题词、涉及的核心函数名、模块名
    - `[research]` 标记用于区分研究报告和 `/ask` 的知识条目
-   - 如果同名文件已存在，覆盖文件内容并更新 index 中对应行
+   - 如果同名条目已存在，更新 index 中对应行
 
 ### 6.2 提取知识条目（可选）
 
