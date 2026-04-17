@@ -6,8 +6,8 @@
     <title>Terrain AI — Your AI assistant finally understands your codebase.</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2">
+    <link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@400;500;600;700&family=Caveat:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
     <div class="dynamic-bg">
@@ -20,22 +20,27 @@
     <button id="langToggle" onclick="toggleLang()" style="display: none; position: fixed; top: 20px; right: 20px; z-index: 100; background: var(--color-bg-white); border: 1px solid var(--color-material-2); border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--color-text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: background 0.2s;" onmouseover="this.style.background='var(--color-material-1)'" onmouseout="this.style.background='var(--color-bg-white)'">EN / 中文</button>
 
     <div class="container stack">
+        <div class="paper-stamp" aria-hidden="true">scratch · no. 04</div>
+
         <!-- Hero Section -->
         <section class="hero">
             <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: var(--space-xxl); align-items: center;">
                 <div class="hero-content">
                     <h1 class="hero-fade-in" style="animation-delay: 0.2s;" data-i18n-html="hero_title">Your AI <i>finally</i> understands your codebase.</h1>
                     <p class="subtitle hero-fade-in" style="animation-delay: 0.6s;" data-i18n="hero_sub">A MCP turns your codebase into a knowledge graph, giving AI tools instant access to functions, call chains, and context.</p>
-                    <div class="hero-fade-in" style="margin-top: var(--space-xl); display: flex; gap: var(--space-md); align-items: center; flex-wrap: wrap; animation-delay: 1.0s;">
-                        <div style="display: inline-flex; align-items: center; padding: 10px 14px; background: var(--color-bg-white); color: var(--color-text-primary); border: 1px solid var(--color-material-2); border-radius: 6px; font-family: ui-monospace, monospace; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                            npx terrain-ai@latest --setup
-                            <button class="copy-btn" style="position: static; margin-left: 16px; background: transparent; color: var(--color-text-secondary); padding: 6px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--color-material-2)'" onmouseout="this.style.background='transparent'" onclick="copyToClipboard('npx terrain-ai@latest --setup')" title="Copy command">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                            </button>
+                    <div class="hero-fade-in hero-cta-group" style="margin-top: var(--space-xl); animation-delay: 1.0s;">
+                        <div style="display: flex; gap: var(--space-md); align-items: center; flex-wrap: wrap;">
+                            <div class="hero-cta-cmd" style="display: inline-flex; align-items: center; padding: 10px 14px; background: var(--color-bg-white); color: var(--color-text-primary); border: 1px solid var(--color-material-2); border-radius: 6px; font-family: ui-monospace, monospace; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                                npx terrain-ai@latest --setup
+                                <button class="copy-btn" style="position: static; margin-left: 16px; background: transparent; color: var(--color-text-secondary); padding: 6px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--color-material-2)'" onmouseout="this.style.background='transparent'" onclick="copyToClipboard('npx terrain-ai@latest --setup')" title="Copy command">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                            </div>
+                            <a href="https://github.com/JeremyJiao01/Terrain-AI" style="color: var(--color-text-primary); display: flex; align-items: center; padding: 8px; border-radius: 50%; transition: background 0.2s;" onmouseover="this.style.background='var(--color-material-2)'" onmouseout="this.style.background='transparent'" title="View on GitHub">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                            </a>
                         </div>
-                        <a href="https://github.com/JeremyJiao01/Terrain-AI" style="color: var(--color-text-primary); display: flex; align-items: center; padding: 8px; border-radius: 50%; transition: background 0.2s;" onmouseover="this.style.background='var(--color-material-2)'" onmouseout="this.style.background='transparent'" title="View on GitHub">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                        </a>
+                        <span class="hand-note-cta" data-i18n="cta_caveat">↳ that's the whole install. one line.</span>
                     </div>
                 </div>
 
@@ -56,6 +61,7 @@
             <p>
 <span data-i18n="pain_text">"Most agents re-read your entire codebase every time they start a task — the same files, the same functions, the same slow discovery loop. Terrain indexes it once into a knowledge graph, and every session after that already knows where everything is."</span>
             </p>
+            <span class="hand-caveat" data-i18n="pain_caveat">— observed on real repos. not marketed.</span>
         </section>
 
         <!-- Features Stack -->
@@ -66,7 +72,7 @@
             
             <div class="card-stack-container" id="featuresStack">
                 <!-- Interactive 1: Pipeline Animation -->
-                <div class="stack-card">
+                <div class="stack-card" data-page="01 / 03">
                     <div style="margin-bottom: var(--space-xl); display: flex; justify-content: space-between; align-items: flex-end;">
                         <div>
                             <h2 style="margin-bottom: 0;" data-i18n-html="card1_title">One quiet read,<br>and nothing is forgotten.</h2>
@@ -140,7 +146,7 @@
                 </div>
 
                 <!-- Interactive 2: Trace Call Investigation -->
-                <div class="stack-card">
+                <div class="stack-card" data-page="02 / 03">
                     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--space-md);">
                         <div>
                             <h2 style="margin-bottom: 0;" data-i18n-html="card2_title">An error is a whisper —<br>here, it becomes a sentence.</h2>
@@ -214,7 +220,7 @@
                 </div>
 
                 <!-- Interactive 3: /code-gen Workflow -->
-                <div class="stack-card">
+                <div class="stack-card" data-page="03 / 03">
                     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--space-md);">
                         <div>
                             <h2 style="margin-bottom: 0;" data-i18n-html="card3_title">Describe what to build,<br>it knows where to begin.</h2>
@@ -297,36 +303,238 @@
             </div>
         </section>
 
-        <!-- Quick Start -->
-        <section class="quick-start reveal">
-            <h2 data-i18n="qs_title">Quick Start</h2>
-            <p style="margin-bottom: var(--space-xl);" data-i18n="qs_sub">Two steps to supercharge your AI assistant.</p>
+        <!-- Team Flow — one index, shared across the whole team -->
+        <section class="team-flow reveal">
+            <h2 data-i18n-html="team_title">One index, shared with your <i>whole team</i>.</h2>
+            <p class="section-sub" data-i18n="team_sub">One person runs <code>terrain index</code>. Everyone else links the result — no redundant build, no copied artifacts. On a 3M-line monorepo, your teammates are ready in milliseconds.</p>
 
-            <h3 style="color: var(--color-bg-white);" data-i18n="qs_step1">Step 1: Install & Init</h3>
-            <div class="code-block">
-                <button class="copy-btn" onclick="copyToClipboard('npx terrain-ai@latest --setup')">Copy</button>
-                <code style="background: transparent; color: #9CDCFE; border: none; padding: 0;">npx terrain-ai@latest --setup</code>
+            <div class="team-diagram-wrap">
+                <span class="team-hand-note tn-above-source">indexed once ↓</span>
+                <span class="team-hand-note tn-right">~200ms per teammate</span>
+                <svg viewBox="0 0 780 300" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <!-- Dashed arrows (drawn first, behind laptops) -->
+                    <g fill="none" stroke-width="2" stroke-linecap="round" stroke-dasharray="5 5">
+                        <path d="M 360 92 C 280 155, 210 190, 135 220" stroke="#FF5C39"/>
+                        <path d="M 390 96 C 390 150, 390 180, 390 220" stroke="#00C48C"/>
+                        <path d="M 420 92 C 500 155, 570 190, 645 220" stroke="#2B5AFA"/>
+                    </g>
+
+                    <!-- Source laptop (top center) -->
+                    <g transform="translate(310, 20)">
+                        <rect x="0" y="0" width="160" height="90" rx="6"
+                              fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.8"/>
+                        <!-- Mini graph inside screen -->
+                        <g stroke="#2B5AFA" stroke-width="1.2" fill="#2B5AFA" opacity="0.85">
+                            <circle cx="40" cy="30" r="3"/>
+                            <circle cx="80" cy="20" r="3"/>
+                            <circle cx="120" cy="32" r="3"/>
+                            <circle cx="56" cy="56" r="3"/>
+                            <circle cx="100" cy="62" r="3"/>
+                            <circle cx="78" cy="78" r="3"/>
+                        </g>
+                        <g stroke="#00C48C" stroke-width="1" fill="none" opacity="0.7">
+                            <line x1="40" y1="30" x2="80" y2="20"/>
+                            <line x1="80" y1="20" x2="120" y2="32"/>
+                            <line x1="40" y1="30" x2="56" y2="56"/>
+                            <line x1="120" y1="32" x2="100" y2="62"/>
+                            <line x1="56" y1="56" x2="100" y2="62"/>
+                            <line x1="56" y1="56" x2="78" y2="78"/>
+                            <line x1="100" y1="62" x2="78" y2="78"/>
+                        </g>
+                        <!-- Base wedge -->
+                        <path d="M -10 92 L 170 92 L 178 104 L -18 104 Z"
+                              fill="#F0EFEA" stroke="#1A1A1A" stroke-width="1.5"/>
+                        <text x="80" y="128" text-anchor="middle"
+                              font-family="ui-monospace, monospace" font-size="11"
+                              fill="#1A1A1A" font-weight="600">terrain index</text>
+                    </g>
+
+                    <!-- Teammate laptops (bottom row) -->
+                    <g transform="translate(55, 220)">
+                        <rect x="0" y="0" width="150" height="58" rx="5"
+                              fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.5"/>
+                        <path d="M 58 24 L 92 24 M 75 14 L 75 34" stroke="#FF5C39" stroke-width="2" stroke-linecap="round"/>
+                        <circle cx="75" cy="24" r="11" fill="none" stroke="#FF5C39" stroke-width="1.5" opacity="0.5"/>
+                        <path d="M -8 60 L 158 60 L 165 70 L -15 70 Z"
+                              fill="#F0EFEA" stroke="#1A1A1A" stroke-width="1.3"/>
+                        <text x="75" y="90" text-anchor="middle"
+                              font-family="ui-monospace, monospace" font-size="10"
+                              fill="#555">teammate A</text>
+                    </g>
+
+                    <g transform="translate(315, 220)">
+                        <rect x="0" y="0" width="150" height="58" rx="5"
+                              fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.5"/>
+                        <path d="M 58 24 L 92 24 M 75 14 L 75 34" stroke="#00C48C" stroke-width="2" stroke-linecap="round"/>
+                        <circle cx="75" cy="24" r="11" fill="none" stroke="#00C48C" stroke-width="1.5" opacity="0.5"/>
+                        <path d="M -8 60 L 158 60 L 165 70 L -15 70 Z"
+                              fill="#F0EFEA" stroke="#1A1A1A" stroke-width="1.3"/>
+                        <text x="75" y="90" text-anchor="middle"
+                              font-family="ui-monospace, monospace" font-size="10"
+                              fill="#555">teammate B</text>
+                    </g>
+
+                    <g transform="translate(575, 220)">
+                        <rect x="0" y="0" width="150" height="58" rx="5"
+                              fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.5"/>
+                        <path d="M 58 24 L 92 24 M 75 14 L 75 34" stroke="#2B5AFA" stroke-width="2" stroke-linecap="round"/>
+                        <circle cx="75" cy="24" r="11" fill="none" stroke="#2B5AFA" stroke-width="1.5" opacity="0.5"/>
+                        <path d="M -8 60 L 158 60 L 165 70 L -15 70 Z"
+                              fill="#F0EFEA" stroke="#1A1A1A" stroke-width="1.3"/>
+                        <text x="75" y="90" text-anchor="middle"
+                              font-family="ui-monospace, monospace" font-size="10"
+                              fill="#555">teammate C</text>
+                    </g>
+                </svg>
             </div>
 
-            <h3 style="color: var(--color-bg-white); margin-top: var(--space-xl);" data-i18n="qs_step2">Step 2: Configure MCP</h3>
-            <p style="font-size: 15px; margin-bottom: var(--space-md);" data-i18n="qs_step2_desc">Add to your Claude Code / Cursor / Windsurf settings:</p>
-            <div class="code-block">
-                <button class="copy-btn" onclick="copyToClipboard(document.getElementById('mcpJson').innerText)">Copy</button>
-                <pre id="mcpJson" style="color: #CE9178; font-size: 14px; margin: 0;">{
-  "mcpServers": {
-    "terrain-ai": {
-      "command": "npx",
-      "args": ["-y", "terrain-ai@latest", "--server"]
-    }
-  }
-}</pre>
-            </div>
-            
-            <div style="margin-top: var(--space-xxxl); border-top: 1px solid rgba(255,255,255,0.1); padding-top: var(--space-xl);">
-                <h3 style="color: var(--color-bg-white);" data-i18n="qs_langs">Supported Languages</h3>
-                <div style="display: flex; flex-wrap: wrap; gap: var(--space-lg); margin-top: var(--space-md); color: var(--color-material-3);">
-                    <span>Python</span> • <span>C / C++</span> • <span>JS / TS</span> • <span>Rust</span> • <span>Go</span> • <span>Java</span> • <span>C#</span>
+            <div class="team-cmd-pair">
+                <div class="team-cmd-block">
+                    <div class="team-cmd-label">on one machine</div>
+                    <div class="team-cmd-code">terrain index <span class="path">/path/to/repo</span></div>
                 </div>
+                <div class="team-cmd-block">
+                    <div class="team-cmd-label">on every teammate's</div>
+                    <div class="team-cmd-code">terrain link <span class="path">/path/to/repo</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Incremental — it stays fresh -->
+        <section class="incremental-strip reveal">
+            <div class="prose">
+                <h2 data-i18n-html="incr_title">And it <i>stays fresh</i>.</h2>
+                <p data-i18n="incr_sub"><code>terrain index -i</code> reads the git diff and re-parses only what changed. Commit your feature, the graph is up-to-date before your AI finishes reading the error.</p>
+                <span class="hand-tag" data-i18n="incr_tag">↳ no cold rebuilds, no background daemon.</span>
+            </div>
+            <div class="incr-mini-term" aria-hidden="true">
+<span class="prompt">❯</span> git commit -m <span class="muted">"fix: retry on 429"</span>
+<span class="muted">[feat 3a4f2c1] fix: retry on 429</span>
+<span class="muted"> 2 files changed, 18 insertions(+), 4 deletions(-)</span>
+
+<span class="prompt">❯</span> terrain index <span class="delta">-i</span>
+<span class="muted">reading git diff...</span>
+<span class="delta">↻</span> re-parse  <span class="delta">api/retry.py</span>    <span class="time">62ms</span>
+<span class="delta">↻</span> re-parse  <span class="delta">api/client.py</span>   <span class="time">88ms</span>
+<span class="muted">cascade</span> api-docs + embeddings     <span class="time">92ms</span>
+<span class="ok">✓</span> graph synced                <span class="time">242ms total</span>
+            </div>
+        </section>
+
+        <!-- Try Asking — concrete example queries -->
+        <section class="try-asking reveal">
+            <div class="try-asking-header">
+                <h2 data-i18n-html="try_title">After install, try <i>asking</i>...</h2>
+                <p data-i18n="try_sub">These are actual questions. The answers come back already structured — function names, file:line, call chains. No more "let me grep around."</p>
+            </div>
+
+            <div class="qa-list">
+                <div class="qa-row">
+                    <div class="qa-question">
+                        <span class="quoted">"Where does <code>refresh_access_token</code> get called?"</span>
+                        <div class="qa-tool-tag">→ find_callers</div>
+                    </div>
+                    <div class="qa-answer"><span class="k-fn">refresh_access_token</span> <span class="k-path">auth/token_manager.c:187</span>
+<span class="k-meta">Called by</span> <span class="k-hit">3 functions</span><span class="k-arrow"> →</span>
+  session_heartbeat     <span class="k-path">net/session.c:412</span>
+  event_loop_tick       <span class="k-path">core/loop.c:88</span>
+  http_retry_handler    <span class="k-path">net/http.c:245</span></div>
+                </div>
+
+                <div class="qa-row">
+                    <div class="qa-question">
+                        <span class="quoted">"Trace how a WebSocket message reaches the event loop."</span>
+                        <div class="qa-tool-tag">→ trace_call_chain</div>
+                    </div>
+                    <div class="qa-answer"><span class="k-fn">ws_on_message</span> <span class="k-path">net/ws.c:312</span>
+<span class="k-arrow">↑</span> dispatch_frame        <span class="k-path">net/ws.c:278</span>
+<span class="k-arrow">↑</span> read_ready_handler    <span class="k-path">net/reader.c:145</span>
+<span class="k-arrow">↑</span> <span class="k-fn">event_loop_tick</span>       <span class="k-path">core/loop.c:88</span>  <span class="k-hit">← entry point</span></div>
+                </div>
+
+                <div class="qa-row">
+                    <div class="qa-question">
+                        <span class="quoted">"What handles JSON parsing here?"</span>
+                        <div class="qa-tool-tag">→ find_api (semantic)</div>
+                    </div>
+                    <div class="qa-answer"><span class="k-meta">3 results — ranked by relevance</span>
+<span class="k-hit">1.</span> <span class="k-fn">parse_json_value</span>  <span class="k-path">util/json.c:42</span>
+   recursive descent, handles nested objects
+<span class="k-hit">2.</span> <span class="k-fn">decode_jwt_payload</span> <span class="k-path">auth/jwt.c:98</span>
+   base64 → JSON, uses <span class="k-fn">parse_json_value</span>
+<span class="k-hit">3.</span> <span class="k-fn">load_config</span>        <span class="k-path">cli/config.c:221</span></div>
+                </div>
+
+                <div class="qa-row">
+                    <div class="qa-question">
+                        <span class="quoted">"Which functions touch the <code>SESSION_STORE</code> global?"</span>
+                        <div class="qa-tool-tag">→ find_symbol_in_docs</div>
+                    </div>
+                    <div class="qa-answer"><span class="k-meta">SESSION_STORE — referenced by 5 functions</span>
+<span class="k-arrow">·</span> <span class="k-fn">session_create</span>     <span class="k-path">net/session.c:203</span>   <span class="k-meta">(writes)</span>
+<span class="k-arrow">·</span> <span class="k-fn">session_lookup</span>     <span class="k-path">net/session.c:256</span>   <span class="k-meta">(reads)</span>
+<span class="k-arrow">·</span> <span class="k-fn">session_evict</span>      <span class="k-path">net/session.c:321</span>   <span class="k-meta">(writes)</span>
+<span class="k-arrow">·</span> <span class="k-fn">heartbeat_sweep</span>    <span class="k-path">net/heart.c:77</span>     <span class="k-meta">(reads)</span>
+<span class="k-arrow">·</span> <span class="k-fn">on_shutdown</span>        <span class="k-path">core/shutdown.c:44</span> <span class="k-meta">(clears)</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Start — recipe card torn from the notebook -->
+        <section class="quick-start reveal">
+            <h2 data-i18n-html="qs_title">Two steps, one <i>minute</i>.</h2>
+            <p class="qs-lede" data-i18n="qs_sub">No daemon to babysit, no cloud account, no API key required for the base install. Just a CLI and an MCP server.</p>
+
+            <div class="qs-step step-1">
+                <div class="qs-step-num" aria-hidden="true">1</div>
+                <div>
+                    <h3 data-i18n="qs_step1">Install &amp; init</h3>
+                    <p class="qs-step-desc" data-i18n="qs_step1_desc">Installs the Python engine, registers Terrain as an MCP server, and (optionally) asks for your LLM / embedding keys.</p>
+                    <div class="qs-code">
+                        <button class="copy-btn" onclick="copyToClipboard('npx terrain-ai@latest --setup')">Copy</button>
+<pre><span class="tok-punct">$</span> <span class="tok-cmd">npx</span> terrain-ai@latest <span class="tok-flag">--setup</span></pre>
+                    </div>
+                    <span class="qs-hint" data-i18n="qs_step1_hint">↳ one command. no kube, no docker, no SaaS account.</span>
+                </div>
+            </div>
+
+            <div class="qs-connector" data-i18n="qs_connector">then ↓</div>
+
+            <div class="qs-step step-2">
+                <div class="qs-step-num" aria-hidden="true">2</div>
+                <div>
+                    <h3 data-i18n="qs_step2">Point your AI at it</h3>
+                    <p class="qs-step-desc" data-i18n="qs_step2_desc">Add this block to Claude Code / Cursor / Windsurf MCP settings. That's it — your AI can now read the graph.</p>
+                    <div class="qs-code">
+                        <button class="copy-btn" onclick="copyToClipboard(document.getElementById('mcpJson').innerText)">Copy</button>
+<pre id="mcpJson"><span class="tok-punct">{</span>
+  <span class="tok-key">"mcpServers"</span><span class="tok-punct">:</span> <span class="tok-punct">{</span>
+    <span class="tok-key">"terrain-ai"</span><span class="tok-punct">:</span> <span class="tok-punct">{</span>
+      <span class="tok-key">"command"</span><span class="tok-punct">:</span> <span class="tok-str">"npx"</span><span class="tok-punct">,</span>
+      <span class="tok-key">"args"</span><span class="tok-punct">:</span> <span class="tok-punct">[</span><span class="tok-str">"-y"</span><span class="tok-punct">,</span> <span class="tok-str">"terrain-ai@latest"</span><span class="tok-punct">,</span> <span class="tok-str">"--server"</span><span class="tok-punct">]</span>
+    <span class="tok-punct">}</span>
+  <span class="tok-punct">}</span>
+<span class="tok-punct">}</span></pre>
+                    </div>
+                    <span class="qs-hint" data-i18n="qs_step2_hint">↳ paste into .claude/settings, .cursor/mcp.json, wherever.</span>
+                </div>
+            </div>
+
+            <div class="qs-langs">
+                <div class="qs-langs-label" data-i18n="qs_langs">Works with</div>
+                <div class="qs-lang-chips">
+                    <span class="qs-lang-chip">Python</span>
+                    <span class="qs-lang-chip">C / C++</span>
+                    <span class="qs-lang-chip">JS / TS</span>
+                    <span class="qs-lang-chip">Rust</span>
+                    <span class="qs-lang-chip">Go</span>
+                    <span class="qs-lang-chip">Java</span>
+                    <span class="qs-lang-chip">Scala</span>
+                    <span class="qs-lang-chip">C#</span>
+                    <span class="qs-lang-chip">PHP</span>
+                    <span class="qs-lang-chip">Lua</span>
+                </div>
+                <span class="qs-signoff" data-i18n="qs_signoff">— now go index a real repo. →</span>
             </div>
         </section>
 
