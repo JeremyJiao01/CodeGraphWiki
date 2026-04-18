@@ -260,6 +260,347 @@ def _resolve_artifact_dir(ws_artifact_dir: Path) -> Path:
     return ws_artifact_dir
 
 
+# ---------------------------------------------------------------------------
+# find_symbol_usage helpers (slice 1/3)
+#
+# These walk the tree-sitter AST of every C/C++ source file under the active
+# repository to (a) resolve a short or qualified symbol name to exactly one
+# variable declaration and (b) list every read usage. Variable nodes are not
+# yet indexed in the graph, so everything is computed on demand.
+# ---------------------------------------------------------------------------
+
+# Source-file extensions we scan for variable declarations/usages.
+_SYMBOL_USAGE_C_EXTS: dict[str, str] = {
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".hpp": "cpp",
+    ".hh": "cpp",
+    ".hxx": "cpp",
+}
+
+# Parser cache — load_parsers() is expensive (reads tree-sitter shared libs),
+# so cache the C/C++ parsers across calls.
+_SYMBOL_USAGE_PARSERS: dict[str, Any] | None = None
+
+
+def _symbol_usage_get_parsers() -> dict[str, Any]:
+    global _SYMBOL_USAGE_PARSERS
+    if _SYMBOL_USAGE_PARSERS is None:
+        from terrain.foundation.parsers.parser_loader import load_parsers
+        from terrain.foundation.types import constants as cs
+
+        parsers, _queries = load_parsers()
+        _SYMBOL_USAGE_PARSERS = {
+            "c": parsers.get(cs.SupportedLanguage.C),
+            "cpp": parsers.get(cs.SupportedLanguage.CPP),
+        }
+    return _SYMBOL_USAGE_PARSERS
+
+
+def _symbol_usage_module_qn(repo_path: Path, file_path: Path) -> str:
+    rel = file_path.relative_to(repo_path)
+    return ".".join([repo_path.name, *rel.with_suffix("").parts])
+
+
+def _symbol_usage_enclosing_function(node) -> tuple[str, int] | None:
+    """Walk up to the nearest function_definition; return (name, start_line)."""
+    parent = node.parent
+    while parent is not None:
+        if parent.type == "function_definition":
+            declarator = parent.child_by_field_name("declarator")
+            # Unwrap pointer_declarator / parenthesized_declarator layers.
+            name_node = declarator
+            while name_node is not None and name_node.type not in (
+                "identifier",
+                "field_identifier",
+                "qualified_identifier",
+            ):
+                inner = name_node.child_by_field_name("declarator")
+                if inner is None:
+                    break
+                name_node = inner
+            if name_node is not None and name_node.type in (
+                "identifier",
+                "field_identifier",
+            ):
+                return (
+                    name_node.text.decode("utf-8", errors="replace"),
+                    parent.start_point[0] + 1,
+                )
+            return ("", parent.start_point[0] + 1)
+        parent = parent.parent
+    return None
+
+
+def _symbol_usage_is_static_decl(decl_node) -> bool:
+    """Check whether a `declaration` node carries a `static` storage class."""
+    for i in range(decl_node.named_child_count):
+        child = decl_node.named_child(i)
+        if child.type == "storage_class_specifier":
+            if child.text.decode("utf-8", errors="replace").strip() == "static":
+                return True
+    return False
+
+
+def _symbol_usage_declarator_identifier(declarator_node):
+    """Unwrap pointer/array/function layers to reach the inner identifier."""
+    cur = declarator_node
+    while cur is not None:
+        if cur.type == "identifier":
+            return cur
+        if cur.type == "function_declarator":
+            # This is a function, not a variable — bail out.
+            return None
+        inner = cur.child_by_field_name("declarator")
+        if inner is None:
+            return None
+        cur = inner
+    return None
+
+
+def _symbol_usage_collect_declarations(
+    root,
+    simple_name: str,
+    module_qn: str,
+    path: str,
+) -> list[dict[str, Any]]:
+    """Return all declarations of ``simple_name`` found under ``root``.
+
+    Each entry carries ``kind`` — one of ``global``, ``static_local``,
+    ``enum``, ``typedef``, ``function``, ``param``. Only ``global`` and
+    ``static_local`` are accepted as variable targets further up the stack.
+    """
+    out: list[dict[str, Any]] = []
+
+    def _qn(base: str, name: str) -> str:
+        return f"{base}.{name}"
+
+    def _visit(node):
+        ntype = node.type
+
+        if ntype == "enumerator":
+            name_node = node.child_by_field_name("name")
+            if name_node is not None and name_node.text.decode(
+                "utf-8", errors="replace"
+            ) == simple_name:
+                out.append({
+                    "kind": "enum",
+                    "name": simple_name,
+                    "qualified_name": _qn(module_qn, simple_name),
+                    "path": path,
+                    "line": name_node.start_point[0] + 1,
+                })
+
+        elif ntype == "type_definition":
+            # typedef ... <name>;
+            for i in range(node.named_child_count):
+                child = node.named_child(i)
+                ident = _symbol_usage_declarator_identifier(child)
+                if ident is not None and ident.text.decode(
+                    "utf-8", errors="replace"
+                ) == simple_name:
+                    out.append({
+                        "kind": "typedef",
+                        "name": simple_name,
+                        "qualified_name": _qn(module_qn, simple_name),
+                        "path": path,
+                        "line": ident.start_point[0] + 1,
+                    })
+                    break
+
+        elif ntype == "function_definition":
+            declarator = node.child_by_field_name("declarator")
+            # Unwrap to function_declarator → identifier.
+            cur = declarator
+            while cur is not None and cur.type != "function_declarator":
+                cur = cur.child_by_field_name("declarator")
+            if cur is not None:
+                name_node = cur.child_by_field_name("declarator")
+                if (
+                    name_node is not None
+                    and name_node.type == "identifier"
+                    and name_node.text.decode("utf-8", errors="replace") == simple_name
+                ):
+                    out.append({
+                        "kind": "function",
+                        "name": simple_name,
+                        "qualified_name": _qn(module_qn, simple_name),
+                        "path": path,
+                        "line": name_node.start_point[0] + 1,
+                    })
+
+        elif ntype == "declaration":
+            # Could be a variable declaration or a function prototype.
+            declarator_field = node.child_by_field_name("declarator")
+            declarators = []
+            # A declaration may have multiple init_declarator children
+            # (e.g. `int a, b;`), but tree-sitter exposes only one via
+            # ``declarator``. Walk named children of type init_declarator or
+            # identifier to find all candidates.
+            for i in range(node.named_child_count):
+                child = node.named_child(i)
+                if child.type in ("init_declarator", "identifier", "pointer_declarator", "array_declarator"):
+                    declarators.append(child)
+            if declarator_field is not None and declarator_field not in declarators:
+                declarators.append(declarator_field)
+
+            is_static = _symbol_usage_is_static_decl(node)
+            enclosing = _symbol_usage_enclosing_function(node)
+
+            for d in declarators:
+                # Skip function prototypes (declarator tree contains function_declarator).
+                if d.type == "function_declarator":
+                    continue
+                # For init_declarator, dig into its .declarator field.
+                target = d
+                if d.type == "init_declarator":
+                    target = d.child_by_field_name("declarator") or d
+                ident = _symbol_usage_declarator_identifier(target)
+                if ident is None:
+                    continue
+                if ident.text.decode("utf-8", errors="replace") != simple_name:
+                    continue
+
+                if enclosing is None:
+                    kind = "global"
+                    qn = _qn(module_qn, simple_name)
+                else:
+                    if is_static:
+                        kind = "static_local"
+                        qn = f"{module_qn}.{enclosing[0]}.{simple_name}"
+                    else:
+                        # Non-static local — not a variable symbol worth tracking.
+                        continue
+                out.append({
+                    "kind": kind,
+                    "name": simple_name,
+                    "qualified_name": qn,
+                    "path": path,
+                    "line": ident.start_point[0] + 1,
+                })
+
+        elif ntype == "parameter_declaration":
+            declarator = node.child_by_field_name("declarator")
+            ident = _symbol_usage_declarator_identifier(declarator) if declarator else None
+            if ident is not None and ident.text.decode(
+                "utf-8", errors="replace"
+            ) == simple_name:
+                out.append({
+                    "kind": "param",
+                    "name": simple_name,
+                    "qualified_name": _qn(module_qn, simple_name),
+                    "path": path,
+                    "line": ident.start_point[0] + 1,
+                })
+
+        for i in range(node.named_child_count):
+            _visit(node.named_child(i))
+
+    _visit(root)
+    return out
+
+
+def _symbol_usage_identifier_role(ident_node) -> str:
+    """Classify an identifier node as ``decl``, ``write``, ``skip``, or ``read``."""
+    parent = ident_node.parent
+    if parent is None:
+        return "skip"
+    ptype = parent.type
+
+    if ptype == "init_declarator":
+        if parent.child_by_field_name("declarator") == ident_node:
+            return "decl"
+    if ptype in ("declaration", "parameter_declaration"):
+        if parent.child_by_field_name("declarator") == ident_node:
+            return "decl"
+    if ptype == "function_declarator":
+        if parent.child_by_field_name("declarator") == ident_node:
+            return "decl"
+    if ptype == "pointer_declarator":
+        # part of a declarator unwrap — walk up one more level
+        grand = parent.parent
+        if grand is not None and grand.type in (
+            "init_declarator",
+            "declaration",
+            "parameter_declaration",
+            "function_declarator",
+        ):
+            if grand.child_by_field_name("declarator") == parent:
+                return "decl"
+    if ptype == "enumerator":
+        if parent.child_by_field_name("name") == ident_node:
+            return "decl"
+    if ptype == "field_expression":
+        if parent.child_by_field_name("field") == ident_node:
+            return "skip"
+    if ptype == "call_expression":
+        if parent.child_by_field_name("function") == ident_node:
+            return "skip"
+    if ptype == "assignment_expression":
+        if parent.child_by_field_name("left") == ident_node:
+            return "write"
+    if ptype == "pointer_expression":
+        op = parent.child_by_field_name("operator")
+        if op is not None and op.text.decode("utf-8", errors="replace") == "&":
+            return "skip"
+
+    return "read"
+
+
+def _symbol_usage_collect_reads(
+    root,
+    simple_name: str,
+    source_lines: list[str],
+    module_qn: str,
+    path: str,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+
+    def _visit(node):
+        if node.type == "identifier" and node.text.decode(
+            "utf-8", errors="replace"
+        ) == simple_name:
+            role = _symbol_usage_identifier_role(node)
+            if role == "read":
+                line_no = node.start_point[0] + 1
+                enclosing = _symbol_usage_enclosing_function(node)
+                enclosing_qn = (
+                    f"{module_qn}.{enclosing[0]}" if enclosing else module_qn
+                )
+                context = ""
+                if 0 < line_no <= len(source_lines):
+                    raw = source_lines[line_no - 1].strip()
+                    context = raw if len(raw) <= 200 else raw[:199] + "…"
+                out.append({
+                    "mode": "read",
+                    "location": f"{path}:{line_no}",
+                    "enclosing_function": enclosing_qn,
+                    "context": context,
+                })
+        for i in range(node.named_child_count):
+            _visit(node.named_child(i))
+
+    _visit(root)
+    return out
+
+
+def _symbol_usage_list_source_files(repo: Path) -> list[tuple[Path, str]]:
+    """Return sorted list of (abs_path, language_key) for C/C++ sources in repo."""
+    files: list[tuple[Path, str]] = []
+    seen: set[Path] = set()
+    for ext, lang in _SYMBOL_USAGE_C_EXTS.items():
+        for p in repo.rglob(f"*{ext}"):
+            if p in seen or not p.is_file():
+                continue
+            seen.add(p)
+            files.append((p, lang))
+    files.sort(key=lambda t: t[0])
+    return files
+
+
 class MCPToolsRegistry:
     """Registry that manages workspace-based repo services and tool handlers."""
 
@@ -642,6 +983,51 @@ class MCPToolsRegistry:
             # Symbol / global-variable lookup
             # -----------------------------------------------------------------
             ToolDefinition(
+                name="find_symbol_usage",
+                description=(
+                    "Find every READ usage of a C/C++ variable symbol (global "
+                    "or function-scope static) across the indexed repository. "
+                    "Slice 1 MVP: symbol resolution + mode='read'. "
+                    "Accepts a short name like 'g_alarm' or a qualified name "
+                    "like 'module.g_alarm' / 'module.func.counter'. "
+                    "Returns the resolved qualified_name + kind plus, for "
+                    "mode='read'/'all', a list of usages with file:line, the "
+                    "enclosing function's qualified name, and the source line. "
+                    "Rejects enum values, typedefs, functions, and parameters "
+                    "with error='symbol is not a variable (kind=X)'. "
+                    "mode='write' is reserved for slice 2 (returns empty + note); "
+                    "qualified_scope is accepted but ignored until slice 2."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": (
+                                "Variable short name (e.g. 'g_alarm') or "
+                                "qualified name (e.g. 'proj.alarm.g_alarm')."
+                            ),
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["read", "write", "all"],
+                            "description": (
+                                "Usage category to return. 'read' and 'all' "
+                                "scan read sites; 'write' is a slice-2 stub."
+                            ),
+                        },
+                        "qualified_scope": {
+                            "type": "string",
+                            "description": (
+                                "Reserved for slice 2. Accepted but ignored in "
+                                "slice 1 (a note is attached to the result)."
+                            ),
+                        },
+                    },
+                    "required": ["symbol"],
+                },
+            ),
+            ToolDefinition(
                 name="find_symbol_in_docs",
                 description=(
                     "Find all functions that reference a specific global variable, "
@@ -716,6 +1102,7 @@ class MCPToolsRegistry:
             "trace_call_chain": self._handle_trace_call_chain,
             "get_merge_diff": self._handle_get_merge_diff,
             "find_symbol_in_docs": self._handle_find_symbol_in_docs,
+            "find_symbol_usage": self._handle_find_symbol_usage,
         }
         return handlers.get(name)
 
@@ -948,7 +1335,8 @@ class MCPToolsRegistry:
                 "- `get_api_doc` -- read detailed docs for any function (signature, call tree, source)\n"
                 "- `find_callers` -- find every function that calls a given function\n"
                 "- `trace_call_chain` -- trace the full call chain from entry points to a target\n"
-                "- `find_symbol_in_docs` -- find all functions that reference a global variable or constant\n\n"
+                "- `find_symbol_in_docs` -- find all functions that reference a global variable or constant\n"
+                "- `find_symbol_usage` -- list every READ usage of a C/C++ global or static-local variable (AST-level)\n\n"
                 "Tell the user what was indexed and ask what they would like to explore."
             )
             return result
@@ -2256,6 +2644,157 @@ class MCPToolsRegistry:
             "caller_count": len(unique),
             "callers": unique,
         }
+
+    # -------------------------------------------------------------------------
+    # find_symbol_usage — resolve a symbol and list every read usage (slice 1)
+    # -------------------------------------------------------------------------
+
+    async def _handle_find_symbol_usage(
+        self,
+        symbol: str,
+        mode: str = "all",
+        qualified_scope: str | None = None,
+    ) -> dict[str, Any]:
+        """Find read usages of a C/C++ variable symbol via AST scan.
+
+        Slice 1 MVP: mode=``read`` / ``all`` perform the AST scan; ``write``
+        is accepted but returns an empty list and a note. ``qualified_scope``
+        is accepted but ignored with a note.
+        """
+        self._require_active()
+
+        if mode not in ("read", "write", "all"):
+            raise ToolError(
+                f"mode must be one of 'read', 'write', 'all' (got {mode!r})"
+            )
+
+        assert self._active_repo_path is not None
+        repo_path = self._active_repo_path
+
+        is_qualified = "." in symbol
+        simple_name = symbol.rsplit(".", 1)[-1] if is_qualified else symbol
+
+        parsers = _symbol_usage_get_parsers()
+        source_files = _symbol_usage_list_source_files(repo_path)
+
+        # ---------- Phase 1: resolve symbol → qualified declaration ----------
+        all_decls: list[dict[str, Any]] = []
+        for abs_path, lang_key in source_files:
+            parser = parsers.get(lang_key)
+            if parser is None:
+                continue
+            try:
+                source_bytes = abs_path.read_bytes()
+            except OSError:
+                continue
+            tree = parser.parse(source_bytes)
+            module_qn = _symbol_usage_module_qn(repo_path, abs_path)
+            rel = str(abs_path.relative_to(repo_path))
+            all_decls.extend(
+                _symbol_usage_collect_declarations(
+                    tree.root_node, simple_name, module_qn, rel
+                )
+            )
+
+        if not all_decls:
+            return {
+                "success": False,
+                "error": "symbol not found",
+                "symbol": symbol,
+            }
+
+        # Partition by kind — we only accept variable kinds (global, static_local).
+        variable_decls = [d for d in all_decls if d["kind"] in ("global", "static_local")]
+        non_variable_decls = [d for d in all_decls if d["kind"] not in ("global", "static_local")]
+
+        if not variable_decls and non_variable_decls:
+            bad_kind = non_variable_decls[0]["kind"]
+            return {
+                "success": False,
+                "error": f"symbol is not a variable (kind={bad_kind})",
+                "symbol": symbol,
+            }
+
+        # If the user passed a qualified_name, keep only exact matches.
+        if is_qualified:
+            exact = [d for d in variable_decls if d["qualified_name"] == symbol]
+            if not exact:
+                return {
+                    "success": False,
+                    "error": "symbol not found",
+                    "symbol": symbol,
+                }
+            variable_decls = exact
+
+        # De-duplicate (same variable can be declared in both a .h and .c).
+        seen_qn: dict[str, dict[str, Any]] = {}
+        for d in variable_decls:
+            seen_qn.setdefault(d["qualified_name"], d)
+        uniq = list(seen_qn.values())
+
+        if len(uniq) > 1:
+            return {
+                "success": False,
+                "error": "ambiguous",
+                "symbol": symbol,
+                "candidates": sorted(d["qualified_name"] for d in uniq),
+            }
+
+        matched = uniq[0]
+
+        # ---------- Phase 2: usage scan (mode=read or mode=all) ----------
+        usages: list[dict[str, Any]] = []
+        notes: list[str] = []
+
+        if mode in ("read", "all"):
+            for abs_path, lang_key in source_files:
+                parser = parsers.get(lang_key)
+                if parser is None:
+                    continue
+                try:
+                    source_bytes = abs_path.read_bytes()
+                except OSError:
+                    continue
+                tree = parser.parse(source_bytes)
+                module_qn = _symbol_usage_module_qn(repo_path, abs_path)
+                rel = str(abs_path.relative_to(repo_path))
+                source_lines = source_bytes.decode("utf-8", errors="replace").splitlines()
+                usages.extend(
+                    _symbol_usage_collect_reads(
+                        tree.root_node,
+                        simple_name,
+                        source_lines,
+                        module_qn,
+                        rel,
+                    )
+                )
+
+            if matched["kind"] == "static_local":
+                # Restrict to usages inside the owning function.
+                usages = [
+                    u for u in usages if u["enclosing_function"] == matched["qualified_name"].rsplit(".", 1)[0]
+                ]
+
+        if mode in ("write", "all"):
+            notes.append("write mode arrives in slice 2")
+
+        if qualified_scope is not None:
+            notes.append("scope filter arrives in slice 2")
+
+        result: dict[str, Any] = {
+            "success": True,
+            "symbol": symbol,
+            "matched": {
+                "qualified_name": matched["qualified_name"],
+                "kind": matched["kind"],
+                "path": matched["path"],
+                "line": matched["line"],
+            },
+            "usages": usages if mode in ("read", "all") else [],
+        }
+        if notes:
+            result["note"] = "; ".join(notes)
+        return result
 
     # -------------------------------------------------------------------------
     # find_symbol_in_docs — search pre-built API docs for global variable refs
