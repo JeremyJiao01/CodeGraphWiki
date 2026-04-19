@@ -646,3 +646,456 @@ int read_field(struct S *s) { return s->g_val; }
         # Only read_global counts — the struct field access does not.
         funcs = {u["enclosing_function"].rsplit(".", 1)[-1] for u in result["usages"]}
         assert funcs == {"read_global"}
+
+
+# ---------------------------------------------------------------------------
+# via_memcpy detection (slice 3)
+# ---------------------------------------------------------------------------
+
+
+class TestViaMemcpy:
+    def test_memcpy_with_address_first_arg(self, tmp_path):
+        """`memcpy(&g_alarm, src, n)` → assign_type=via_memcpy, op=memcpy."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g_alarm;
+
+void copy_in(const void *src, unsigned n) {
+    memcpy(&g_alarm, src, n);
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_alarm", "mode": "write"})
+
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        u = result["usages"][0]
+        assert u["mode"] == "write"
+        assert u["assign_type"] == "via_memcpy"
+        assert u["op"] == "memcpy"
+        assert "memcpy(&g_alarm, src, n)" in u["rhs"]
+
+    def test_memset_with_address_first_arg(self, tmp_path):
+        """`memset(&g, 0, sizeof(g))` → via_memcpy with op=memset."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g;
+
+void clear(void) {
+    memset(&g, 0, sizeof(g));
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g", "mode": "write"})
+
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        u = result["usages"][0]
+        assert u["assign_type"] == "via_memcpy"
+        assert u["op"] == "memset"
+
+    def test_array_first_arg_no_address(self, tmp_path):
+        """`memcpy(g_buf, src, n)` (array name auto address-of) → via_memcpy."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+char g_buf[64];
+
+void copy_buf(const char *src, unsigned n) {
+    memcpy(g_buf, src, n);
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_buf", "mode": "write"})
+
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        assert result["usages"][0]["assign_type"] == "via_memcpy"
+        assert result["usages"][0]["op"] == "memcpy"
+
+
+# ---------------------------------------------------------------------------
+# address_of detection (slice 3)
+# ---------------------------------------------------------------------------
+
+
+class TestAddressOf:
+    def test_unknown_func_with_address_arg(self, tmp_path):
+        """`clear(&g_alarm)` → address_of (not memcpy whitelist, not readonly)."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g_alarm;
+void clear(int *p);
+
+void run(void) {
+    clear(&g_alarm);
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_alarm", "mode": "write"})
+
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        u = result["usages"][0]
+        assert u["assign_type"] == "address_of"
+        assert u["op"] == "clear"
+        assert "clear(&g_alarm)" in u["rhs"]
+
+    def test_address_in_non_first_arg(self, tmp_path):
+        """`update(0, &g_alarm)` → address_of (non-first arg)."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g_alarm;
+void update(int flag, int *p);
+
+void run(void) {
+    update(0, &g_alarm);
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_alarm", "mode": "write"})
+
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        assert result["usages"][0]["assign_type"] == "address_of"
+        assert result["usages"][0]["op"] == "update"
+
+    def test_readonly_api_does_not_register(self, tmp_path):
+        """`memcmp(&g, &other, sizeof(g))` is NOT recorded — readonly whitelist."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g;
+int other;
+
+int eq(void) {
+    return memcmp(&g, &other, sizeof(g)) == 0;
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g", "mode": "write"})
+
+        assert result["success"] is True
+        assert result["usages"] == []
+
+    def test_printf_with_address_does_not_register(self, tmp_path):
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g;
+
+void dump(void) {
+    printf("%p", (void *)&g);
+}
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g", "mode": "write"})
+        assert result["success"] is True
+        assert result["usages"] == []
+
+    def test_two_globals_both_address_of(self, tmp_path):
+        """`foo(&g_a, &g_b)` with symbol=g_a is address_of (foo not memcpy)."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g_a;
+int g_b;
+void foo(int *a, int *b);
+
+void run(void) {
+    foo(&g_a, &g_b);
+}
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_a", "mode": "write"})
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        assert result["usages"][0]["assign_type"] == "address_of"
+        assert result["usages"][0]["op"] == "foo"
+
+
+# ---------------------------------------------------------------------------
+# pointer_deref_write detection (slice 3)
+# ---------------------------------------------------------------------------
+
+
+class TestPointerDerefWrite:
+    def test_local_alias_then_deref_write(self, tmp_path):
+        """`int *p = &g; *p = 1;` → pointer_deref_write of g."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g_alarm;
+
+void poke(void) {
+    int *p = &g_alarm;
+    *p = 1;
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_alarm", "mode": "write"})
+
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        u = result["usages"][0]
+        assert u["assign_type"] == "pointer_deref_write"
+        assert u["enclosing_function"].endswith(".poke")
+
+    def test_unknown_pointer_source_is_not_aliased(self, tmp_path):
+        """`int *p = get_ptr(); *p = 1;` does NOT count as a write of g."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g_alarm;
+int *get_ptr(void);
+
+void poke(void) {
+    int *p = get_ptr();
+    *p = 1;
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_alarm", "mode": "write"})
+
+        assert result["success"] is True
+        assert result["usages"] == []
+
+    def test_alias_does_not_leak_across_functions(self, tmp_path):
+        """`int *p = &g;` in foo() does not make `*p = 1;` in bar() a write of g."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g;
+
+void foo(void) {
+    int *p = &g;
+    (void)p;
+}
+
+void bar(int *p) {
+    *p = 1;
+}
+""",
+            encoding="utf-8",
+        )
+
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g", "mode": "write"})
+
+        assert result["success"] is True
+        # Only foo() has the alias, and it doesn't deref-write — so zero hits.
+        assert result["usages"] == []
+
+    def test_alias_via_assignment_after_decl(self, tmp_path):
+        """Assignment-style alias: `int *p; ... p = &g; *p = 1;`."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g;
+
+void poke(void) {
+    int *p;
+    p = &g;
+    *p = 2;
+}
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g", "mode": "write"})
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        assert result["usages"][0]["assign_type"] == "pointer_deref_write"
+
+
+# ---------------------------------------------------------------------------
+# kind distinction: global vs static_local (slice 3 hardening)
+# ---------------------------------------------------------------------------
+
+
+class TestKindDistinction:
+    def test_static_local_kind(self, tmp_path):
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+void foo(void) {
+    static int local_cnt = 0;
+    local_cnt++;
+}
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "local_cnt"})
+        assert result["success"] is True
+        assert result["matched"]["kind"] == "static_local"
+        # Qualified name includes the function name segment.
+        assert ".foo.local_cnt" in result["matched"]["qualified_name"]
+
+    def test_file_scope_static_is_global(self, tmp_path):
+        """`static int counter;` at file scope is `global`, not `static_local`."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+static int counter = 0;
+
+void tick(void) { counter++; }
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "counter"})
+        assert result["success"] is True
+        assert result["matched"]["kind"] == "global"
+
+
+# ---------------------------------------------------------------------------
+# Edge-case fixtures: hardening (slice 3)
+# ---------------------------------------------------------------------------
+
+
+class TestEdgeCaseFixtures:
+    def test_volatile_global_read_and_write(self, tmp_path):
+        """`volatile uint32_t g_reg;` reads + writes are detected like any global."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "reg.c").write_text(
+            """\
+typedef unsigned int uint32_t;
+volatile uint32_t g_reg;
+
+void hw_set(uint32_t v) { g_reg = v; }
+uint32_t hw_get(void) { return g_reg; }
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_reg", "mode": "all"})
+        assert result["success"] is True
+        modes = [u["mode"] for u in result["usages"]]
+        assert sorted(modes) == ["read", "write"]
+
+    def test_macro_expansion_assignment_not_misdetected(self, tmp_path):
+        """`SET_FLAG(g)` expands to an assignment, but tree-sitter sees only
+        a `call_expression`. We must NOT report a write."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+#define SET_FLAG(f) ((f) = 1)
+int g;
+
+void run(void) {
+    SET_FLAG(g);
+}
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g", "mode": "write"})
+        assert result["success"] is True
+        # SET_FLAG looks like a call but `g` is passed as a bare identifier (not
+        # &g), and SET_FLAG is not in the memcpy whitelist — so no write.
+        assert result["usages"] == []
+
+    def test_array_subscript_write_is_direct(self, tmp_path):
+        """`g_array[i] = 1;` with symbol=g_array is a write of g_array."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "a.c").write_text(
+            """\
+int g_array[8];
+
+void store(int i, int v) {
+    g_array[i] = v;
+}
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_array", "mode": "write"})
+        assert result["success"] is True
+        assert len(result["usages"]) == 1
+        u = result["usages"][0]
+        assert u["mode"] == "write"
+        assert u["assign_type"] == "direct"
+
+    def test_combined_fixture(self, tmp_path):
+        """A single C file exercising every assign_type produced by slice 3."""
+        repo = tmp_path / "proj"
+        repo.mkdir()
+        (repo / "all.c").write_text(
+            """\
+int g_alarm;
+
+void direct_w(int v) { g_alarm = v; }
+void compound_w(int v) { g_alarm |= v; }
+void update_w(void) { g_alarm++; }
+void memcpy_w(const void *src, unsigned n) { memcpy(&g_alarm, src, n); }
+void addrof_w(void) { clear(&g_alarm); }
+void deref_w(void) {
+    int *p = &g_alarm;
+    *p = 1;
+}
+void readonly_use(void) { (void)memcmp(&g_alarm, &g_alarm, sizeof(g_alarm)); }
+""",
+            encoding="utf-8",
+        )
+        registry = _make_registry(tmp_path, repo)
+        result = _call(registry, "find_symbol_usage", {"symbol": "g_alarm", "mode": "write"})
+        assert result["success"] is True
+        types = sorted(u["assign_type"] for u in result["usages"])
+        assert types == [
+            "address_of",
+            "compound",
+            "compound",  # update_expression
+            "direct",
+            "pointer_deref_write",
+            "via_memcpy",
+        ]
