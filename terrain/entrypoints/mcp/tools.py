@@ -624,23 +624,79 @@ _SYMBOL_USAGE_COMPOUND_OPS: frozenset[str] = frozenset(
 def _symbol_usage_lhs_matches(left_node, simple_name: str) -> bool:
     """Does the LHS of an assignment (or target of ++/--) refer to ``simple_name``?
 
-    Matches two shapes only (MVP):
+    Matches three shapes (MVP):
       * bare identifier ``simple_name``
       * ``field_expression`` whose outermost ``argument`` is an identifier
         matching ``simple_name`` (e.g. ``g_alarm.dci`` with symbol=``g_alarm``).
+      * ``subscript_expression`` whose outermost ``argument`` is an identifier
+        matching ``simple_name`` (e.g. ``g_array[i]`` with symbol=``g_array``).
     """
     if left_node is None:
         return False
     if left_node.type == "identifier":
         return left_node.text.decode("utf-8", errors="replace") == simple_name
-    if left_node.type == "field_expression":
+    if left_node.type in ("field_expression", "subscript_expression"):
         arg = left_node.child_by_field_name("argument")
-        # Walk down any inner field_expression chain to find the outermost argument.
-        while arg is not None and arg.type == "field_expression":
+        # Walk down any inner field/subscript chain to find the outermost argument.
+        while arg is not None and arg.type in ("field_expression", "subscript_expression"):
             arg = arg.child_by_field_name("argument")
         if arg is not None and arg.type == "identifier":
             return arg.text.decode("utf-8", errors="replace") == simple_name
     return False
+
+
+def _symbol_usage_is_address_of(node, simple_name: str) -> bool:
+    """Return True iff *node* is a ``pointer_expression`` of the form ``&simple_name``."""
+    if node is None or node.type != "pointer_expression":
+        return False
+    op = node.child_by_field_name("operator")
+    if op is None or op.text.decode("utf-8", errors="replace") != "&":
+        return False
+    arg = node.child_by_field_name("argument")
+    if arg is None or arg.type != "identifier":
+        return False
+    return arg.text.decode("utf-8", errors="replace") == simple_name
+
+
+def _symbol_usage_collect_aliases(func_node, simple_name: str) -> frozenset[str]:
+    """Find local pointer variables aliased to ``&simple_name`` within a function.
+
+    Recognises two MVP patterns inside the function body:
+      * ``T *p = &simple_name;`` (init_declarator)
+      * ``p = &simple_name;``    (plain assignment, p was declared earlier)
+
+    Returns the set of local variable names whose value points at ``simple_name``.
+    Flow-insensitive: any later reassignment of ``p`` is ignored — accepted false
+    positive per slice-3 MVP scope.
+    """
+    aliases: set[str] = set()
+
+    def _visit(node):
+        ntype = node.type
+        if ntype == "init_declarator":
+            value = node.child_by_field_name("value")
+            if value is not None and _symbol_usage_is_address_of(value, simple_name):
+                decl = node.child_by_field_name("declarator")
+                ident = _symbol_usage_declarator_identifier(decl) if decl is not None else None
+                if ident is not None:
+                    aliases.add(ident.text.decode("utf-8", errors="replace"))
+        elif ntype == "assignment_expression":
+            op_node = node.child_by_field_name("operator")
+            op_text = op_node.text.decode("utf-8", errors="replace") if op_node is not None else "="
+            if op_text == "=":
+                left = node.child_by_field_name("left")
+                right = node.child_by_field_name("right")
+                if (
+                    left is not None
+                    and left.type == "identifier"
+                    and _symbol_usage_is_address_of(right, simple_name)
+                ):
+                    aliases.add(left.text.decode("utf-8", errors="replace"))
+        for i in range(node.named_child_count):
+            _visit(node.named_child(i))
+
+    _visit(func_node)
+    return frozenset(aliases)
 
 
 def _symbol_usage_collect_writes(
@@ -658,7 +714,15 @@ def _symbol_usage_collect_writes(
         (``assign_type="compound"``)
       * ``update_expression`` (``x++`` / ``++x`` / ``x--`` / ``--x``)
         (``assign_type="compound"``, rhs="")
+      * ``call_expression`` of a memcpy-family function with first arg
+        ``&simple_name`` or bare array name (``assign_type="via_memcpy"``)
+      * ``call_expression`` of a non-readonly function with any
+        ``&simple_name`` argument (``assign_type="address_of"``)
+      * ``assignment_expression`` whose left is ``*p`` where ``p`` is a local
+        alias of ``&simple_name`` (``assign_type="pointer_deref_write"``)
     """
+    from terrain.foundation.types import constants as cs
+
     out: list[dict[str, Any]] = []
 
     def _enclosing_qn(node) -> str:
@@ -671,11 +735,95 @@ def _symbol_usage_collect_writes(
             return raw if len(raw) <= 200 else raw[:199] + "…"
         return ""
 
-    def _visit(node):
+    def _emit_pointer_deref_write(node):
+        """``*p = rhs`` with ``p`` aliasing ``simple_name`` → write entry."""
+        op_node = node.child_by_field_name("operator")
+        right = node.child_by_field_name("right")
+        op = op_node.text.decode("utf-8", errors="replace") if op_node else "="
+        rhs = (
+            right.text.decode("utf-8", errors="replace").strip()
+            if right is not None
+            else ""
+        )
+        line_no = node.start_point[0] + 1
+        out.append({
+            "mode": "write",
+            "location": f"{path}:{line_no}",
+            "enclosing_function": _enclosing_qn(node),
+            "context": _ctx(line_no),
+            "assign_type": "pointer_deref_write",
+            "op": op,
+            "rhs": rhs,
+        })
+
+    def _emit_call_write(node, fname: str, assign_type: str):
+        line_no = node.start_point[0] + 1
+        rhs = node.text.decode("utf-8", errors="replace").strip()
+        out.append({
+            "mode": "write",
+            "location": f"{path}:{line_no}",
+            "enclosing_function": _enclosing_qn(node),
+            "context": _ctx(line_no),
+            "assign_type": assign_type,
+            "op": fname,
+            "rhs": rhs,
+        })
+
+    def _handle_call(node):
+        """Detect via_memcpy / address_of writes triggered by a ``call_expression``."""
+        func = node.child_by_field_name("function")
+        args_list = node.child_by_field_name("arguments")
+        if func is None or args_list is None or func.type != "identifier":
+            return
+        fname = func.text.decode("utf-8", errors="replace")
+        if fname in cs.READONLY_API_FUNCTIONS:
+            return
+        # Iterate positional arguments (skip comments / non-named children).
+        args = [args_list.named_child(i) for i in range(args_list.named_child_count)]
+        for idx, arg in enumerate(args):
+            is_addr_of = _symbol_usage_is_address_of(arg, simple_name)
+            is_bare_array = (
+                arg.type == "identifier"
+                and arg.text.decode("utf-8", errors="replace") == simple_name
+            )
+            if (
+                idx == 0
+                and fname in cs.MEMCPY_LIKE_FUNCTIONS
+                and (is_addr_of or is_bare_array)
+            ):
+                _emit_call_write(node, fname, "via_memcpy")
+                return
+            if is_addr_of:
+                _emit_call_write(node, fname, "address_of")
+                return
+
+    def _visit(node, alias_set: frozenset[str]):
         ntype = node.type
+
+        # Re-scope aliases when entering a function definition.
+        if ntype == "function_definition":
+            new_aliases = _symbol_usage_collect_aliases(node, simple_name)
+            for i in range(node.named_child_count):
+                _visit(node.named_child(i), new_aliases)
+            return
+
         if ntype == "assignment_expression":
             left = node.child_by_field_name("left")
-            if _symbol_usage_lhs_matches(left, simple_name):
+            # 1. pointer_deref_write: `*p = rhs` with p in alias_set
+            if left is not None and left.type == "pointer_expression":
+                op_n = left.child_by_field_name("operator")
+                argn = left.child_by_field_name("argument")
+                if (
+                    op_n is not None
+                    and op_n.text.decode("utf-8", errors="replace") == "*"
+                    and argn is not None
+                    and argn.type == "identifier"
+                ):
+                    pname = argn.text.decode("utf-8", errors="replace")
+                    if pname in alias_set:
+                        _emit_pointer_deref_write(node)
+            # 2. direct / compound assignment of simple_name
+            elif _symbol_usage_lhs_matches(left, simple_name):
                 op_node = node.child_by_field_name("operator")
                 right = node.child_by_field_name("right")
                 op = (
@@ -688,7 +836,6 @@ def _symbol_usage_collect_writes(
                 elif op in _SYMBOL_USAGE_COMPOUND_OPS:
                     assign_type = "compound"
                 else:
-                    # Unknown operator — treat as compound so we don't lose the edit.
                     assign_type = "compound"
                 rhs = (
                     right.text.decode("utf-8", errors="replace").strip()
@@ -728,11 +875,13 @@ def _symbol_usage_collect_writes(
                     "op": op,
                     "rhs": "",
                 })
+        elif ntype == "call_expression":
+            _handle_call(node)
 
         for i in range(node.named_child_count):
-            _visit(node.named_child(i))
+            _visit(node.named_child(i), alias_set)
 
-    _visit(root)
+    _visit(root, frozenset())
     return out
 
 
@@ -1180,9 +1329,13 @@ class MCPToolsRegistry:
                     "qualified name like 'module.g_alarm' / 'module.func.counter'. "
                     "Returns the resolved qualified_name + kind plus a list of "
                     "usages with file:line, the enclosing function's qualified "
-                    "name, and the source line. Writes carry "
-                    "'assign_type' ('direct' for '=', 'compound' for '+='/'|='/"
-                    "'++'/... ), the raw 'op', and 'rhs' (empty for ++/--). "
+                    "name, and the source line. Writes carry 'assign_type' "
+                    "('direct' for '=', 'compound' for '+='/'|='/'++'/..., "
+                    "'via_memcpy' for memcpy-family destinations, 'address_of' "
+                    "for `&sym` passed to a non-readonly function, "
+                    "'pointer_deref_write' for `*p = ...` where `p` aliases "
+                    "`&sym` within the same function), the raw 'op', and 'rhs' "
+                    "(full call expression for via_memcpy/address_of, empty for ++/--). "
                     "Rejects enum values, typedefs, functions, and parameters "
                     "with error='symbol is not a variable (kind=X)'. "
                     "qualified_scope restricts to one function or module qn "
