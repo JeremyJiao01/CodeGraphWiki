@@ -719,6 +719,21 @@ RS_IDENT_NODE_TYPES = ("mod_item",)
 # C++ name node types
 CPP_NAME_NODE_TYPES = SPEC_CPP_FUNCTION_TYPES + SPEC_CPP_CLASS_TYPES
 
+# C/C++ memcpy-family functions where the first argument is a write destination.
+# Used by find_symbol_usage to flag `memcpy(&g, src, n)` as a write of `g`.
+MEMCPY_LIKE_FUNCTIONS: frozenset[str] = frozenset({
+    "memcpy", "memmove", "memset",
+    "strcpy", "strncpy", "strcat", "strncat",
+})
+
+# C/C++ standard-library functions known not to mutate any of their
+# pointer arguments. Used by find_symbol_usage so that `memcmp(&g, ...)` is
+# NOT flagged as a write of `g`.
+READONLY_API_FUNCTIONS: frozenset[str] = frozenset({
+    "printf", "fprintf", "puts",
+    "strlen", "memcmp", "strcmp", "strncmp",
+})
+
 # TS specific node types
 TS_FUNCTION_SIGNATURE = "function_signature"
 TS_ABSTRACT_CLASS_DECLARATION = "abstract_class_declaration"
