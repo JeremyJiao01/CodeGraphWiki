@@ -1,0 +1,6 @@
+# Preserve raw bytes of non-UTF-8 encoding test fixtures.
+# These files contain GBK / GB2312 encoded text that must NOT be subject to
+# CRLF normalization or any text transformation, otherwise the parser tests
+# in tests/foundation/test_encoding_parsing.py would silently break.
+tests/fixtures/test_gbk.c    binary
+tests/fixtures/test_gb2312.c binary

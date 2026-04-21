@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 
 # Skip the entire module if fixture files are missing
 pytestmark = pytest.mark.skipif(
