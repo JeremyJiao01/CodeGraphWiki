@@ -2033,7 +2033,8 @@ class MCPToolsRegistry:
             "linked_source_repo": source_meta.get("repo_name", source_dir.name),
         }
         (new_dir / "meta.json").write_text(
-            json.dumps(new_meta, ensure_ascii=False, indent=2)
+            json.dumps(new_meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
 
         # Activate the new linked repo

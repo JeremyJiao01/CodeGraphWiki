@@ -257,7 +257,7 @@ async def _maybe_incremental_sync(registry: "MCPToolsRegistry") -> None:
                         meta_file.read_text(encoding="utf-8", errors="replace")
                     )
                 existing_meta["last_indexed_commit"] = new_head
-                meta_file.write_text(_json2.dumps(existing_meta, ensure_ascii=False, indent=2))
+                meta_file.write_text(_json2.dumps(existing_meta, ensure_ascii=False, indent=2), encoding="utf-8")
             except Exception as e:
                 logger.debug("Failed to update last_indexed_commit in meta.json: {}", e)
 

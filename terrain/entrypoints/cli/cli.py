@@ -164,12 +164,12 @@ def load_config_file(config_path: str | Path) -> dict[str, Any]:
         try:
             import yaml
 
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 return yaml.safe_load(f)
         except ImportError:
             raise ImportError("PyYAML is required for YAML config files. Install with: pip install pyyaml")
     elif config_path.suffix == ".json":
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             return json.load(f)
     else:
         raise ValueError(f"Unsupported config file format: {config_path.suffix}")
@@ -260,8 +260,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
         if args.output:
             logger.info(f"Exporting to: {args.output}")
             data = builder.export_graph()
-            with open(args.output, "w") as f:
-                json.dump(data, f, indent=2, default=str)
+            with open(args.output, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, default=str, ensure_ascii=False)
             print(f"Exported to: {args.output}")
 
         return 0
@@ -356,8 +356,8 @@ def cmd_export(args: argparse.Namespace) -> int:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, "w") as f:
-            json.dump(data, f, indent=2, default=str)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, default=str, ensure_ascii=False)
 
         print()
         print("=" * 60)
@@ -1206,7 +1206,7 @@ def _rename_repo(artifact_dir: Path, new_name: str) -> None:
     except (json.JSONDecodeError, OSError):
         return
     meta["repo_name"] = new_name
-    meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def cmd_repo(_args: argparse.Namespace) -> int:

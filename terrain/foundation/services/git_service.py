@@ -18,6 +18,8 @@ class GitChangeDetector:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             if result.returncode == 0:
@@ -55,6 +57,8 @@ class GitChangeDetector:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             if result.returncode != 0:
@@ -96,6 +100,8 @@ class GitChangeDetector:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             if result.returncode != 0:
@@ -129,6 +135,8 @@ class GitChangeDetector:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             if result.returncode != 0:
@@ -169,6 +177,8 @@ class GitChangeDetector:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             if verify.returncode != 0:
@@ -180,6 +190,8 @@ class GitChangeDetector:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             if result.returncode != 0:
@@ -217,6 +229,8 @@ class GitChangeDetector:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
             )
             if result.returncode != 0:

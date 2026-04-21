@@ -1510,7 +1510,7 @@ def save_meta(
         },
         **({} if last_indexed_commit is None else {"last_indexed_commit": last_indexed_commit}),
     }
-    meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def artifact_dir_for(workspace: Path, repo_path: "Path | PurePath") -> Path:
