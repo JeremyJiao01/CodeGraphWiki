@@ -1165,8 +1165,15 @@ class MCPToolsRegistry:
                     "List all previously indexed repositories in the workspace. "
                     "Shows repo name, path, last indexed time, which pipeline steps "
                     "have been completed (graph, api_docs, embeddings, wiki), and "
-                    "which one is currently active. Use this to discover available "
-                    "repos and switch between them with switch_repository."
+                    "which one is currently active.\n\n"
+                    "Each repo also carries a `staleness` field: "
+                    "'up-to-date' (HEAD matches the indexed commit), "
+                    "'stale' (HEAD has moved — graph results may be out of date), "
+                    "or 'unknown' (not a git repo, HEAD unreadable, or graph not built). "
+                    "Short SHAs are reported as `indexed_head` and `current_head` so you "
+                    "can tell how far the repo has drifted. "
+                    "Consult staleness before calling switch_repository or running heavy "
+                    "queries; prefer re-indexing stale repos for trustworthy results."
                 ),
                 input_schema={"type": "object", "properties": {}, "required": []},
             ),
@@ -1869,10 +1876,20 @@ class MCPToolsRegistry:
     # -------------------------------------------------------------------------
 
     async def _handle_list_repositories(self) -> dict[str, Any]:
+        # Lazy import avoids a cli↔tools circular import at module load time.
+        from terrain.entrypoints.cli.cli import _get_repo_status_entries
+
         active_name = None
         active_file = self._workspace / "active.txt"
         if active_file.exists():
             active_name = active_file.read_text(encoding="utf-8", errors="replace").strip()
+
+        try:
+            status_entries = _get_repo_status_entries(self._workspace)
+        except Exception as exc:  # pragma: no cover — defensive: never 500 the MCP tool
+            logger.debug("staleness lookup failed: {}", exc)
+            status_entries = []
+        status_by_artifact = {e["artifact_dir"]: e for e in status_entries}
 
         repos: list[dict[str, Any]] = []
         for child in sorted(self._workspace.iterdir()):
@@ -1886,14 +1903,29 @@ class MCPToolsRegistry:
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 continue
 
+            steps = meta.get("steps", {})
+            status_entry = status_by_artifact.get(child.name)
+            # Half-built repo (no graph yet) — staleness is meaningless.
+            if not steps.get("graph") or status_entry is None:
+                staleness = "unknown"
+                indexed_head = None
+                current_head = None
+            else:
+                staleness = status_entry["status"]
+                indexed_head = status_entry["indexed_head"]
+                current_head = status_entry["current_head"]
+
             repos.append({
                 "artifact_dir": child.name,
                 "repo_name": meta.get("repo_name", child.name),
                 "repo_path": meta.get("repo_path", "unknown"),
                 "indexed_at": meta.get("indexed_at"),
                 "wiki_page_count": meta.get("wiki_page_count", 0),
-                "steps": meta.get("steps", {}),
+                "steps": steps,
                 "active": child.name == active_name,
+                "staleness": staleness,
+                "indexed_head": indexed_head,
+                "current_head": current_head,
             })
 
         return {
@@ -1902,7 +1934,9 @@ class MCPToolsRegistry:
             "repositories": repos,
             "hint": (
                 "Use switch_repository with repo_name to change the active repo. "
-                "Use `terrain index <path>` or build_graph to index a new repo."
+                "Use `terrain index <path>` or build_graph to index a new repo. "
+                "Check `staleness` before trusting graph results: "
+                "'stale' means HEAD has moved since indexing — consider re-indexing."
             ),
         }
 

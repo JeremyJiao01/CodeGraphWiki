@@ -417,11 +417,14 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
     """Return staleness status for every indexed repo under *ws*.
 
     Each entry is a dict with:
-        name        — display name from meta.json
-        path        — absolute repo path
-        indexed_at  — ISO 8601 timestamp string
-        status      — "up-to-date" | "stale" | "unknown"
+        artifact_dir  — artifact directory name (stable join key)
+        name          — display name from meta.json
+        path          — absolute repo path
+        indexed_at    — ISO 8601 timestamp string
+        status        — "up-to-date" | "stale" | "unknown"
         commits_since — int (>=0) or None when unknown
+        indexed_head  — short SHA (7 chars) recorded at index time, or None
+        current_head  — short SHA (7 chars) of the repo's HEAD now, or None
     """
     from terrain.foundation.services.git_service import GitChangeDetector
 
@@ -449,6 +452,7 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
 
         repo_path = Path(repo_path_str) if repo_path_str else None
         commits: int | None = None
+        current_head_full: str | None = None
 
         if repo_path:
             if last_indexed_commit:
@@ -457,6 +461,7 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
             elif indexed_at:
                 # Legacy meta.json without a SHA anchor — best-effort timestamp path.
                 commits = detector.count_commits_since(repo_path, indexed_at)
+            current_head_full = detector.get_current_head(repo_path)
 
         if commits is None:
             status = "unknown"
@@ -466,11 +471,14 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
             status = "stale"
 
         entries.append({
+            "artifact_dir": child.name,
             "name": name,
             "path": repo_path_str,
             "indexed_at": indexed_at,
             "status": status,
             "commits_since": commits,
+            "indexed_head": last_indexed_commit[:7] if last_indexed_commit else None,
+            "current_head": current_head_full[:7] if current_head_full else None,
         })
 
     return entries
