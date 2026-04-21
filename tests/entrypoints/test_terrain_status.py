@@ -346,6 +346,204 @@ class TestStatusEntriesShaPath:
 
 
 # ---------------------------------------------------------------------------
+# _get_repo_status_entries exposes artifact_dir + indexed_head + current_head
+# ---------------------------------------------------------------------------
+
+
+class TestStatusEntriesHeadFields:
+    """The MCP list_repositories tool joins on these fields — they must exist."""
+
+    def test_entry_carries_artifact_dir_and_short_heads_when_up_to_date(self, tmp_path):
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+        repo = tmp_path / "myrepo"
+        repo.mkdir()
+        _init_repo(repo)
+        head = _commit(repo, "a.txt", "a", "first")
+
+        artifact_dir = ws / "myrepo_abc12345"
+        artifact_dir.mkdir()
+        (artifact_dir / "meta.json").write_text(json.dumps({
+            "repo_name": "myrepo",
+            "repo_path": str(repo),
+            "indexed_at": "2026-04-10T10:00:00+00:00",
+            "last_indexed_commit": head,
+        }))
+
+        entries = _get_repo_status_entries(ws)
+        assert len(entries) == 1
+        e = entries[0]
+        assert e["artifact_dir"] == "myrepo_abc12345"
+        assert e["status"] == "up-to-date"
+        assert e["indexed_head"] == head[:7]
+        assert e["current_head"] == head[:7]
+
+    def test_entry_reports_distinct_short_heads_when_stale(self, tmp_path):
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+        repo = tmp_path / "myrepo"
+        repo.mkdir()
+        _init_repo(repo)
+        anchor = _commit(repo, "a.txt", "a", "first")
+        latest = _commit(repo, "b.txt", "b", "second")
+
+        artifact_dir = ws / "myrepo_abc12345"
+        artifact_dir.mkdir()
+        (artifact_dir / "meta.json").write_text(json.dumps({
+            "repo_name": "myrepo",
+            "repo_path": str(repo),
+            "indexed_at": "2026-04-10T10:00:00+00:00",
+            "last_indexed_commit": anchor,
+        }))
+
+        entries = _get_repo_status_entries(ws)
+        e = entries[0]
+        assert e["status"] == "stale"
+        assert e["indexed_head"] == anchor[:7]
+        assert e["current_head"] == latest[:7]
+        assert e["indexed_head"] != e["current_head"]
+        # Short SHAs are 7 chars, never the full 40
+        assert len(e["indexed_head"]) == 7
+        assert len(e["current_head"]) == 7
+
+    def test_entry_head_fields_none_when_not_git_repo(self, tmp_path):
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+        repo = tmp_path / "myrepo"   # plain dir, not a git repo
+        repo.mkdir()
+
+        artifact_dir = ws / "myrepo_abc12345"
+        artifact_dir.mkdir()
+        (artifact_dir / "meta.json").write_text(json.dumps({
+            "repo_name": "myrepo",
+            "repo_path": str(repo),
+            "indexed_at": "2026-04-10T10:00:00+00:00",
+            # no last_indexed_commit
+        }))
+
+        entries = _get_repo_status_entries(ws)
+        e = entries[0]
+        assert e["status"] == "unknown"
+        assert e["indexed_head"] is None
+        assert e["current_head"] is None
+
+
+# ---------------------------------------------------------------------------
+# MCP list_repositories handler embeds staleness / indexed_head / current_head
+# ---------------------------------------------------------------------------
+
+
+def _write_artifact(
+    ws: Path,
+    artifact_name: str,
+    repo_path: Path,
+    *,
+    last_indexed_commit: str | None,
+    graph_built: bool = True,
+) -> None:
+    artifact_dir = ws / artifact_name
+    artifact_dir.mkdir()
+    meta: dict = {
+        "repo_name": artifact_name.split("_")[0],
+        "repo_path": str(repo_path),
+        "indexed_at": "2026-04-10T10:00:00+00:00",
+        "steps": {"graph": graph_built, "api_docs": False, "embeddings": False, "wiki": False},
+    }
+    if last_indexed_commit is not None:
+        meta["last_indexed_commit"] = last_indexed_commit
+    (artifact_dir / "meta.json").write_text(json.dumps(meta))
+
+
+def _list_repositories(ws: Path) -> dict:
+    import asyncio
+
+    from terrain.entrypoints.mcp.tools import MCPToolsRegistry
+
+    registry = MCPToolsRegistry(workspace=ws)
+    try:
+        return asyncio.new_event_loop().run_until_complete(registry._handle_list_repositories())
+    finally:
+        registry.close()
+
+
+class TestMcpListRepositoriesStaleness:
+    """Covers the three staleness states exposed by the MCP list_repositories tool."""
+
+    def test_up_to_date_repo_reports_up_to_date_and_equal_heads(self, tmp_path):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        repo = tmp_path / "myrepo"
+        repo.mkdir()
+        _init_repo(repo)
+        head = _commit(repo, "a.txt", "a", "first")
+        _write_artifact(ws, "myrepo_abc12345", repo, last_indexed_commit=head)
+
+        result = _list_repositories(ws)
+        repos = result["repositories"]
+        assert len(repos) == 1
+        r = repos[0]
+        assert r["staleness"] == "up-to-date"
+        assert r["indexed_head"] == head[:7]
+        assert r["current_head"] == head[:7]
+
+    def test_stale_repo_reports_stale_with_distinct_short_shas(self, tmp_path):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        repo = tmp_path / "myrepo"
+        repo.mkdir()
+        _init_repo(repo)
+        anchor = _commit(repo, "a.txt", "a", "first")
+        latest = _commit(repo, "b.txt", "b", "second")
+        _write_artifact(ws, "myrepo_abc12345", repo, last_indexed_commit=anchor)
+
+        result = _list_repositories(ws)
+        r = result["repositories"][0]
+        assert r["staleness"] == "stale"
+        assert r["indexed_head"] == anchor[:7]
+        assert r["current_head"] == latest[:7]
+        assert r["indexed_head"] != r["current_head"]
+
+    def test_non_git_repo_reports_unknown(self, tmp_path):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        repo = tmp_path / "myrepo"
+        repo.mkdir()  # not a git repo
+        _write_artifact(ws, "myrepo_abc12345", repo, last_indexed_commit=None)
+
+        result = _list_repositories(ws)
+        r = result["repositories"][0]
+        assert r["staleness"] == "unknown"
+        assert r["indexed_head"] is None
+        assert r["current_head"] is None
+
+    def test_half_built_repo_without_graph_is_unknown(self, tmp_path):
+        """Edge case: artifact dir exists but graph step never finished."""
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        repo = tmp_path / "myrepo"
+        repo.mkdir()
+        _init_repo(repo)
+        head = _commit(repo, "a.txt", "a", "first")
+        _write_artifact(
+            ws, "myrepo_abc12345", repo,
+            last_indexed_commit=head,
+            graph_built=False,
+        )
+
+        result = _list_repositories(ws)
+        r = result["repositories"][0]
+        assert r["staleness"] == "unknown"
+        assert r["indexed_head"] is None
+        assert r["current_head"] is None
+
+    def test_empty_workspace_returns_empty_list_not_error(self, tmp_path):
+        ws = tmp_path / "empty"
+        result = _list_repositories(ws)
+        assert result["repositories"] == []
+        assert result["repository_count"] == 0
+
+
+# ---------------------------------------------------------------------------
 # save_meta writes timezone-aware UTC for indexed_at
 # ---------------------------------------------------------------------------
 
