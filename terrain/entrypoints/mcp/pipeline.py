@@ -1562,9 +1562,11 @@ def save_meta(
     has_embeddings = (artifact_dir / "vectors.pkl").exists()
     has_wiki = wiki_page_count > 0 or (artifact_dir / "wiki" / "index.md").exists()
 
+    from terrain.foundation.utils.paths import normalize_repo_path
+
     meta = {
         **existing,
-        "repo_path": repo_path.as_posix(),
+        "repo_path": normalize_repo_path(repo_path),
         "repo_name": resolved_name,
         "indexed_at": datetime.now(timezone.utc).isoformat(),
         "wiki_page_count": wiki_page_count,
@@ -1582,9 +1584,27 @@ def save_meta(
 def artifact_dir_for(workspace: Path, repo_path: "Path | PurePath") -> Path:
     import hashlib
 
-    # Use POSIX path for hashing so the same repo gets the same hash
-    # regardless of OS (Windows backslash vs Unix forward slash).
-    posix_path = repo_path.as_posix()
-    h = hashlib.md5(posix_path.encode()).hexdigest()[:8]
+    from terrain.foundation.utils.paths import normalize_repo_path
+
+    # Hash the *normalized* canonical form so CLI and MCP always agree on the
+    # artifact dir for the same logical repo (JER-100). See normalize_repo_path
+    # for the full contract.
+    canonical = normalize_repo_path(repo_path)
+    h = hashlib.md5(canonical.encode()).hexdigest()[:8]
     name = repo_path.name or repo_path.anchor.replace("\\", "").replace("/", "").replace(":", "") or "root"
-    return workspace / f"{name}_{h}"
+    new_dir = workspace / f"{name}_{h}"
+
+    # Backward compatibility: workspaces indexed before JER-100 may already
+    # contain a dir hashed from raw ``repo_path.as_posix()``. When the new
+    # canonical hash doesn't match an existing dir but the legacy one does,
+    # return the legacy dir so existing workspaces keep working. New artifacts
+    # will always use the canonical form.
+    if not new_dir.exists() and workspace.exists():
+        legacy_posix = repo_path.as_posix()
+        if legacy_posix != canonical:
+            legacy_hash = hashlib.md5(legacy_posix.encode()).hexdigest()[:8]
+            if legacy_hash != h:
+                legacy_dir = workspace / f"{name}_{legacy_hash}"
+                if legacy_dir.exists():
+                    return legacy_dir
+    return new_dir

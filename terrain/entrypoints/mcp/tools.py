@@ -1041,8 +1041,18 @@ class MCPToolsRegistry:
         if not meta_file.exists():
             raise FileNotFoundError(f"meta.json not found in {artifact_dir}")
 
+        from terrain.foundation.utils.paths import normalize_repo_path
+
         meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
-        repo_path = Path(meta["repo_path"])
+        try:
+            raw_repo_path = meta["repo_path"]
+        except KeyError as exc:
+            raise KeyError(f"meta.json in {artifact_dir} missing 'repo_path'") from exc
+        try:
+            repo_path = Path(normalize_repo_path(raw_repo_path))
+        except (TypeError, ValueError) as exc:
+            logger.warning(f"meta.json repo_path normalize failed ({raw_repo_path!r}): {exc}; falling back to raw")
+            repo_path = Path(raw_repo_path)
         db_path = artifact_dir / "graph.db"
         vectors_path = artifact_dir / "vectors.pkl"
 
@@ -2064,9 +2074,11 @@ class MCPToolsRegistry:
         source_meta = json.loads(
             (source_dir / "meta.json").read_text(encoding="utf-8", errors="replace")
         )
+        from terrain.foundation.utils.paths import normalize_repo_path
+
         new_meta = {
             **source_meta,
-            "repo_path": str(repo),
+            "repo_path": normalize_repo_path(repo),
             "repo_name": repo.name,
             "linked_to": str(source_dir),
             "linked_source_repo": source_meta.get("repo_name", source_dir.name),
@@ -2082,7 +2094,7 @@ class MCPToolsRegistry:
 
         return {
             "status": "success",
-            "repo_path": str(repo),
+            "repo_path": normalize_repo_path(repo),
             "artifact_dir": str(new_dir),
             "linked_to": source_dir.name,
             "linked_artifacts": linked,
