@@ -217,8 +217,163 @@ def migrate_meta_to_v2(artifact_dir: Path, ws: Path) -> None:
         pass
 
 
+# ---------------------------------------------------------------------------
+# unlink_artifact — symmetric teardown for register_link
+# ---------------------------------------------------------------------------
+
+class UnlinkError(Exception):
+    """Raised when :func:`unlink_artifact` refuses or cannot complete."""
+
+
+def _remove_child_tree(child_dir: Path) -> None:
+    """Remove *child_dir* safely.
+
+    Symlinks created by ``terrain link`` point at the authoritative source's
+    data files — we must ``unlink()`` them, never ``rmtree()`` them, or
+    we'd wipe the upstream data. On Windows (where ``terrain link`` falls
+    back to ``copytree``), real copies are safe to ``rmtree``.
+    """
+    import shutil
+
+    if not child_dir.exists() and not child_dir.is_symlink():
+        return
+
+    for entry in sorted(child_dir.iterdir()):
+        # Symlink check must come before is_dir() — is_dir() on a symlink
+        # follows the link and would report True for a dir symlink.
+        if entry.is_symlink():
+            entry.unlink()
+        elif entry.is_dir():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+    child_dir.rmdir()
+
+
+def unlink_artifact(ws: Path, target: str) -> dict[str, Any]:
+    """Tear down a link created by :func:`register_link`.
+
+    *target* is either:
+      * an absolute/relative repo path (matched against ``repo_path`` in
+        every meta, after normalization), or
+      * a workspace artifact dir basename.
+
+    Returns a dict describing the teardown::
+
+        {
+            "artifact_dir": "<child dir name>",
+            "repo_path":    "<canonical repo path>",
+            "source_artifact": "<source dir name>",
+            "cleared_active": bool,
+        }
+
+    Raises :class:`UnlinkError` when:
+      * the target cannot be found in *ws*,
+      * the target resolves to the authoritative source (refuses to tear
+        down the upstream DB — only children may be unlinked).
+    """
+    if not ws.exists():
+        raise UnlinkError(f"Workspace does not exist: {ws}")
+
+    # Build an in-memory index of every dir's meta so we can match both by
+    # artifact name and by repo_path — and so we can find the source ptr
+    # without a second read.
+    metas: dict[str, dict[str, Any]] = {}
+    for child in sorted(ws.iterdir()):
+        if not child.is_dir():
+            continue
+        m = _read_meta(child / "meta.json")
+        if m is not None:
+            metas[child.name] = m
+
+    child_name: str | None = None
+
+    # Direct artifact_dir hit.
+    if target in metas:
+        child_name = target
+    else:
+        # Try matching by normalized repo_path.
+        try:
+            canonical = normalize_repo_path(target)
+        except (TypeError, ValueError):
+            canonical = None
+        if canonical is not None:
+            for name, meta in metas.items():
+                meta_path = meta.get("repo_path")
+                if not meta_path:
+                    continue
+                try:
+                    meta_canonical = normalize_repo_path(meta_path)
+                except (TypeError, ValueError):
+                    meta_canonical = str(meta_path)
+                if meta_canonical == canonical:
+                    child_name = name
+                    break
+
+    if child_name is None:
+        raise UnlinkError(
+            f"Not found in workspace: {target}. "
+            "Pass an artifact dir basename or a linked repo path."
+        )
+
+    child_meta = metas[child_name]
+    source_name = child_meta.get("source_artifact")
+    if not source_name:
+        raise UnlinkError(
+            f"{child_name} is not a linked child artifact "
+            "(no source_artifact). Refusing to unlink the authoritative "
+            "source. Use `terrain clean` to fully remove an artifact."
+        )
+
+    child_dir = ws / child_name
+    source_dir = ws / str(source_name)
+
+    # Remove the child entry from the source meta's linked_repos (idempotent).
+    source_meta = metas.get(str(source_name)) or _read_meta(source_dir / "meta.json")
+    if source_meta is not None:
+        remaining = [
+            e for e in (source_meta.get("linked_repos") or [])
+            if e.get("artifact_dir") != child_name
+        ]
+        source_meta["schema_version"] = SCHEMA_VERSION
+        source_meta["linked_repos"] = remaining
+        try:
+            _atomic_write_meta(source_dir / "meta.json", source_meta)
+        except OSError:
+            pass
+
+    # Clear active.txt if we're tearing down the active artifact.
+    cleared_active = False
+    active_file = ws / "active.txt"
+    if active_file.exists():
+        try:
+            active_name = active_file.read_text(
+                encoding="utf-8", errors="replace"
+            ).strip()
+        except OSError:
+            active_name = ""
+        if active_name == child_name:
+            try:
+                active_file.write_text("", encoding="utf-8")
+                cleared_active = True
+            except OSError:
+                pass
+
+    # Finally remove the child artifact dir itself.
+    _remove_child_tree(child_dir)
+
+    return {
+        "artifact_dir": child_name,
+        "repo_path": child_meta.get("repo_path"),
+        "source_artifact": str(source_name),
+        "cleared_active": cleared_active,
+    }
+
+
 __all__ = [
     "SCHEMA_VERSION",
+    "UnlinkError",
     "register_link",
     "migrate_meta_to_v2",
+    "unlink_artifact",
 ]

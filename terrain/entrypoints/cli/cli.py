@@ -385,7 +385,17 @@ def _get_workspace_root() -> Path:
 
 
 def _load_repos(ws: Path) -> list[dict]:
-    """Return all indexed repos, sorted by name, with 'active' flag set."""
+    """Return all indexed repos, sorted by name, with 'active' flag set.
+
+    Each entry carries schema-v2 linkage hints when present:
+
+    * ``linked_source`` — on a *child* artifact (its meta has
+      ``source_artifact``), the ``repo_name`` of the authoritative source.
+      Unset / ``None`` for standalone or authoritative entries.
+    * ``shared_count`` — on an *authoritative* artifact, the length of the
+      source meta's ``linked_repos`` list (how many child mounts share this
+      database). Unset for non-authoritative entries.
+    """
     from terrain.entrypoints.link_ops import migrate_meta_to_v2
     from terrain.foundation.utils.paths import normalize_repo_path
 
@@ -395,6 +405,7 @@ def _load_repos(ws: Path) -> list[dict]:
     repos: list[dict] = []
     if not ws.exists():
         return repos
+    metas_by_name: dict[str, dict] = {}
     for child in sorted(ws.iterdir()):
         if not child.is_dir():
             continue
@@ -407,19 +418,37 @@ def _load_repos(ws: Path) -> list[dict]:
             meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
+        metas_by_name[child.name] = meta
         resolved = _resolve_artifact_dir(child)
         raw_path = meta.get("repo_path", "unknown")
         try:
             path_display = normalize_repo_path(raw_path) if raw_path != "unknown" else raw_path
         except (TypeError, ValueError):
             path_display = raw_path
+        source_artifact = meta.get("source_artifact")
+        linked_repos = meta.get("linked_repos") or []
         repos.append({
             "artifact_dir": resolved,
             "name": meta.get("repo_name", child.name),
             "path": path_display,
             "indexed_at": meta.get("indexed_at", "unknown"),
             "active": child.name == active_name,
+            "source_artifact": source_artifact,
+            "linked_source": None,            # resolved below
+            "shared_count": len(linked_repos) if linked_repos else 0,
         })
+
+    # Resolve child rows' ``linked_source`` against the sibling we already
+    # loaded — avoids a second disk read per entry.
+    for r in repos:
+        src_name = r.get("source_artifact")
+        if not src_name:
+            continue
+        src_meta = metas_by_name.get(str(src_name))
+        if src_meta is None:
+            continue
+        r["linked_source"] = src_meta.get("repo_name", src_name)
+
     return repos
 
 
@@ -427,14 +456,23 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
     """Return staleness status for every indexed repo under *ws*.
 
     Each entry is a dict with:
-        artifact_dir  — artifact directory name (stable join key)
-        name          — display name from meta.json
-        path          — absolute repo path
-        indexed_at    — ISO 8601 timestamp string
-        status        — "up-to-date" | "stale" | "unknown"
-        commits_since — int (>=0) or None when unknown
-        indexed_head  — short SHA (7 chars) recorded at index time, or None
-        current_head  — short SHA (7 chars) of the repo's HEAD now, or None
+        artifact_dir   — artifact directory name (stable join key)
+        name           — display name from meta.json
+        path           — absolute repo path
+        indexed_at     — ISO 8601 timestamp string
+        status         — "up-to-date" | "stale" | "unknown"
+        commits_since  — int (>=0) or None when unknown
+        indexed_head   — short SHA (7 chars) recorded at index time, or None
+        current_head   — short SHA (7 chars) of the repo's HEAD now, or None
+        linked_source  — source artifact's ``repo_name`` if this row is a
+                         linked child (schema v2); otherwise ``None``.
+        shared_count   — number of linked mounts if this row is the
+                         authoritative source; otherwise ``0``.
+
+    Each linked mount already owns its own artifact dir (created by
+    ``terrain link``), so the per-dir iteration naturally yields one row
+    per mount with its own ``GitChangeDetector`` probe — no virtual
+    expansion is needed.
     """
     from terrain.foundation.services.git_service import GitChangeDetector
 
@@ -445,7 +483,11 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
     entries: list[dict] = []
 
     from terrain.entrypoints.link_ops import migrate_meta_to_v2
+    from terrain.foundation.utils.paths import normalize_repo_path
 
+    # First pass: read every meta (with lazy v2 migration) so we can resolve
+    # ``source_artifact`` -> source repo_name without re-reading meta.json.
+    metas: dict[str, dict] = {}
     for child in sorted(ws.iterdir()):
         if not child.is_dir():
             continue
@@ -455,13 +497,15 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
         # JER-101: lazy v1 → v2 migration (idempotent, no-op for v2).
         migrate_meta_to_v2(child, ws)
         try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8", errors="replace"))
+            metas[child.name] = json.loads(
+                meta_file.read_text(encoding="utf-8", errors="replace")
+            )
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
 
-        from terrain.foundation.utils.paths import normalize_repo_path
-
-        name = meta.get("repo_name", child.name)
+    for child_name, meta in metas.items():
+        child = ws / child_name
+        name = meta.get("repo_name", child_name)
         repo_path_str = meta.get("repo_path", "")
         indexed_at = meta.get("indexed_at", "")
         last_indexed_commit = meta.get("last_indexed_commit") or ""
@@ -470,7 +514,7 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
             try:
                 repo_path = Path(normalize_repo_path(repo_path_str))
             except (TypeError, ValueError):
-                logger.warning(f"meta.json repo_path normalize failed for {child.name}: {repo_path_str!r}")
+                logger.warning(f"meta.json repo_path normalize failed for {child_name}: {repo_path_str!r}")
                 repo_path = Path(repo_path_str)
         else:
             repo_path = None
@@ -493,8 +537,20 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
         else:
             status = "stale"
 
+        # JER-102: schema-v2 linkage for display/MCP consumers.
+        linked_source: str | None = None
+        src_name = meta.get("source_artifact")
+        if src_name:
+            src_meta = metas.get(str(src_name))
+            if src_meta is not None:
+                linked_source = src_meta.get("repo_name", str(src_name))
+            else:
+                linked_source = str(src_name)
+        linked_repos = meta.get("linked_repos") or []
+        shared_count = len(linked_repos) if linked_repos else 0
+
         entries.append({
-            "artifact_dir": child.name,
+            "artifact_dir": child_name,
             "name": name,
             "path": repo_path_str,
             "indexed_at": indexed_at,
@@ -502,6 +558,8 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
             "commits_since": commits,
             "indexed_head": last_indexed_commit[:7] if last_indexed_commit else None,
             "current_head": current_head_full[:7] if current_head_full else None,
+            "linked_source": linked_source,
+            "shared_count": shared_count,
         })
 
     return entries
@@ -804,7 +862,14 @@ def cmd_status(args: argparse.Namespace) -> int:
             else:
                 detail = f"{commits} commit{'s' if commits != 1 else ''} since last index"
             name_padded = entry["name"].ljust(name_w)
-            print(f"  {name_padded}  {icon}  {label:<12}  ({detail})")
+            linkage = ""
+            linked_source = entry.get("linked_source")
+            shared_count = entry.get("shared_count") or 0
+            if linked_source:
+                linkage = f"   {_c('36', f'linked → {linked_source}')}"
+            elif shared_count >= 2:
+                linkage = f"   {_c('36', f'(shared by {shared_count} repos)')}"
+            print(f"  {name_padded}  {icon}  {label:<12}  ({detail}){linkage}")
     elif ws.exists():
         print(f"  repos      {_c('2', '(none indexed)')}")
 
@@ -1219,7 +1284,14 @@ def cmd_list(_args: argparse.Namespace) -> int:
 
     for r in repos:
         marker = "* " if r["active"] else "  "
-        print(f"{marker}{r['name']}")
+        name_line = f"{marker}{r['name']}"
+        linked_source = r.get("linked_source")
+        shared_count = r.get("shared_count") or 0
+        if linked_source:
+            name_line += f"   {_c('36', f'linked → {linked_source}')}"
+        elif shared_count >= 2:
+            name_line += f"   {_c('36', f'(shared by {shared_count} repos)')}"
+        print(name_line)
         print(f"    path:       {r['path']}")
         print(f"    indexed_at: {r['indexed_at']}")
     print()
@@ -1510,6 +1582,43 @@ def _link_update_meta(artifact_dir: Path, repo_path: "Path | PurePath",
         meta["indexed_at"] = meta["linked_at"]
 
     meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# unlink — symmetric teardown for `terrain link`
+# ---------------------------------------------------------------------------
+
+def cmd_unlink(args: argparse.Namespace) -> int:
+    """Remove a linked child artifact created by ``terrain link``."""
+    from terrain.entrypoints.link_ops import UnlinkError, unlink_artifact
+
+    ws = _get_workspace_root()
+    target = getattr(args, "target", "").strip()
+    if not target:
+        print(f"  {_c('31', 'ERROR')} unlink: missing target "
+              f"(pass a repo path or artifact dir name)")
+        return 1
+
+    try:
+        result = unlink_artifact(ws, target)
+    except UnlinkError as exc:
+        print(f"  {_c('31', 'ERROR')} {exc}")
+        return 1
+
+    print()
+    print(f"  {_T_DOT} {_c('32', 'Unlinked successfully')}")
+    print(f"  {_T_SIDE}")
+    print(f"  {_T_BRANCH} artifact   {result['artifact_dir']}")
+    if result.get("repo_path"):
+        print(f"  {_T_BRANCH} repo       {result['repo_path']}")
+    print(f"  {_T_BRANCH} source     {result['source_artifact']}")
+    if result.get("cleared_active"):
+        print(f"  {_T_LAST} active     {_c('33', 'cleared')} "
+              f"— run `terrain repo` to pick a new active artifact")
+    else:
+        print(f"  {_T_LAST} active     unchanged")
+    print()
+    return 0
 
 
 def _link_artifacts(source_dir: Path, target_dir: Path) -> None:
@@ -2611,6 +2720,23 @@ Windows:
         help="Artifact directory name to link (interactive if omitted)",
     )
     link_parser.set_defaults(func=cmd_link)
+
+    # unlink command
+    unlink_parser = subparsers.add_parser(
+        "unlink",
+        help="Undo a `terrain link` — remove a linked child artifact",
+        description=(
+            "Remove a linked child artifact created by `terrain link`. "
+            "Accepts either a linked repo path or the artifact directory "
+            "basename. The authoritative source artifact is never touched."
+        ),
+    )
+    unlink_parser.add_argument(
+        "target",
+        type=str,
+        help="Linked repo path, or artifact directory basename",
+    )
+    unlink_parser.set_defaults(func=cmd_unlink)
 
     # clean command
     clean_parser = subparsers.add_parser(
