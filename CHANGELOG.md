@@ -6,6 +6,18 @@
 
 ---
 
+## [2.1.14] — 2026-04-23
+
+### Added
+- **opencode support in `npx terrain-ai@latest --setup`** — auto-detects the `opencode` CLI, registers the terrain MCP server by editing `$XDG_CONFIG_HOME/opencode/opencode.json` (falls back to `~/.config/opencode/opencode.json`), and installs slash commands (`/ask`, `/code-gen`, `/research`, `/trace`) into `$XDG_CONFIG_HOME/opencode/command/`. Edits are idempotent and preserve existing MCP entries and top-level fields. `terrain uninstall` now also removes the opencode entry and command files
+- **`npm-package/bin/opencode.mjs`** — extracted opencode config helpers as a standalone module with 16 unit tests (`npm-package/tests/opencode.test.mjs`) covering registration, uninstall, JSONC detection, and preservation of unrelated config
+
+### 新增
+- **`npx terrain-ai@latest --setup` 支持 opencode** — 自动检测 `opencode` CLI，通过修改 `$XDG_CONFIG_HOME/opencode/opencode.json`（缺省为 `~/.config/opencode/opencode.json`）注册 terrain MCP 服务器；并将 slash commands（`/ask`、`/code-gen`、`/research`、`/trace`）安装到 `$XDG_CONFIG_HOME/opencode/command/`。写入是幂等的，保留已有 MCP 与顶层字段。`terrain uninstall` 现在也会清理 opencode 相关配置和 command 文件
+- **`npm-package/bin/opencode.mjs`** — 抽出的 opencode 配置工具模块，配套 16 个单元测试（`npm-package/tests/opencode.test.mjs`），覆盖注册、卸载、JSONC 识别及对无关配置的保护
+
+---
+
 ## [2.1.13] — 2026-04-17
 
 ### Added
