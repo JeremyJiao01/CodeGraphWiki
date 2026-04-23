@@ -386,6 +386,8 @@ def _get_workspace_root() -> Path:
 
 def _load_repos(ws: Path) -> list[dict]:
     """Return all indexed repos, sorted by name, with 'active' flag set."""
+    from terrain.foundation.utils.paths import normalize_repo_path
+
     active_file = ws / "active.txt"
     active_name = active_file.read_text(encoding="utf-8", errors="replace").strip() if active_file.exists() else ""
 
@@ -403,10 +405,15 @@ def _load_repos(ws: Path) -> list[dict]:
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
         resolved = _resolve_artifact_dir(child)
+        raw_path = meta.get("repo_path", "unknown")
+        try:
+            path_display = normalize_repo_path(raw_path) if raw_path != "unknown" else raw_path
+        except (TypeError, ValueError):
+            path_display = raw_path
         repos.append({
             "artifact_dir": resolved,
             "name": meta.get("repo_name", child.name),
-            "path": meta.get("repo_path", "unknown"),
+            "path": path_display,
             "indexed_at": meta.get("indexed_at", "unknown"),
             "active": child.name == active_name,
         })
@@ -445,12 +452,21 @@ def _get_repo_status_entries(ws: Path) -> list[dict]:
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
 
+        from terrain.foundation.utils.paths import normalize_repo_path
+
         name = meta.get("repo_name", child.name)
         repo_path_str = meta.get("repo_path", "")
         indexed_at = meta.get("indexed_at", "")
         last_indexed_commit = meta.get("last_indexed_commit") or ""
 
-        repo_path = Path(repo_path_str) if repo_path_str else None
+        if repo_path_str:
+            try:
+                repo_path = Path(normalize_repo_path(repo_path_str))
+            except (TypeError, ValueError):
+                logger.warning(f"meta.json repo_path normalize failed for {child.name}: {repo_path_str!r}")
+                repo_path = Path(repo_path_str)
+        else:
+            repo_path = None
         commits: int | None = None
         current_head_full: str | None = None
 
@@ -1445,9 +1461,11 @@ def _link_update_meta(artifact_dir: Path, repo_path: "Path | PurePath",
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             pass
 
+    from terrain.foundation.utils.paths import normalize_repo_path
+
     meta = {
         **existing,
-        "repo_path": repo_path.as_posix(),
+        "repo_path": normalize_repo_path(repo_path),
         "repo_name": repo_path.name or "root",
         "linked_at": datetime.now().isoformat(),
         "steps": {
