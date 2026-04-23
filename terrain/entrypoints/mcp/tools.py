@@ -1528,6 +1528,7 @@ class MCPToolsRegistry:
             "list_repositories": self._handle_list_repositories,
             "switch_repository": self._handle_switch_repository,
             "link_repository": self._handle_link_repository,
+            "unlink_repository": self._handle_unlink_repository,
             "query_code_graph": self._handle_query_code_graph,
             "get_code_snippet": self._handle_get_code_snippet,
             "semantic_search": self._handle_semantic_search,
@@ -1832,6 +1833,24 @@ class MCPToolsRegistry:
                 "or MOONSHOT_API_KEY to enable natural language queries."
             )
 
+        # JER-102: expose schema-v2 linkage so clients can tell when the
+        # active artifact is a linked child (FileEditor still uses the
+        # child's own ``repo_path`` — we only surface the pointer).
+        linked_source: str | None = None
+        source_artifact = meta.get("source_artifact")
+        if source_artifact:
+            src_meta_file = self._workspace / str(source_artifact) / "meta.json"
+            if src_meta_file.exists():
+                try:
+                    src_meta = json.loads(
+                        src_meta_file.read_text(encoding="utf-8", errors="replace")
+                    )
+                    linked_source = src_meta.get("repo_name", str(source_artifact))
+                except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                    linked_source = str(source_artifact)
+            else:
+                linked_source = str(source_artifact)
+
         result: dict[str, Any] = {
             "repo_path": str(self._active_repo_path),
             "artifact_dir": str(self._active_artifact_dir),
@@ -1839,6 +1858,9 @@ class MCPToolsRegistry:
             "semantic_search_available": self._semantic_service is not None,
             "cypher_query_available": self._cypher_gen is not None,
             "wiki_pages": wiki_pages,
+            "source_artifact": source_artifact,
+            "linked_source": linked_source,
+            "shared_count": len(meta.get("linked_repos") or []),
         }
         if warnings:
             result["warnings"] = warnings
@@ -1929,6 +1951,15 @@ class MCPToolsRegistry:
                 current_head = status_entry["current_head"]
                 commits_since = status_entry["commits_since"]
 
+            # JER-102: pass through schema-v2 linkage. ``_get_repo_status_entries``
+            # already resolved ``linked_source`` from the source meta for us.
+            linked_source = None
+            shared_count = len(meta.get("linked_repos") or [])
+            if status_entry is not None:
+                linked_source = status_entry.get("linked_source")
+            if linked_source is None and meta.get("source_artifact"):
+                linked_source = str(meta.get("source_artifact"))
+
             repos.append({
                 "artifact_dir": child.name,
                 "repo_name": meta.get("repo_name", child.name),
@@ -1941,6 +1972,9 @@ class MCPToolsRegistry:
                 "indexed_head": indexed_head,
                 "current_head": current_head,
                 "commits_since": commits_since,
+                "source_artifact": meta.get("source_artifact"),
+                "linked_source": linked_source,
+                "shared_count": shared_count,
             })
 
         return {
@@ -2111,6 +2145,50 @@ class MCPToolsRegistry:
                 f"Shared artifacts: {', '.join(linked)}. "
                 f"Now active."
             ),
+        }
+
+    # -------------------------------------------------------------------------
+    # unlink_repository — symmetric teardown of link_repository
+    # -------------------------------------------------------------------------
+
+    async def _handle_unlink_repository(self, target: str) -> dict[str, Any]:
+        """Remove a child artifact created by ``link_repository``.
+
+        *target* may be an artifact dir basename or a linked repo path.
+        Refuses to tear down the authoritative source — only children may
+        be unlinked. When the active artifact is the target, clears the
+        registry's in-memory active state so callers must re-select.
+        """
+        from terrain.entrypoints.link_ops import UnlinkError, unlink_artifact
+
+        try:
+            result = unlink_artifact(self._workspace, target)
+        except UnlinkError as exc:
+            raise ToolError({
+                "error": str(exc),
+                "hint": (
+                    "Pass an artifact dir basename or a linked repo path. "
+                    "Use list_repositories to see available repos."
+                ),
+            }) from exc
+
+        if result.get("cleared_active"):
+            self.close()
+            self._active_repo_path = None
+            self._active_artifact_dir = None
+
+        return {
+            "status": "success",
+            "artifact_dir": result["artifact_dir"],
+            "repo_path": result.get("repo_path"),
+            "source_artifact": result["source_artifact"],
+            "cleared_active": bool(result.get("cleared_active")),
+            "message": (
+                f"Unlinked {result['artifact_dir']} (source "
+                f"{result['source_artifact']} kept). "
+                + ("Active state cleared — call switch_repository."
+                   if result.get("cleared_active") else "")
+            ).strip(),
         }
 
     # -------------------------------------------------------------------------
