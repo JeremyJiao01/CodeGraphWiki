@@ -18,6 +18,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync
 import { homedir, platform, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  getOpencodeConfigPath,
+  getOpencodeCommandDir,
+  registerOpencodeMcp as _registerOpencodeMcp,
+  unregisterOpencodeMcp as _unregisterOpencodeMcp,
+  installOpencodeSkills as _installOpencodeSkills,
+  detectOpencodeState as _detectOpencodeState,
+} from "./opencode.mjs";
 
 const PYTHON_PACKAGE = "terrain-ai";
 const MODULE_PATH = "terrain.entrypoints.mcp.server";
@@ -1395,6 +1403,9 @@ async function runSetup() {
   }
 
   // 4. Claude Code registration
+  const opencodeDetected = commandExists("opencode");
+  const claudePrefix = opencodeDetected ? T.BRANCH : T.LAST;
+
   if (commandExists("claude")) {
     try {
       try {
@@ -1406,9 +1417,9 @@ async function runSetup() {
         : 'claude mcp add --scope user --transport stdio terrain -- npx -y terrain-ai@latest --server';
 
       execSync(addCmd, { stdio: "pipe", shell: true });
-      log(`  ${T.LAST} ${T.OK} Claude Code MCP registered (global)`);
+      log(`  ${claudePrefix} ${T.OK} Claude Code MCP registered (global)`);
     } catch {
-      log(`  ${T.LAST} ${T.WARN} Claude Code auto-register failed`);
+      log(`  ${claudePrefix} ${T.WARN} Claude Code auto-register failed`);
       log(`       Run manually:`);
       if (IS_WIN) {
         log(`       claude mcp add --scope user --transport stdio terrain -- cmd /c npx -y terrain-ai@latest --server`);
@@ -1417,7 +1428,7 @@ async function runSetup() {
       }
     }
   } else {
-    log(`  ${T.LAST} ${T.WARN} Claude Code CLI not found`);
+    log(`  ${claudePrefix} ${T.WARN} Claude Code CLI not found`);
     log();
     log(`       Add to your MCP client config manually:`);
     log();
@@ -1431,8 +1442,34 @@ async function runSetup() {
     log(`       }`);
   }
 
-  // 5. Install skill commands to ~/.claude/commands/
+  // 4b. opencode registration (edits opencode.json directly; its `mcp add` is a TUI)
+  if (opencodeDetected) {
+    try {
+      const path = registerOpencodeMcp();
+      log(`  ${T.LAST} ${T.OK} opencode MCP registered (${path})`);
+    } catch (err) {
+      log(`  ${T.LAST} ${T.WARN} opencode auto-register failed: ${err.message}`);
+      log(`       Add this to ${getOpencodeConfigPath()}:`);
+      log(`       {`);
+      log(`         "$schema": "https://opencode.ai/config.json",`);
+      log(`         "mcp": {`);
+      log(`           "terrain": {`);
+      log(`             "type": "local",`);
+      if (IS_WIN) {
+        log(`             "command": ["cmd", "/c", "npx", "-y", "terrain-ai@latest", "--server"],`);
+      } else {
+        log(`             "command": ["npx", "-y", "terrain-ai@latest", "--server"],`);
+      }
+      log(`             "enabled": true`);
+      log(`           }`);
+      log(`         }`);
+      log(`       }`);
+    }
+  }
+
+  // 5. Install skill commands to ~/.claude/commands/ and ~/.config/opencode/command/
   installSkills(log);
+  installOpencodeSkills(log);
 
   log();
   log(`  ${T.DOT} Setup complete`);
@@ -1500,6 +1537,46 @@ function installSkills(log) {
       log();
       log(`  ${T.DOT} ${T.WARN} Skill installation failed: ${err.message}`);
       log(`       Copy manually from: ${srcDir}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// opencode support (thin wrappers over ./opencode.mjs)
+// ---------------------------------------------------------------------------
+
+function registerOpencodeMcp() {
+  return _registerOpencodeMcp({ isWin: IS_WIN });
+}
+
+function unregisterOpencodeMcp() {
+  return _unregisterOpencodeMcp();
+}
+
+function detectOpencodeState() {
+  return _detectOpencodeState({ commandExists });
+}
+
+function installOpencodeSkills(log) {
+  try {
+    const result = _installOpencodeSkills();
+    const { installed, targetDir, missing } = result;
+    if (missing) return;
+    if (log && installed.length > 0) {
+      log();
+      log(`  ${T.DOT} opencode skills installed`);
+      log(`  ${T.SIDE}`);
+      for (let i = 0; i < installed.length; i++) {
+        const name = installed[i].replace(".md", "");
+        const prefix = i < installed.length - 1 ? T.BRANCH : T.LAST;
+        log(`  ${prefix} /${name}`);
+      }
+    }
+    return targetDir;
+  } catch (err) {
+    if (log) {
+      log();
+      log(`  ${T.DOT} ${T.WARN} opencode skill installation failed: ${err.message}`);
     }
   }
 }
@@ -1630,6 +1707,8 @@ async function runUninstall() {
   const skillDir = join(homedir(), ".claude", "commands");
   const installedSkills = SKILL_NAMES.filter(f => existsSync(join(skillDir, f)));
 
+  const opencode = detectOpencodeState();
+
   log(`  ${T.DOT} Components detected`);
   log(`  ${T.SIDE}`);
   if (hasPythonPkg)    log(`  ${T.BRANCH} Python package:  terrain`);
@@ -1639,6 +1718,8 @@ async function runUninstall() {
   if (hasEnv)          log(`  ${T.BRANCH} Config file:     ${ENV_FILE}`);
   if (hasClaudeConfig) log(`  ${T.BRANCH} Claude Code MCP: registered`);
   if (installedSkills.length > 0) log(`  ${T.BRANCH} Skill commands:  ${installedSkills.map(f => "/" + f.replace(".md", "")).join(", ")}`);
+  if (opencode.hasMcp) log(`  ${T.BRANCH} opencode MCP:    registered`);
+  if (opencode.installedSkills.length > 0) log(`  ${T.BRANCH} opencode skills: ${opencode.installedSkills.map(f => "/" + f.replace(".md", "")).join(", ")}`);
   log(`  ${T.LAST}`);
   log();
 
@@ -1698,6 +1779,31 @@ async function runUninstall() {
     }
     if (removed > 0) {
       log(`  ${T.BRANCH} ${T.OK} Skill commands (${removed} files)`);
+    }
+  }
+
+  // opencode MCP entry
+  if (opencode.hasMcp) {
+    try {
+      if (unregisterOpencodeMcp()) {
+        log(`  ${T.BRANCH} ${T.OK} opencode MCP entry`);
+      }
+    } catch (err) {
+      log(`  ${T.BRANCH} ${T.WARN} opencode MCP entry: ${err.message}`);
+    }
+  }
+
+  // opencode skill command files
+  if (opencode.installedSkills.length > 0) {
+    let removed = 0;
+    for (const file of opencode.installedSkills) {
+      try {
+        rmSync(join(opencode.cmdDir, file), { force: true });
+        removed++;
+      } catch { /* best effort */ }
+    }
+    if (removed > 0) {
+      log(`  ${T.BRANCH} ${T.OK} opencode skills (${removed} files)`);
     }
   }
 
@@ -1937,6 +2043,7 @@ async function runMove() {
 function startServer(extraArgs = []) {
   // Ensure skills are installed (silent, no output on stdio — MCP uses it)
   installSkills(null);
+  installOpencodeSkills(null);
 
   // Show notice if a background update completed since last startup
   showPendingUpdateNotice();

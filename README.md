@@ -67,9 +67,13 @@ pip install terrain-ai
 npx terrain-ai@latest --setup
 ```
 
-The setup wizard installs the Python package, configures your LLM and embedding provider, and registers Terrain as a global MCP server for Claude Code. One command.
+The setup wizard installs the Python package, configures your LLM and embedding provider, and registers Terrain as a global MCP server for supported clients. One command.
 
-Then in Claude Code — point it at any repo and ask anything.
+**Supported clients (auto-detected):**
+- **Claude Code** — MCP registered via `claude mcp add`; slash commands installed to `~/.claude/commands/`
+- **opencode** — MCP registered by editing `~/.config/opencode/opencode.json` (respects `$XDG_CONFIG_HOME`); slash commands installed to `~/.config/opencode/command/`
+
+Then in your client — point it at any repo and ask anything.
 
 ## Index a Codebase
 
@@ -106,7 +110,7 @@ C/C++, Python, JavaScript/TypeScript, Rust, Go, Java, Scala, C#, PHP, Lua
 npx terrain-ai@latest --uninstall
 ```
 
-Removes: Claude MCP registration, Python package, workspace data.
+Removes: Claude MCP registration, opencode MCP registration, slash commands from both clients, Python package, workspace data.
 
 ### CLI Tool (`terrain`)
 
