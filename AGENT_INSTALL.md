@@ -91,3 +91,30 @@ After a successful install, verify:
 Expected output: `ok`. If this fails, try the next mirror source.
 
 ---
+
+## Block 4 — Check for Existing API Keys
+
+Check if `~/.terrain/.env` already contains keys.
+
+**Mac/Linux:**
+```bash
+cat ~/.terrain/.env 2>/dev/null
+```
+
+**Windows:**
+```
+type "%USERPROFILE%\.terrain\.env" 2>nul
+```
+
+**If the file exists and contains `LLM_API_KEY`** → the keys are already configured. Skip to Block 5.
+
+**If the file is missing or `LLM_API_KEY` is absent** → ask the user the following questions one at a time:
+
+1. Which LLM provider are you using? (OpenAI / Anthropic / Gemini / other — for "other", ask for the base URL)
+2. What is your LLM API key?
+3. What model name should be used? (e.g. `gpt-4o`, `claude-opus-4-6`, `gemini-2.0-flash`)
+4. Do you use a separate embedding provider? If yes: which one, what is the API key, and what model name?
+
+Store the answers as variables. Do NOT write them to disk yet — proceed to Block 4.5 to validate them first.
+
+---
