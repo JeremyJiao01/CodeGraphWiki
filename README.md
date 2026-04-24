@@ -61,7 +61,20 @@ The Python package provides the core indexing engine, graph database, and all la
 pip install terrain-ai
 ```
 
-## Quick Start
+## Quick Start — Agent Install (Recommended)
+
+Already using an AI agent like Claude Code, opencode, or codex? Paste this into your agent chat:
+
+```
+Please follow the installation instructions at:
+https://raw.githubusercontent.com/JeremyJiao01/Terrain-AI/main/AGENT_INSTALL.md
+```
+
+Your agent will handle everything: Python 3.11 check, package install, API key setup, and MCP registration. After the first run, you can re-trigger by saying **"install terrain"** in any session.
+
+---
+
+### Manual Install (Alternative)
 
 ```bash
 npx terrain-ai@latest --setup
@@ -72,8 +85,6 @@ The setup wizard installs the Python package, configures your LLM and embedding 
 **Supported clients (auto-detected):**
 - **Claude Code** — MCP registered via `claude mcp add`; slash commands installed to `~/.claude/commands/`
 - **opencode** — MCP registered by editing `~/.config/opencode/opencode.json` (respects `$XDG_CONFIG_HOME`); slash commands installed to `~/.config/opencode/command/`
-
-Then in your client — point it at any repo and ask anything.
 
 ## Index a Codebase
 
