@@ -118,3 +118,84 @@ type "%USERPROFILE%\.terrain\.env" 2>nul
 Store the answers as variables. Do NOT write them to disk yet — proceed to Block 4.5 to validate them first.
 
 ---
+
+## Block 4.5 — Validate API Keys
+
+Test each key before writing it to disk. Use the exact request format below. If a test fails, show the HTTP status code and error body, ask the user to re-enter the key, and retry. Only write keys to disk after both tests pass — or after the user explicitly says "skip".
+
+### LLM test — minimal chat completion
+
+Send this HTTP request (replace placeholders with collected values):
+
+```
+POST {LLM_BASE_URL}/chat/completions
+Authorization: Bearer {LLM_API_KEY}
+Content-Type: application/json
+
+{
+  "model": "{LLM_MODEL}",
+  "messages": [{"role": "user", "content": "Reply with OK"}],
+  "max_tokens": 32,
+  "temperature": 1.0,
+  "top_p": 0.9,
+  "stream": false
+}
+```
+
+Default `LLM_BASE_URL` if not specified: `https://api.openai.com/v1`
+
+**Success:** HTTP 200 and the response JSON contains `choices[0].message.content`.
+**Failure:** Report the status code and the full response body. Ask the user to re-enter the key and retry.
+
+### Embedding test — minimal single-vector request
+
+```
+POST {EMBEDDING_BASE_URL}/embeddings
+Authorization: Bearer {EMBEDDING_API_KEY}
+Content-Type: application/json
+
+{
+  "model": "{EMBEDDING_MODEL}",
+  "input": ["hello"]
+}
+```
+
+Default `EMBEDDING_BASE_URL`: same as `LLM_BASE_URL` if using the same provider.
+Default `EMBEDDING_API_KEY`: same as `LLM_API_KEY` if using the same provider.
+
+**Success:** HTTP 200 and `data[0].embedding` is a non-empty array.
+**Failure:** Report the status code and the full response body. Ask the user to re-enter the key and retry.
+
+### Write keys to disk
+
+After both tests pass (or user skips), write only the validated keys to `~/.terrain/.env`:
+
+**Mac/Linux:**
+```bash
+mkdir -p ~/.terrain
+cat > ~/.terrain/.env << 'EOF'
+LLM_API_KEY={LLM_API_KEY}
+LLM_BASE_URL={LLM_BASE_URL}
+LLM_MODEL={LLM_MODEL}
+EMBEDDING_API_KEY={EMBEDDING_API_KEY}
+EMBEDDING_BASE_URL={EMBEDDING_BASE_URL}
+EMBEDDING_MODEL={EMBEDDING_MODEL}
+EOF
+```
+
+**Windows:**
+```
+if not exist "%USERPROFILE%\.terrain" mkdir "%USERPROFILE%\.terrain"
+(
+echo LLM_API_KEY={LLM_API_KEY}
+echo LLM_BASE_URL={LLM_BASE_URL}
+echo LLM_MODEL={LLM_MODEL}
+echo EMBEDDING_API_KEY={EMBEDDING_API_KEY}
+echo EMBEDDING_BASE_URL={EMBEDDING_BASE_URL}
+echo EMBEDDING_MODEL={EMBEDDING_MODEL}
+) > "%USERPROFILE%\.terrain\.env"
+```
+
+Omit any line whose value was not provided.
+
+---
