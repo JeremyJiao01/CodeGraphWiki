@@ -473,13 +473,16 @@ def generate_descriptions_step(
     for batch_idx in range(0, total, _DESC_BATCH_SIZE):
         batch = todo_funcs[batch_idx : batch_idx + _DESC_BATCH_SIZE]
         current_batch = batch_idx // _DESC_BATCH_SIZE + 1
+        batch_end = min(batch_idx + _DESC_BATCH_SIZE, total)
+        preview = ", ".join(f["name"][:18] for f in batch[:3])
 
+        # Before the blocking LLM call: tell the spinner what we're working on.
+        # pct is based on functions completed so far (not batches) so progress
+        # crawls smoothly instead of jumping 10/10/10.
         if progress_cb:
-            pct = int(current_batch / total_batches * 100)
             progress_cb(
-                f"Generating descriptions: batch {current_batch}/{total_batches} "
-                f"({generated} done, {errors} errors, {total - generated - errors} remaining)",
-                float(pct),
+                f"desc {batch_idx + 1}-{batch_end}/{total} → LLM: {preview}…",
+                (batch_idx / total) * 100,
             )
 
         prompt = _build_desc_prompt(batch)
@@ -495,9 +498,15 @@ def generate_descriptions_step(
             descriptions = _parse_desc_response(response.content, len(batch))
 
             batch_ok = 0
-            for func_info, desc in zip(batch, descriptions):
+            for i, (func_info, desc) in enumerate(zip(batch, descriptions)):
+                done = batch_idx + i + 1
                 if not desc:
                     errors += 1
+                    if progress_cb:
+                        progress_cb(
+                            f"[{done}/{total}] ⚠ {func_info['name']} (no desc)",
+                            (done / total) * 100,
+                        )
                     continue
 
                 old_content = func_info["content"]
@@ -511,6 +520,11 @@ def generate_descriptions_step(
                 func_info["path"].write_text(new_content, encoding="utf-8")
                 generated += 1
                 batch_ok += 1
+                if progress_cb:
+                    progress_cb(
+                        f"[{done}/{total}] ✓ {func_info['name']}",
+                        (done / total) * 100,
+                    )
 
             # Reset circuit breaker on any success
             if batch_ok > 0:
@@ -1295,6 +1309,17 @@ def build_vector_index(
     for batch_start in range(0, len(remaining), _EMBED_BATCH_SIZE):
         batch = remaining[batch_start : batch_start + _EMBED_BATCH_SIZE]
         batch_texts = [t for _, _, t in batch]
+        batch_end = min(batch_start + _EMBED_BATCH_SIZE, len(remaining))
+        preview = ", ".join(func.get("name", "")[:18] for _, func, _ in batch[:3])
+
+        # Pre-call header so L1's spinner has meaningful text while the
+        # embed API is blocking.
+        if progress_cb and total > 0:
+            done_before = already_done + batch_start
+            progress_cb(
+                f"embed {done_before + 1}-{already_done + batch_end}/{total} → {preview}…",
+                16.0 + (done_before / total) * 24.0,
+            )
 
         batch_embeddings = embedder.embed_batch(batch_texts)
 
@@ -1304,7 +1329,7 @@ def build_vector_index(
         if len(batch_embeddings) != len(batch):
             continue
 
-        for (node_id, func, _), embedding in zip(batch, batch_embeddings):
+        for i, ((node_id, func, _), embedding) in enumerate(zip(batch, batch_embeddings)):
             rec = VectorRecord(
                 node_id=node_id,
                 qualified_name=func["qualified_name"],
@@ -1322,16 +1347,15 @@ def build_vector_index(
             func_map[node_id] = func
             finished_qnames.add(func["qualified_name"])
 
+            if progress_cb and total > 0:
+                done = already_done + batch_start + i + 1
+                progress_cb(
+                    f"[{done}/{total}] ✓ {func.get('name', '')}",
+                    16.0 + (done / total) * 24.0,
+                )
+
         # Persist checkpoint after every batch
         _save_checkpoint(ckpt_path, records, func_map, finished_qnames)
-
-        done = already_done + min(batch_start + _EMBED_BATCH_SIZE, len(remaining))
-        if progress_cb and total > 0:
-            overall_pct = 16.0 + (done / total) * 24.0
-            progress_cb(
-                f"Embedded {done}/{total} functions.",
-                overall_pct,
-            )
 
     vector_store.store_embeddings_batch(records)
 
