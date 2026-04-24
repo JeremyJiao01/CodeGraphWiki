@@ -282,3 +282,77 @@ Tell the user: "Please add the following to your agent's MCP configuration file:
 If the MCP registration command fails, show the appropriate JSON block above and instruct the user to add it manually.
 
 ---
+
+## Block 6 — Install Slash Command (Self-Perpetuation)
+
+Write a local slash command file so the user can trigger installation in future sessions by saying "install terrain" — without needing the bootstrap URL again.
+
+**Claude Code — Mac/Linux:**
+```bash
+mkdir -p ~/.claude/commands
+cat > ~/.claude/commands/terrain.md << 'EOF'
+Install terrain-ai by following the instructions at:
+https://raw.githubusercontent.com/JeremyJiao01/Terrain-AI/main/AGENT_INSTALL.md
+EOF
+```
+
+**Claude Code — Windows:**
+```
+if not exist "%USERPROFILE%\.claude\commands" mkdir "%USERPROFILE%\.claude\commands"
+echo Install terrain-ai by following the instructions at: > "%USERPROFILE%\.claude\commands\terrain.md"
+echo https://raw.githubusercontent.com/JeremyJiao01/Terrain-AI/main/AGENT_INSTALL.md >> "%USERPROFILE%\.claude\commands\terrain.md"
+```
+
+**opencode — Mac/Linux:**
+```bash
+mkdir -p ~/.config/opencode/command
+cat > ~/.config/opencode/command/terrain.md << 'EOF'
+Install terrain-ai by following the instructions at:
+https://raw.githubusercontent.com/JeremyJiao01/Terrain-AI/main/AGENT_INSTALL.md
+EOF
+```
+
+**opencode — Windows:**
+```
+if not exist "%APPDATA%\opencode\command" mkdir "%APPDATA%\opencode\command"
+echo Install terrain-ai by following the instructions at: > "%APPDATA%\opencode\command\terrain.md"
+echo https://raw.githubusercontent.com/JeremyJiao01/Terrain-AI/main/AGENT_INSTALL.md >> "%APPDATA%\opencode\command\terrain.md"
+```
+
+---
+
+## Block 7 — Validate Installation
+
+Run both commands. Do not declare success until both pass.
+
+**Mac/Linux:**
+```bash
+terrain --version
+terrain status
+```
+
+**Windows:**
+```
+terrain --version
+terrain status
+```
+
+**Expected:**
+- `terrain --version` prints a version string (e.g. `terrain 2.1.14`)
+- `terrain status` prints workspace and service status without errors
+
+**If either command fails:**
+- `terrain --version` fails → the pip install (Block 3) did not complete correctly. Re-run Block 3.
+- `terrain status` fails → the MCP registration (Block 5) or `.env` configuration (Block 4.5) may be incomplete. Report the full error output.
+
+Do not proceed past this block until both commands succeed.
+
+---
+
+## Installation Complete
+
+terrain-ai is now installed and configured. You can:
+
+- Index a codebase: `terrain index /path/to/repo`
+- Ask about code in your agent: "find the function that handles X"
+- Re-run this setup anytime by saying **"install terrain"** in your agent
