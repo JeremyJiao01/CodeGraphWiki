@@ -52,6 +52,39 @@ def _is_lock_error(exc: Exception) -> bool:
     return any(kw in msg for kw in _LOCK_ERROR_KEYWORDS)
 
 
+def _safe_kuzu_path(p: Path) -> str:
+    """Return a Kuzu-safe path string.
+
+    On Windows, Kuzu's C++ layer may fail with IO exceptions when the path
+    contains non-ASCII characters (Chinese, emoji, etc.) because it opens
+    files with narrow-char APIs.  This function converts such paths to the
+    Windows short path (8.3) format which is pure ASCII.
+
+    On non-Windows systems the path is returned unchanged.
+    """
+    s = str(p)
+    if os.name != "nt":
+        return s
+    # Fast path: all ASCII — no conversion needed
+    try:
+        s.encode("ascii")
+        return s
+    except UnicodeEncodeError:
+        pass
+    # Convert to short (8.3) path via Windows API
+    try:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(512)
+        n = ctypes.windll.kernel32.GetShortPathNameW(s, buf, 512)
+        if n > 0:
+            short = buf.value
+            logger.debug("Kuzu path converted: {} -> {}", s, short)
+            return short
+    except Exception as exc:
+        logger.debug("GetShortPathNameW failed ({}), using original path", exc)
+    return s
+
+
 def _remove_stale_lock(db_path: Path) -> bool:
     """Try to remove a stale .lock file inside a Kuzu database directory.
 
@@ -141,7 +174,7 @@ class KuzuIngestor:
         last_exc: Exception | None = None
         for attempt in range(DB_LOCK_MAX_RETRIES + 1):
             try:
-                self._db = kuzu.Database(str(self.db_path), read_only=self.read_only)
+                self._db = kuzu.Database(_safe_kuzu_path(self.db_path), read_only=self.read_only)
                 self._conn = kuzu.Connection(self._db)
                 self._ref_count = 1
                 if attempt > 0:
